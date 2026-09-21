@@ -38,7 +38,8 @@ x-megaquant: &megaquant
     PYTORCH_CUDA_ALLOC_CONF: ${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
     CUDA_DEVICE_MAX_CONNECTIONS: ${CUDA_DEVICE_MAX_CONNECTIONS:-16}
     MEGAQUANT_EXTRA_ARGS: ${MEGAQUANT_EXTRA_ARGS:-}
-    MEGAQUANT_VLLM_BASE_URL: ${MEGAQUANT_VLLM_BASE_URL:-http://127.0.0.1:8000/v1}
+    MEGAQUANT_VLLM_BASE_URL: ${MEGAQUANT_VLLM_BASE_URL:-}
+    MEGAQUANT_SGLANG_BASE_URL: ${MEGAQUANT_SGLANG_BASE_URL:-http://127.0.0.1:30000/v1}
     EVAL_RECIPE: ${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -98,11 +99,24 @@ services:
         "recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml",
       ]
 
+  serve-sglang:
+    <<: *megaquant
+    profiles: ["gpu"]
+    ports:
+      - "${SGLANG_PORT:-30000}:30000"
+    command:
+      [
+        "serve",
+        "-c",
+        "recipes/eval-gpqa-diamond.yaml",
+      ]
+
+  # Alias of serve-sglang (default engine is SGLang).
   serve-vllm:
     <<: *megaquant
     profiles: ["gpu"]
     ports:
-      - "${VLLM_PORT:-8000}:8000"
+      - "${SGLANG_PORT:-30000}:30000"
     command:
       [
         "serve",

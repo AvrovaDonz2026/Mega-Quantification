@@ -42,11 +42,12 @@ docker compose --profile gpu run --rm mixed      # 混合；默认 mixed.5090.ya
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-等价 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`、`make serve-vllm`、`make eval-gpqa`。
+等价 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`、`make serve-sglang`、`make eval-gpqa`。
 
-GPQA Diamond 走官方 Qwen thinking 采样和 NVIDIA vLLM 卡参数。32 GB 卡上
-保持 `max-model-len 262144`，KV 放不下就 native offload 进主机内存
-（MemTotal − 6 GiB），不要截断生成。先 `serve-vllm` 再 `eval-gpqa`。
+GPQA Diamond 走官方 Qwen thinking 采样，推理用 SGLang（NVIDIA Qwen3.8
+cookbook）。32 GB 卡上保持 `context-length 262144`，KV 放不下就 HiCache
+offload 进主机内存（MemTotal − 6 GiB），不要截断生成。先 `serve-sglang`
+再 `eval-gpqa`。
 
 ## 把已经建好的镜像拷到另一台 5090
 
@@ -96,9 +97,9 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml docker compose --profile gpu run
 docker compose --profile gpu run --rm mixed
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 
-# GPQA：先 serve（KV → RAM），再 eval
-docker compose --profile gpu run --rm serve-vllm
-MEGAQUANT_VLLM_BASE_URL=http://127.0.0.1:8000/v1 docker compose --profile gpu run --rm eval-gpqa
+# GPQA：先 serve（SGLang，KV → RAM），再 eval
+docker compose --profile gpu run --rm serve-sglang
+MEGAQUANT_SGLANG_BASE_URL=http://127.0.0.1:30000/v1 docker compose --profile gpu run --rm eval-gpqa
 
 # 只用第 0 张卡
 CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize

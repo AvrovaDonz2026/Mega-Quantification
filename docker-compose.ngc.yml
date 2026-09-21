@@ -33,6 +33,13 @@ services:
         INSTALL_TORCH: "0"
     image: megaquant:nvfp4-ngc
 
+  serve-sglang:
+    build:
+      args:
+        BASE_IMAGE: nvcr.io/nvidia/pytorch:25.08-py3
+        INSTALL_TORCH: "0"
+    image: megaquant:nvfp4-ngc
+
   serve-vllm:
     build:
       args:

@@ -9,10 +9,13 @@ from typing import Any
 
 from megaquant.config import CLI_OVERRIDE_MAP, load_recipe
 from megaquant.eval_gpqa import (
+    default_eval_base_url,
+    default_serve_port,
     describe_eval,
+    eval_base_url_from_env,
     load_eval_recipe,
     run_gpqa,
-    vllm_serve_argv_from_recipe,
+    serve_argv_from_recipe,
 )
 from megaquant.exceptions import MegaQuantError
 from megaquant.pipeline import QuantPipeline
@@ -119,20 +122,24 @@ def cmd_rewrite_sglang(args: argparse.Namespace) -> int:
 
 
 def _eval_recipe_from_args(args: argparse.Namespace):
-    import os
-
     overrides: dict[str, Any] = {}
     if getattr(args, "model", None):
         overrides["model"] = args.model
     if getattr(args, "output", None):
         overrides["output_dir"] = args.output
-    if getattr(args, "base_url", None):
-        overrides["base_url"] = args.base_url
-    elif os.environ.get("MEGAQUANT_VLLM_BASE_URL"):
-        overrides["base_url"] = os.environ["MEGAQUANT_VLLM_BASE_URL"]
     if getattr(args, "limit", None) is not None:
         overrides["limit"] = args.limit
-    return load_eval_recipe(args.config, overrides or None)
+    recipe = load_eval_recipe(args.config, overrides or None)
+    engine = getattr(args, "engine", None)
+    if engine:
+        recipe.serve.engine = engine
+    recipe.base_url = (
+        getattr(args, "base_url", None)
+        or eval_base_url_from_env()
+        or recipe.base_url
+        or default_eval_base_url(recipe)
+    )
+    return recipe
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
@@ -148,12 +155,16 @@ def cmd_eval(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     import json
     import os
+    import sys
 
     recipe = _eval_recipe_from_args(args)
-    argv = vllm_serve_argv_from_recipe(
+    port = getattr(args, "port", None)
+    if port is None:
+        port = default_serve_port(recipe)
+    argv = serve_argv_from_recipe(
         recipe,
         getattr(args, "model", None),
-        port=int(getattr(args, "port", 8000) or 8000),
+        port=int(port),
     )
     if getattr(args, "dry_run", False):
         plan = describe_eval(recipe)
@@ -162,6 +173,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
                 {
                     "argv": argv,
                     "plan": plan,
+                    "engine": recipe.serve.engine,
                     "kv_cpu_offload_gib": plan["kv_cpu_offload_gib"],
                 },
                 indent=2,
@@ -171,10 +183,21 @@ def cmd_serve(args: argparse.Namespace) -> int:
     print("[serve]", " ".join(argv), flush=True)
     try:
         os.execvp(argv[0], argv)
-    except FileNotFoundError as exc:
+    except FileNotFoundError:
+        if argv[:2] == ["sglang", "serve"]:
+            alt = [sys.executable, "-m", "sglang.launch_server", *argv[2:]]
+            print("[serve]", " ".join(alt), flush=True)
+            try:
+                os.execvp(alt[0], alt)
+            except FileNotFoundError as exc:
+                raise MegaQuantError(
+                    "sglang is not installed. Install a recent SGLang "
+                    "(lmsysorg/sglang:dev / `uv pip install --prerelease=allow sglang`) "
+                    "then retry."
+                ) from exc
         raise MegaQuantError(
             "vllm is not on PATH. Install a Blackwell vLLM build, then retry."
-        ) from exc
+        )
     return 1
 
 
@@ -215,24 +238,43 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate = sub.add_parser(
         "eval",
-        help="GPQA Diamond (Qwen thinking + NVIDIA vLLM card flags; no short truncation)",
+        help="GPQA Diamond via OpenAI-compatible SGLang (Qwen thinking; no short truncation)",
     )
     evaluate.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
     evaluate.add_argument("--model", help="Export dir or served model name")
     evaluate.add_argument("--output", help="Eval journal directory")
-    evaluate.add_argument("--base-url", dest="base_url", help="OpenAI-compatible vLLM URL")
+    evaluate.add_argument(
+        "--base-url",
+        dest="base_url",
+        help="OpenAI-compatible SGLang URL (default http://127.0.0.1:30000/v1)",
+    )
+    evaluate.add_argument(
+        "--engine",
+        choices=["sglang", "vllm"],
+        help="Override serve.engine in the eval plan (default sglang)",
+    )
     evaluate.add_argument("--limit", type=int, help="Optional item cap (full run omits this)")
     evaluate.add_argument("--dry-run", action="store_true")
     evaluate.set_defaults(func=cmd_eval)
 
     serve = sub.add_parser(
         "serve",
-        help="vLLM serve with NVIDIA-card flags; KV that misses HBM goes to host RAM",
+        help="SGLang serve (NVIDIA Qwen3.8 cookbook); KV that misses HBM goes to host RAM",
     )
     serve.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
     serve.add_argument("--model", help="Export dir (NVFP4 checkpoint)")
-    serve.add_argument("--port", type=int, default=8000)
-    serve.add_argument("--dry-run", action="store_true", help="Print argv; do not exec vLLM")
+    serve.add_argument(
+        "--engine",
+        choices=["sglang", "vllm"],
+        help="Override serve.engine (default sglang)",
+    )
+    serve.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Listen port (default 30000 for SGLang, 8000 for vLLM)",
+    )
+    serve.add_argument("--dry-run", action="store_true", help="Print argv; do not exec the server")
     serve.set_defaults(func=cmd_serve)
 
     return parser

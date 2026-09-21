@@ -4,21 +4,30 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from megaquant.eval_gpqa import (
+    DEFAULT_EVAL_BASE_URL,
     DEFAULT_MAX_MODEL_LEN,
+    NVIDIA_SGLANG_SERVE,
     NVIDIA_VLLM_SERVE,
     QWEN_THINKING_SAMPLING,
     GenerationResult,
     GPQAItem,
     auto_kv_offload_gib,
     build_gpqa_item,
+    default_eval_base_url,
     describe_eval,
+    eval_base_url_from_env,
     extract_choice,
     format_gpqa_prompt,
     load_eval_recipe,
     remaining_new_tokens,
     run_gpqa,
     score_items,
+    serve_argv_from_recipe,
+    sglang_serve_argv,
+    sglang_serve_argv_from_recipe,
     visible_answer_span,
     vllm_serve_argv,
     vllm_serve_argv_from_recipe,
@@ -42,18 +51,25 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     for key, value in QWEN_THINKING_SAMPLING.items():
         assert samp[key] == value, key
     serve = recipe.serve.model_dump()
-    assert serve["kv_cache_dtype"] == NVIDIA_VLLM_SERVE["kv_cache_dtype"]
-    assert serve["reasoning_parser"] == NVIDIA_VLLM_SERVE["reasoning_parser"]
-    assert serve["max_num_batched_tokens"] == NVIDIA_VLLM_SERVE["max_num_batched_tokens"]
-    assert serve["gpu_memory_utilization"] == NVIDIA_VLLM_SERVE["gpu_memory_utilization"]
+    assert serve["engine"] == "sglang"
+    assert serve["kv_cache_dtype"] == NVIDIA_SGLANG_SERVE["kv_cache_dtype"]
+    assert serve["reasoning_parser"] == NVIDIA_SGLANG_SERVE["reasoning_parser"]
+    assert serve["chunked_prefill_size"] == NVIDIA_SGLANG_SERVE["chunked_prefill_size"]
+    assert serve["mamba_full_memory_ratio"] == NVIDIA_SGLANG_SERVE["mamba_full_memory_ratio"]
+    assert serve["mamba_radix_cache_strategy"] == "extra_buffer_lazy"
+    assert serve["enable_hierarchical_cache"] is True
     assert serve["kv_offloading_backend"] == "native"
     assert serve["kv_offloading_size_gb"] == 0
     assert serve["swap_space_gb"] == 0
     assert serve["cpu_reserve_gib"] == 6
     plan = describe_eval(recipe)
+    assert plan["engine"] == "sglang"
+    assert plan["base_url"] is None
     assert "remaining context" in plan["max_new_tokens_policy"]
-    assert plan["kv_offloading_backend"] == "native"
+    assert plan["kv_offloading_backend"] == "hicache"
     assert plan["kv_cpu_offload_gib"] >= 4
+    assert default_eval_base_url(recipe) == DEFAULT_EVAL_BASE_URL
+    assert default_eval_base_url(recipe) == "http://127.0.0.1:30000/v1"
 
 
 def test_remaining_tokens_never_uses_small_default_cap() -> None:
@@ -165,6 +181,25 @@ def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
     assert scores["unparsed"] == 1
 
 
+def test_sglang_argv_matches_cookbook_and_hicache() -> None:
+    argv = sglang_serve_argv("/ckpt", tp=1, context_length=262144, kv_offloading_size_gb=58)
+    joined = " ".join(argv)
+    assert argv[:2] == ["sglang", "serve"]
+    assert "--model-path /ckpt" in joined
+    assert "--kv-cache-dtype fp8_e4m3" in joined
+    assert "--context-length 262144" in joined
+    assert "--chunked-prefill-size 2048" in joined
+    assert "--reasoning-parser qwen3" in joined
+    assert "--tool-call-parser qwen3_coder" in joined
+    assert "--mamba-full-memory-ratio 4.59" in joined
+    assert "--mamba-radix-cache-strategy extra_buffer_lazy" in joined
+    assert "--attention-backend flashinfer" in joined
+    assert "--enable-hierarchical-cache" in joined
+    assert "--hicache-size 58" in joined
+    assert "--port 30000" in joined
+    assert "vllm" not in joined
+
+
 def test_vllm_argv_matches_nvidia_card_flags() -> None:
     argv = vllm_serve_argv("/ckpt", tp=1, max_model_len=262144, kv_offloading_size_gb=58)
     joined = " ".join(argv)
@@ -196,8 +231,24 @@ def test_vllm_argv_omits_swap_by_default_and_honors_explicit_swap() -> None:
     assert both[both.index("--kv-offloading-size") + 1] == "12"
 
 
+def test_sglang_argv_from_recipe_follows_yaml_kv_offload() -> None:
+    recipe = load_eval_recipe(RECIPE)
+    recipe.serve.kv_offloading_size_gb = 40
+    argv = sglang_serve_argv_from_recipe(recipe, "/export")
+    joined = " ".join(argv)
+    assert "--model-path" in argv
+    assert argv[argv.index("--model-path") + 1] == "/export"
+    assert "--enable-hierarchical-cache" in joined
+    assert "--hicache-size 40" in joined
+    assert "--context-length 262144" in joined
+    assert describe_eval(recipe)["kv_cpu_offload_gib"] == 40
+    default = serve_argv_from_recipe(recipe, "/export")
+    assert default[:2] == ["sglang", "serve"]
+
+
 def test_vllm_argv_from_recipe_follows_yaml_kv_offload() -> None:
     recipe = load_eval_recipe(RECIPE)
+    recipe.serve.engine = "vllm"
     recipe.serve.kv_offloading_size_gb = 40
     argv = vllm_serve_argv_from_recipe(recipe, "/export")
     joined = " ".join(argv)
@@ -205,17 +256,41 @@ def test_vllm_argv_from_recipe_follows_yaml_kv_offload() -> None:
     assert "--kv-offloading-backend native" in joined
     assert "--kv-offloading-size 40" in joined
     assert "--max-model-len 262144" in joined
-    assert describe_eval(recipe)["kv_cpu_offload_gib"] == 40
 
 
-def test_cli_eval_and_serve_dry_run(capsys) -> None:
+def test_eval_base_url_prefers_sglang_then_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in (
+        "MEGAQUANT_SGLANG_BASE_URL",
+        "MEGAQUANT_BASE_URL",
+        "MEGAQUANT_VLLM_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    assert eval_base_url_from_env() is None
+    monkeypatch.setenv("MEGAQUANT_VLLM_BASE_URL", "http://vllm.local:8000/v1")
+    assert eval_base_url_from_env() == "http://vllm.local:8000/v1"
+    monkeypatch.setenv("MEGAQUANT_SGLANG_BASE_URL", "http://sglang.local:30000/v1")
+    assert eval_base_url_from_env() == "http://sglang.local:30000/v1"
+
+
+def test_cli_eval_and_serve_dry_run(capsys, monkeypatch: pytest.MonkeyPatch) -> None:
     from megaquant.cli import main
+
+    for key in (
+        "MEGAQUANT_SGLANG_BASE_URL",
+        "MEGAQUANT_BASE_URL",
+        "MEGAQUANT_VLLM_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
 
     code = main(["eval", "-c", str(RECIPE), "--dry-run"])
     assert code == 0
     eval_out = capsys.readouterr().out
     assert "remaining context" in eval_out
     assert "native" in eval_out
+    assert "http://127.0.0.1:30000/v1" in eval_out
+    assert '"engine": "sglang"' in eval_out
 
     code = main(["serve", "-c", str(RECIPE), "--model", "/ckpt", "--dry-run"])
     assert code == 0
@@ -225,10 +300,15 @@ def test_cli_eval_and_serve_dry_run(capsys) -> None:
 
     data = json.loads(payload)
     joined = " ".join(data["argv"])
-    assert "--kv-offloading-backend native" in joined
+    assert data["argv"][:2] == ["sglang", "serve"]
+    assert data["engine"] == "sglang"
+    assert "--enable-hierarchical-cache" in joined
     assert "--kv-cache-dtype fp8_e4m3" in joined
-    assert data["argv"][2] == "/ckpt"
+    assert data["argv"][data["argv"].index("--model-path") + 1] == "/ckpt"
     assert data["kv_cpu_offload_gib"] >= 4
+    assert "--port" in data["argv"]
+    assert data["argv"][data["argv"].index("--port") + 1] == "30000"
+    assert data["plan"]["base_url"] == "http://127.0.0.1:30000/v1"
 
 
 def test_dry_run_does_not_need_a_model() -> None:

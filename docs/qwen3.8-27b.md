@@ -223,44 +223,11 @@ python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme mixed
 ```
 
-## Serve (vLLM / SGLang / TensorRT-LLM)
+## Serve (SGLang / vLLM / TensorRT-LLM)
 
-Patterns below follow the NVIDIA mixed model card (tested on Grace Blackwell
-GB300 with vLLM nightly). Point `--model` / `--model-path` at your export dir
-or at `nvidia/Qwen3.8-27B-NVFP4`.
-
-### vLLM
-
-```sh
-# Prefer the recipe-built argv (adds native KV CPU offload on 32 GB cards):
-bash scripts/serve_vllm.sh outputs/Qwen3.8-27B-NVFP4-W4A8
-
-# Equivalent NVIDIA-card flags. On a 32 GB 5090 keep max-model-len 262144
-# and offload KV that does not fit HBM into host RAM (MemTotal − 6 GiB).
-# Do not also pass a large --swap-space; that would double-book RAM.
-vllm serve outputs/Qwen3.8-27B-NVFP4-W4A8 \
-    --port 8000 \
-    --quantization modelopt \
-    --kv-cache-dtype fp8_e4m3 \
-    --tensor-parallel-size 1 \
-    --max-model-len 262144 \
-    --reasoning-parser qwen3 \
-    --enable-auto-tool-choice \
-    --tool-call-parser qwen3_coder \
-    --mm-encoder-tp-mode data \
-    --seed 0 \
-    --gpu-memory-utilization 0.85 \
-    --max-num-seqs 32 \
-    --max-num-batched-tokens 32768 \
-    --enable-chunked-prefill \
-    --kv-offloading-backend native \
-    --kv-offloading-size 58
-```
-
-`megaquant serve --dry-run` prints the resolved argv, including the auto
-KV size. Docker: `vllm/vllm-openai:nightly`. NVIDIA's mixed card (GB300)
-omits `--quantization modelopt` and KV offload because that box has enough
-HBM for the 262k window.
+Default inference is **SGLang**. `megaquant serve --dry-run` prints the
+resolved argv (cookbook flags + HiCache size). Point `--model-path` at
+your export dir or at `nvidia/Qwen3.8-27B-NVFP4`.
 
 ### SGLang
 
@@ -270,6 +237,11 @@ Needs a recent `sglang` / `lmsysorg/sglang:dev` that routes
 as `w4afp8` and will not run this checkpoint.
 
 ```sh
+# Recipe-built argv (adds HiCache so 262k fits a 32 GB card):
+bash scripts/serve_sglang.sh outputs/Qwen3.8-27B-NVFP4-W4A8
+# or: python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml \
+#        --model outputs/Qwen3.8-27B-NVFP4-W4A8
+
 sglang serve \
   --trust-remote-code \
   --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
@@ -279,15 +251,29 @@ sglang serve \
   --reasoning-parser qwen3 \
   --tool-call-parser qwen3_coder \
   --mamba-full-memory-ratio 4.59 \
+  --mamba-radix-cache-strategy extra_buffer_lazy \
+  --mamba-ssm-dtype float32 \
+  --attention-backend flashinfer \
+  --context-length 262144 \
+  --enable-hierarchical-cache \
+  --hicache-size 58 \
   --host 0.0.0.0 \
-  --port 30000 \
-  --mamba-radix-cache-strategy extra_buffer \
-  --mamba-ssm-dtype float32
+  --port 30000
 ```
 
-Docker: `lmsysorg/sglang:dev`. If `hf_quant_config.json` still says
-`quant_algo: W4A8_NVFP4_FP8` or a bare `NVFP4` without `quantized_layers`,
-run `megaquant rewrite-sglang <export_dir>` first.
+Docker: `lmsysorg/sglang:dev` or `make serve-sglang`. If
+`hf_quant_config.json` still says `quant_algo: W4A8_NVFP4_FP8` or a bare
+`NVFP4` without `quantized_layers`, run `megaquant rewrite-sglang <export_dir>`
+first. GPQA client: `http://127.0.0.1:30000/v1`.
+
+### vLLM
+
+Optional (`--engine vllm`). NVIDIA mixed card on GB300 used these flags:
+
+```sh
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml \
+  --engine vllm --model outputs/Qwen3.8-27B-NVFP4-W4A8
+```
 
 ### TensorRT-LLM
 
@@ -311,16 +297,16 @@ vLLM support for that combo is limited.
 ## GPQA Diamond (official card protocol)
 
 Evaluate each NVFP4 export with the **same sampling as the Qwen thinking
-card** and the **same vLLM serve flags as the NVIDIA NVFP4 card**. Do not
+card** on a **SGLang** server (NVIDIA Qwen3.8 cookbook flags). Do not
 greedy-decode. Do not cap generation at 512/2048 tokens.
 
 | Knob | Value |
 |---|---|
 | Sampling | `temperature=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true` |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
-| Context | `max_model_len=262144`; `max_new_tokens=0` means the remaining window |
+| Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
-| KV on 32 GB | `--kv-offloading-backend native` + `--kv-offloading-size` = MemTotal − 6 GiB (~58 GiB on a 64 GB box) |
+| KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size` = MemTotal − 6 GiB (~58 GiB on a 64 GB box) |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong) |
 
 NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4**. The
@@ -331,13 +317,13 @@ RAM** rather than shrinking `max_new_tokens`. Qwen GPQA traces can run tens
 of thousands of tokens; a short cap is not an official-card eval.
 
 ```bash
-# Terminal 1 — serve (native KV → RAM)
+# Terminal 1 — serve (SGLang HiCache KV → RAM)
 bash scripts/gpu-pod.sh serve w4a8
 # or: python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml \
 #        --model outputs/Qwen3.8-27B-NVFP4-W4A8
 
 # Terminal 2 — client (full 198; needs HF_TOKEN or GPQA_CSV for gated Hub)
-MEGAQUANT_VLLM_BASE_URL=http://127.0.0.1:8000/v1 \
+MEGAQUANT_SGLANG_BASE_URL=http://127.0.0.1:30000/v1 \
   bash scripts/gpu-pod.sh eval w4a8
 # same for w4a4 / mixed after those exports exist
 
@@ -346,10 +332,12 @@ python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 ```
 
-Compose: `make serve-vllm` then `make eval-gpqa`. The client talks to
-`MEGAQUANT_VLLM_BASE_URL` (default `http://127.0.0.1:8000/v1`). Journals
-land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
-the full text; stdout is a one-line status).
+Compose: `make serve-sglang` then `make eval-gpqa`. The client talks to
+`MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`;
+`MEGAQUANT_VLLM_BASE_URL` is a leftover alias). Journals land in
+`outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps the
+full text; stdout is a one-line status). Optional `--engine vllm` keeps
+the NVIDIA GB300 vLLM flags on port 8000.
 
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local
 CSV with the Hub columns (`Question`, `Correct Answer`,

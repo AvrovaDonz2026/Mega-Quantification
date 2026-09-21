@@ -30,13 +30,14 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     text = compose_path.read_text()
     data = yaml.safe_load(text)
     services = data["services"]
-    for name in ("megaquant", "quantize", "mixed", "w4a4", "serve-vllm", "eval-gpqa", "shell"):
+    for name in ("megaquant", "quantize", "mixed", "w4a4", "serve-sglang", "serve-vllm", "eval-gpqa", "shell"):
         assert name in services, f"missing compose service {name}"
 
     profiles = services["quantize"].get("profiles") or []
     assert "gpu" in profiles
     assert "gpu" in (services["w4a4"].get("profiles") or [])
     assert "gpu" in (services["eval-gpqa"].get("profiles") or [])
+    assert "gpu" in (services["serve-sglang"].get("profiles") or [])
     assert "gpu" in (services["serve-vllm"].get("profiles") or [])
     mixed_cmd = " ".join(str(x) for x in (services["mixed"].get("command") or []))
     assert "mixed.5090.yaml" in mixed_cmd
@@ -44,9 +45,11 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "w4a4.5090.yaml" in w4a4_cmd
     eval_cmd = " ".join(str(x) for x in (services["eval-gpqa"].get("command") or []))
     assert "eval-gpqa-diamond.yaml" in eval_cmd
-    serve_cmd = " ".join(str(x) for x in (services["serve-vllm"].get("command") or []))
+    serve_cmd = " ".join(str(x) for x in (services["serve-sglang"].get("command") or []))
     assert "serve" in serve_cmd
     assert "eval-gpqa-diamond.yaml" in serve_cmd
+    assert "MEGAQUANT_SGLANG_BASE_URL" in text
+    assert "30000" in text
 
     volume_blob = text
     megaquant_vols = services["megaquant"].get("volumes") or []
@@ -79,14 +82,16 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert 'MEGAQUANT_GPU_HEADROOM_GIB:-1' in script or 'MEGAQUANT_GPU_HEADROOM_GIB:-"1"' in script
     assert "eval-gpqa-diamond.yaml" in script
     assert "serve|eval" in script
-    assert "KV CPU offload" in script
+    assert "HiCache" in script or "KV CPU offload" in script
     assert "gpqa_diamond-${SCHEME}" in script
+    assert "MEGAQUANT_SGLANG_BASE_URL" in script
+    assert "http://127.0.0.1:30000/v1" in script
 
 
 def test_ngc_compose_covers_eval_and_serve(repo_root: Path) -> None:
     data = yaml.safe_load((repo_root / "docker-compose.ngc.yml").read_text())
     services = data["services"]
-    for name in ("eval-gpqa", "serve-vllm", "w4a4", "mixed"):
+    for name in ("eval-gpqa", "serve-sglang", "serve-vllm", "w4a4", "mixed"):
         assert name in services, name
 
 
@@ -105,9 +110,11 @@ def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:
 
 
 def test_serve_and_eval_scripts_are_executable_helpers(repo_root: Path) -> None:
-    serve = (repo_root / "scripts" / "serve_vllm.sh").read_text()
+    serve = (repo_root / "scripts" / "serve_sglang.sh").read_text()
     eval_sh = (repo_root / "scripts" / "eval_gpqa.sh").read_text()
     assert "megaquant.cli serve" in serve
-    assert "KV" in serve
+    assert "KV" in serve or "HiCache" in serve
     assert "megaquant.cli eval" in eval_sh
     assert "eval-gpqa-diamond.yaml" in eval_sh
+    wrapper = (repo_root / "scripts" / "serve_vllm.sh").read_text()
+    assert "serve_sglang.sh" in wrapper

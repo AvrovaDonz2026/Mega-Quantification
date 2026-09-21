@@ -206,11 +206,11 @@ case "${CMD}" in
     esac
     EVAL_OUT="$ROOT/outputs/eval/gpqa_diamond-${SCHEME}"
     if [[ "${CMD}" == "serve" ]]; then
-      log "serve recipe=${EVAL_RECIPE} model=${EVAL_MODEL} (KV CPU offload = MemTotal − reserve)"
+      log "serve recipe=${EVAL_RECIPE} model=${EVAL_MODEL} (SGLang HiCache KV CPU offload = MemTotal − reserve)"
       exec "${PY}" -m megaquant.cli serve -c "${EVAL_RECIPE}" --model "${EVAL_MODEL}" "$@"
     fi
-    export MEGAQUANT_VLLM_BASE_URL="${MEGAQUANT_VLLM_BASE_URL:-http://127.0.0.1:8000/v1}"
-    log "eval recipe=${EVAL_RECIPE} model=${EVAL_MODEL} out=${EVAL_OUT} base=${MEGAQUANT_VLLM_BASE_URL}"
+    export MEGAQUANT_SGLANG_BASE_URL="${MEGAQUANT_SGLANG_BASE_URL:-${MEGAQUANT_BASE_URL:-${MEGAQUANT_VLLM_BASE_URL:-http://127.0.0.1:30000/v1}}}"
+    log "eval recipe=${EVAL_RECIPE} model=${EVAL_MODEL} out=${EVAL_OUT} base=${MEGAQUANT_SGLANG_BASE_URL}"
     exec "${PY}" -m megaquant.cli eval -c "${EVAL_RECIPE}" \
       --model "${EVAL_MODEL}" --output "${EVAL_OUT}" "$@"
     ;;

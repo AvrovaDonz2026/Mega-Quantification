@@ -8,16 +8,20 @@ Qwen/Qwen3.8-27B thinking-mode sampling (model card + generation_config.json)::
     presence_penalty=0.0, repetition_penalty=1.0, do_sample=True
     enable_thinking=True, preserve_thinking=True, reasoning_effort=xhigh
 
-NVIDIA ``nvidia/Qwen3.8-27B-NVFP4`` vLLM serve flags (GB300 card)::
+Default serve engine is **SGLang** (NVIDIA Qwen3.8 cookbook + mixed NVFP4)::
 
-    --kv-cache-dtype fp8_e4m3 --max-model-len 262144 --reasoning-parser qwen3
-    --seed 0 --gpu-memory-utilization 0.85 --max-num-seqs 32
-    --max-num-batched-tokens 32768 --enable-chunked-prefill
+    sglang serve --model-path … --kv-cache-dtype fp8_e4m3
+    --mem-fraction-static 0.85 --chunked-prefill-size 2048
+    --reasoning-parser qwen3 --tool-call-parser qwen3_coder
+    --mamba-full-memory-ratio 4.59 --mamba-radix-cache-strategy extra_buffer_lazy
+    --mamba-ssm-dtype float32 --attention-backend flashinfer
+    --context-length 262144 --port 30000
 
 On a 32 GB card the 262144 window does not fit in HBM. KV that does not fit
-is offloaded to host RAM (``--kv-offloading-backend native`` plus
-``--kv-offloading-size`` = MemTotal − reserve). Do not shrink ``max_new_tokens``
-to dodge VRAM.
+is offloaded to host RAM (SGLang ``--enable-hierarchical-cache`` plus
+``--hicache-size`` = MemTotal − reserve). Optional ``engine: vllm`` keeps the
+NVIDIA GB300 vLLM flags (``--kv-offloading-backend native``). Do not shrink
+``max_new_tokens`` to dodge VRAM.
 
 Generation is **not** capped at a small ``max_new_tokens``. The budget is the
 remaining context (``max_model_len - prompt_tokens``). If the server still
@@ -37,7 +41,7 @@ import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -61,6 +65,10 @@ QWEN_THINKING_SAMPLING: dict[str, Any] = {
     "do_sample": True,
 }
 
+DEFAULT_SGLANG_PORT = 30000
+DEFAULT_VLLM_PORT = 8000
+DEFAULT_EVAL_BASE_URL = f"http://127.0.0.1:{DEFAULT_SGLANG_PORT}/v1"
+
 NVIDIA_VLLM_SERVE: dict[str, Any] = {
     "kv_cache_dtype": "fp8_e4m3",
     "max_model_len": DEFAULT_MAX_MODEL_LEN,
@@ -74,6 +82,23 @@ NVIDIA_VLLM_SERVE: dict[str, Any] = {
     "tool_call_parser": "qwen3_coder",
     "mm_encoder_tp_mode": "data",
     "kv_offloading_backend": "native",
+}
+
+# SGLang cookbook (Qwen3.8-27B NVFP4) + NVIDIA mixed card extras.
+NVIDIA_SGLANG_SERVE: dict[str, Any] = {
+    "kv_cache_dtype": "fp8_e4m3",
+    "mem_fraction_static": 0.85,
+    "chunked_prefill_size": 2048,
+    "reasoning_parser": "qwen3",
+    "tool_call_parser": "qwen3_coder",
+    "mamba_full_memory_ratio": 4.59,
+    "mamba_radix_cache_strategy": "extra_buffer_lazy",
+    "mamba_ssm_dtype": "float32",
+    "attention_backend": "flashinfer",
+    "context_length": DEFAULT_MAX_MODEL_LEN,
+    "host": "0.0.0.0",
+    "port": DEFAULT_SGLANG_PORT,
+    "enable_hierarchical_cache": True,
 }
 
 
@@ -106,10 +131,15 @@ class EvalGeneration(StrictModel):
 
 
 class EvalServe(StrictModel):
+    engine: Literal["sglang", "vllm"] = "sglang"
+    host: str = "0.0.0.0"
     kv_cache_dtype: str = "fp8_e4m3"
     gpu_memory_utilization: float = 0.85
+    mem_fraction_static: float | None = None
     max_num_seqs: int = 32
+    max_running_requests: int | None = None
     max_num_batched_tokens: int = 32768
+    chunked_prefill_size: int = 2048
     reasoning_parser: str = "qwen3"
     enable_chunked_prefill: bool = True
     enable_auto_tool_choice: bool = True
@@ -117,6 +147,12 @@ class EvalServe(StrictModel):
     mm_encoder_tp_mode: str = "data"
     quantization: str | None = "modelopt"
     tensor_parallel_size: int | None = None
+    attention_backend: str | None = "flashinfer"
+    mamba_full_memory_ratio: float | None = 4.59
+    mamba_radix_cache_strategy: str = "extra_buffer_lazy"
+    mamba_ssm_dtype: str = "float32"
+    max_mamba_cache_size: int | None = None
+    enable_hierarchical_cache: bool = True
     kv_offloading_backend: str = "native"
     # 0 = auto: MemTotal − cpu_reserve_gib. KV that does not fit HBM goes to RAM.
     kv_offloading_size_gb: float = 0
@@ -225,13 +261,40 @@ def load_eval_recipe(path: str | Path, overrides: dict[str, Any] | None = None) 
         raise EvalError(str(exc)) from exc
 
 
+def eval_base_url_from_env() -> str | None:
+    """Prefer SGLang URL; keep MEGAQUANT_VLLM_BASE_URL as a fallback alias."""
+    import os
+
+    for key in (
+        "MEGAQUANT_SGLANG_BASE_URL",
+        "MEGAQUANT_BASE_URL",
+        "MEGAQUANT_VLLM_BASE_URL",
+    ):
+        value = os.environ.get(key)
+        if value:
+            return value
+    return None
+
+
+def default_eval_base_url(recipe: EvalRecipe | None = None) -> str:
+    """Local OpenAI-compatible URL for the selected serve engine."""
+    if recipe is not None and recipe.serve.engine == "vllm":
+        return f"http://127.0.0.1:{DEFAULT_VLLM_PORT}/v1"
+    return DEFAULT_EVAL_BASE_URL
+
+
 def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
+    kv_backend = recipe.serve.kv_offloading_backend
+    if recipe.serve.engine == "sglang" and kv_backend in {"native", "hicache", ""}:
+        kv_backend = "hicache"
     return {
         "name": recipe.name,
         "benchmark": recipe.benchmark,
         "dataset": recipe.dataset,
         "model": recipe.model,
         "backend": recipe.backend,
+        "base_url": recipe.base_url,
+        "engine": recipe.serve.engine,
         "thinking": recipe.thinking.model_dump(),
         "sampling": recipe.sampling.model_dump(),
         "generation": recipe.generation.model_dump(),
@@ -243,12 +306,13 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
             else f"min(remaining, {recipe.generation.max_new_tokens})"
         ),
         "official_thinking_sampling": QWEN_THINKING_SAMPLING,
+        "official_sglang_serve": NVIDIA_SGLANG_SERVE,
         "official_vllm_serve": NVIDIA_VLLM_SERVE,
         "kv_cpu_offload_gib": auto_kv_offload_gib(
             recipe.serve.cpu_reserve_gib,
             explicit_gb=recipe.serve.kv_offloading_size_gb,
         ),
-        "kv_offloading_backend": recipe.serve.kv_offloading_backend,
+        "kv_offloading_backend": kv_backend,
     }
 
 
@@ -366,6 +430,163 @@ def vllm_serve_argv_from_recipe(
         swap_space_gb=serve.swap_space_gb,
         cpu_reserve_gib=serve.cpu_reserve_gib,
     )
+
+
+def sglang_serve_argv(
+    model: str,
+    *,
+    tp: int = 1,
+    port: int = DEFAULT_SGLANG_PORT,
+    host: str = "0.0.0.0",
+    context_length: int | None = None,
+    kv_cache_dtype: str | None = None,
+    mem_fraction_static: float | None = None,
+    max_running_requests: int | None = None,
+    chunked_prefill_size: int | None = None,
+    reasoning_parser: str | None = None,
+    tool_call_parser: str | None = None,
+    mamba_full_memory_ratio: float | None = None,
+    mamba_radix_cache_strategy: str | None = None,
+    mamba_ssm_dtype: str | None = None,
+    attention_backend: str | None = None,
+    max_mamba_cache_size: int | None = None,
+    seed: int | None = None,
+    enable_hierarchical_cache: bool = True,
+    kv_offloading_backend: str = "native",
+    kv_offloading_size_gb: float | int = 0,
+    cpu_reserve_gib: int = 6,
+) -> list[str]:
+    """NVIDIA/SGLang cookbook flags plus HiCache so 262k gen fits a 32 GB card.
+
+    ``kv_offloading_backend`` in ``{native, hicache}`` turns on
+    ``--enable-hierarchical-cache`` with ``--hicache-size`` = MemTotal − reserve.
+    """
+    length = int(context_length or NVIDIA_SGLANG_SERVE["context_length"])
+    kv_ram = auto_kv_offload_gib(cpu_reserve_gib, explicit_gb=kv_offloading_size_gb)
+    argv = [
+        "sglang",
+        "serve",
+        "--model-path",
+        model,
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--trust-remote-code",
+        "--kv-cache-dtype",
+        str(kv_cache_dtype or NVIDIA_SGLANG_SERVE["kv_cache_dtype"]),
+        "--mem-fraction-static",
+        str(
+            NVIDIA_SGLANG_SERVE["mem_fraction_static"]
+            if mem_fraction_static is None
+            else mem_fraction_static
+        ),
+        "--context-length",
+        str(length),
+        "--chunked-prefill-size",
+        str(
+            NVIDIA_SGLANG_SERVE["chunked_prefill_size"]
+            if chunked_prefill_size is None
+            else chunked_prefill_size
+        ),
+        "--reasoning-parser",
+        str(reasoning_parser or NVIDIA_SGLANG_SERVE["reasoning_parser"]),
+        "--tool-call-parser",
+        str(tool_call_parser or NVIDIA_SGLANG_SERVE["tool_call_parser"]),
+        "--tp-size",
+        str(max(1, tp)),
+        "--max-running-requests",
+        str(
+            NVIDIA_VLLM_SERVE["max_num_seqs"]
+            if max_running_requests is None
+            else max_running_requests
+        ),
+        "--seed",
+        str(0 if seed is None else seed),
+        "--mamba-radix-cache-strategy",
+        str(
+            mamba_radix_cache_strategy
+            or NVIDIA_SGLANG_SERVE["mamba_radix_cache_strategy"]
+        ),
+        "--mamba-ssm-dtype",
+        str(mamba_ssm_dtype or NVIDIA_SGLANG_SERVE["mamba_ssm_dtype"]),
+    ]
+    ratio = (
+        NVIDIA_SGLANG_SERVE["mamba_full_memory_ratio"]
+        if mamba_full_memory_ratio is None
+        else mamba_full_memory_ratio
+    )
+    if ratio is not None:
+        argv.extend(["--mamba-full-memory-ratio", str(ratio)])
+    backend = attention_backend
+    if backend is None:
+        backend = NVIDIA_SGLANG_SERVE["attention_backend"]
+    if backend:
+        argv.extend(["--attention-backend", str(backend)])
+    if max_mamba_cache_size is not None and int(max_mamba_cache_size) > 0:
+        argv.extend(["--max-mamba-cache-size", str(int(max_mamba_cache_size))])
+    offload = (kv_offloading_backend or "native").strip().lower()
+    if enable_hierarchical_cache and offload not in {"none", "off", "false"}:
+        argv.extend(["--enable-hierarchical-cache", "--hicache-size", str(kv_ram)])
+    return argv
+
+
+def sglang_serve_argv_from_recipe(
+    recipe: EvalRecipe,
+    model: str | None = None,
+    *,
+    port: int | None = None,
+) -> list[str]:
+    serve = recipe.serve
+    tp = serve.tensor_parallel_size if serve.tensor_parallel_size else 1
+    mem = serve.mem_fraction_static
+    if mem is None:
+        mem = serve.gpu_memory_utilization
+    running = serve.max_running_requests
+    if running is None:
+        running = serve.max_num_seqs
+    return sglang_serve_argv(
+        model or recipe.model,
+        tp=int(tp),
+        port=int(port or DEFAULT_SGLANG_PORT),
+        host=serve.host,
+        context_length=recipe.generation.max_model_len,
+        kv_cache_dtype=serve.kv_cache_dtype,
+        mem_fraction_static=mem,
+        max_running_requests=running,
+        chunked_prefill_size=serve.chunked_prefill_size,
+        reasoning_parser=serve.reasoning_parser,
+        tool_call_parser=serve.tool_call_parser,
+        mamba_full_memory_ratio=serve.mamba_full_memory_ratio,
+        mamba_radix_cache_strategy=serve.mamba_radix_cache_strategy,
+        mamba_ssm_dtype=serve.mamba_ssm_dtype,
+        attention_backend=serve.attention_backend,
+        max_mamba_cache_size=serve.max_mamba_cache_size,
+        seed=recipe.generation.seed,
+        enable_hierarchical_cache=serve.enable_hierarchical_cache,
+        kv_offloading_backend=serve.kv_offloading_backend,
+        kv_offloading_size_gb=serve.kv_offloading_size_gb,
+        cpu_reserve_gib=serve.cpu_reserve_gib,
+    )
+
+
+def serve_argv_from_recipe(
+    recipe: EvalRecipe,
+    model: str | None = None,
+    *,
+    port: int | None = None,
+) -> list[str]:
+    if recipe.serve.engine == "vllm":
+        return vllm_serve_argv_from_recipe(
+            recipe, model, port=int(port or DEFAULT_VLLM_PORT)
+        )
+    return sglang_serve_argv_from_recipe(recipe, model, port=port)
+
+
+def default_serve_port(recipe: EvalRecipe) -> int:
+    if recipe.serve.engine == "vllm":
+        return DEFAULT_VLLM_PORT
+    return DEFAULT_SGLANG_PORT
 
 
 def _stable_rng(seed: int, text: str) -> random.Random:
@@ -667,8 +888,9 @@ def run_gpqa(
                 return openai_chat_complete(base_url=base, **kwargs)
         else:
             raise EvalError(
-                "Set --base-url to an OpenAI-compatible vLLM server "
-                "(NVIDIA-card flags) or inject a generator in tests."
+                "Set --base-url to an OpenAI-compatible SGLang server "
+                "(cookbook flags, default http://127.0.0.1:30000/v1) "
+                "or inject a generator in tests."
             )
 
     def n_tokens(text: str) -> int:
