@@ -24,6 +24,10 @@ RECIPES = REPO_ROOT / "recipes"
 W4A8 = RECIPES / "qwen3.8-27b-nvfp4-w4a8.yaml"
 MIXED = RECIPES / "qwen3.8-27b-nvfp4-mixed.yaml"
 W4A4 = RECIPES / "qwen3.8-27b-nvfp4-w4a4.yaml"
+W4A4_5090 = RECIPES / "qwen3.8-27b-nvfp4-w4a4.5090.yaml"
+W4A4_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-w4a4.public-calib.yaml"
+MIXED_5090 = RECIPES / "qwen3.8-27b-nvfp4-mixed.5090.yaml"
+MIXED_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-mixed.public-calib.yaml"
 
 
 def _load(path: Path) -> dict:
@@ -72,8 +76,13 @@ def test_mixed_recipe_matches_nvidia_intent() -> None:
     assert data["scheme"] == "nvfp4_mixed"
     assert data["algorithm"] == "local_hessian"
     assert data["calibration"]["num_samples"] == 2048
+    assert data["calibration"]["batch_size"] == 1
+    assert data["calibration"]["dataset"] == "nvidia/Nemotron-Post-Training-Dataset-v3"
     assert data["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-mixed"
     assert data["family"] == "qwen3_5"
+    text = MIXED.read_text().lower()
+    assert "16" in text
+    assert "group_size" in text or "group size" in text
 
 
 def test_w4a4_comparison_recipe_if_present() -> None:
@@ -86,3 +95,45 @@ def test_w4a4_comparison_recipe_if_present() -> None:
     text = W4A4.read_text().lower()
     assert "16" in text
     assert "block" in text or "group" in text
+
+
+def test_5090_and_public_calib_recipes() -> None:
+    for path in (W4A4_5090, W4A4_PUBLIC, MIXED_5090, MIXED_PUBLIC):
+        assert path.is_file(), path.name
+        data = _load(path)
+        _assert_schema(data, path)
+        assert data["model"]["source"] == "Qwen/Qwen3.8-27B"
+        assert data["backend"] == "modelopt"
+        assert data["family"] == "qwen3_5"
+        assert data["calibration"]["dataset"] == "HuggingFaceH4/ultrachat_200k"
+        assert data["algorithm"] == "max"
+
+    w4a4_5090 = _load(W4A4_5090)
+    assert w4a4_5090["scheme"] == "nvfp4_w4a4"
+    assert w4a4_5090["calibration"]["num_samples"] == 256
+    assert w4a4_5090["calibration"]["max_seq_length"] == 1024
+    assert w4a4_5090["calibration"]["batch_size"] == 4
+    assert w4a4_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A4"
+
+    mixed_5090 = _load(MIXED_5090)
+    assert mixed_5090["scheme"] == "nvfp4_mixed"
+    assert mixed_5090["algorithm"] == "max"
+    assert mixed_5090["algorithm"] != "local_hessian"
+    assert mixed_5090["calibration"]["num_samples"] == 256
+    assert mixed_5090["calibration"]["max_seq_length"] == 1024
+    assert mixed_5090["calibration"]["batch_size"] == 4
+    assert mixed_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-mixed"
+
+    w4a4_pub = _load(W4A4_PUBLIC)
+    assert w4a4_pub["scheme"] == "nvfp4_w4a4"
+    assert w4a4_pub["calibration"]["num_samples"] == 512
+    assert w4a4_pub["calibration"]["max_seq_length"] == 2048
+    assert w4a4_pub["calibration"]["batch_size"] == 1
+    mixed_pub = _load(MIXED_PUBLIC)
+    assert mixed_pub["scheme"] == "nvfp4_mixed"
+    assert mixed_pub["algorithm"] == "max"
+    assert mixed_pub["algorithm"] != "local_hessian"
+    assert mixed_pub["calibration"]["num_samples"] == 512
+    assert mixed_pub["calibration"]["max_seq_length"] == 2048
+    assert mixed_pub["calibration"]["batch_size"] == 1
+

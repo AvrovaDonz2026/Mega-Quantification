@@ -1,0 +1,34 @@
+# Same mixed NVFP4/FP8 scheme as qwen3.8-27b-nvfp4-mixed.yaml but with a
+# *public* calibration set and algorithm max (not Local-Hessian).
+# Nemotron-Post-Training-Dataset-v3 is gated and needs HF_TOKEN.
+# Use this on GPU cloud pods / CI when you only have anonymous Hub access.
+# Single 32 GB 5090: prefer qwen3.8-27b-nvfp4-mixed.5090.yaml (256×1024, batch 4).
+
+name: qwen3.8-27b-nvfp4-mixed-public-calib
+backend: modelopt
+scheme: nvfp4_mixed
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: HuggingFaceH4/ultrachat_200k
+  num_samples: 512
+  max_seq_length: 2048
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-mixed
+  format: hf
+  pack: true

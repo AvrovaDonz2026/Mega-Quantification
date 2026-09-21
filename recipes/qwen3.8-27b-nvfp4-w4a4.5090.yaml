@@ -1,0 +1,37 @@
+# Single-32GB-5090 + 64 GB RAM profile: real NVFP4 W4A4 PTQ.
+#
+# Uniform NVFP4 W4A4 (block / group_size 16). Packs VRAM−1GiB of weights, keeps
+# the rest in RAM (MemTotal−6GiB, not disk), uses every CPU thread, and runs
+# max-calib at 256×1024 with batch_size 4 so CPU↔GPU offload is amortized.
+# Skip the vision constructor so auto device_map fills the GPU with the 27B LM.
+# Use a local snapshot, not UPFS /model. Quality Nemotron recipe: the
+# non-suffix qwen3.8-27b-nvfp4-w4a4.yaml.
+
+name: qwen3.8-27b-nvfp4-w4a4-5090
+backend: modelopt
+scheme: nvfp4_w4a4
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: HuggingFaceH4/ultrachat_200k
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 4
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4
+  format: hf
+  pack: true

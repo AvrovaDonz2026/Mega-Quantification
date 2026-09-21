@@ -25,3 +25,18 @@ def w4a8_recipe_path(recipes_dir: Path) -> Path:
 @pytest.fixture(scope="session")
 def mixed_recipe_path(recipes_dir: Path) -> Path:
     return recipes_dir / "qwen3.8-27b-nvfp4-mixed.yaml"
+
+
+@pytest.fixture(scope="session")
+def w4a4_recipe_path(recipes_dir: Path) -> Path:
+    return recipes_dir / "qwen3.8-27b-nvfp4-w4a4.yaml"
+
+
+@pytest.fixture(scope="session")
+def w4a4_5090_recipe_path(recipes_dir: Path) -> Path:
+    return recipes_dir / "qwen3.8-27b-nvfp4-w4a4.5090.yaml"
+
+
+@pytest.fixture(scope="session")
+def mixed_5090_recipe_path(recipes_dir: Path) -> Path:
+    return recipes_dir / "qwen3.8-27b-nvfp4-mixed.5090.yaml"

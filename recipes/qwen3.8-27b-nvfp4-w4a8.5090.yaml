@@ -1,6 +1,6 @@
 # Single-32GB-5090 + 64 GB RAM profile: real NVFP4 W4A8 PTQ.
 #
-# Packs VRAM−2GiB of weights, keeps the rest in RAM (MemTotal−6GiB, not disk),
+# Packs VRAM−1GiB of weights, keeps the rest in RAM (MemTotal−6GiB, not disk),
 # uses every CPU thread, and runs max-calib at 256×1024 with batch_size 4 so
 # CPU↔GPU offload is amortized. Skip the vision constructor so auto device_map
 # fills the GPU with the 27B LM. Use a local snapshot, not UPFS /model.

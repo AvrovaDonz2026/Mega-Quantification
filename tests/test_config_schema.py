@@ -44,6 +44,7 @@ def test_load_w4a8_and_mixed_yaml() -> None:
     assert w4a8.model.quantize_mtp is False
     assert w4a8.export.output_dir == "outputs/Qwen3.8-27B-NVFP4-W4A8"
     assert mixed.export.output_dir == "outputs/Qwen3.8-27B-NVFP4-mixed"
+    assert mixed.calibration.dataset == "nvidia/Nemotron-Post-Training-Dataset-v3"
 
 
 def test_load_w4a4_comparison_if_present() -> None:
@@ -55,3 +56,42 @@ def test_load_w4a4_comparison_if_present() -> None:
     recipe = load_recipe(W4A4)
     assert recipe.scheme == "nvfp4_w4a4"
     assert recipe.model.source == "Qwen/Qwen3.8-27B"
+
+
+def test_load_5090_packed_recipes() -> None:
+    load_recipe = _load_recipe_fn()
+    if load_recipe is None:
+        pytest.skip("megaquant.config.load_recipe not available")
+    w4a4 = load_recipe(REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a4.5090.yaml")
+    mixed = load_recipe(REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-mixed.5090.yaml")
+    assert w4a4.scheme == "nvfp4_w4a4"
+    assert mixed.scheme == "nvfp4_mixed"
+    assert w4a4.algorithm == "max"
+    assert mixed.algorithm == "max"
+    assert w4a4.calibration.batch_size == 4
+    assert mixed.calibration.batch_size == 4
+    assert w4a4.calibration.dataset == "HuggingFaceH4/ultrachat_200k"
+    assert mixed.calibration.dataset == "HuggingFaceH4/ultrachat_200k"
+
+
+def test_load_public_calib_recipes_if_present() -> None:
+    load_recipe = _load_recipe_fn()
+    if load_recipe is None:
+        pytest.skip("megaquant.config.load_recipe not available")
+    paths = (
+        REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a4.public-calib.yaml",
+        REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-mixed.public-calib.yaml",
+        REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a8.public-calib.yaml",
+    )
+    loaded = 0
+    for path in paths:
+        if not path.is_file():
+            continue
+        recipe = load_recipe(path)
+        assert recipe.model.source == "Qwen/Qwen3.8-27B"
+        assert recipe.family == "qwen3_5"
+        assert recipe.algorithm == "max"
+        assert recipe.calibration.dataset == "HuggingFaceH4/ultrachat_200k"
+        loaded += 1
+    if loaded == 0:
+        pytest.skip("public-calib recipes not shipped")

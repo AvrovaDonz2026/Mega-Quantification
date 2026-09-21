@@ -1,10 +1,9 @@
-# Comparison recipe: uniform NVFP4 W4A4 (weights + activations both NVFP4).
-#
-# Block size: stock NVFP4 uses group_size / block size 16, unlike W4A8's 32.
-# Single 32 GB 5090 / Compshare pod: use qwen3.8-27b-nvfp4-w4a4.5090.yaml
-# (or `bash scripts/gpu-pod.sh plan|quantize w4a4`), not this quality YAML.
+# Same as qwen3.8-27b-nvfp4-w4a4.yaml but with a *public* calibration set.
+# Nemotron-Post-Training-Dataset-v2 is gated and needs HF_TOKEN.
+# Use this on GPU cloud pods / CI when you only have anonymous Hub access.
+# Single 32 GB 5090: prefer qwen3.8-27b-nvfp4-w4a4.5090.yaml (256×1024, batch 4).
 
-name: qwen3.8-27b-nvfp4-w4a4
+name: qwen3.8-27b-nvfp4-w4a4-public-calib
 backend: modelopt
 scheme: nvfp4_w4a4
 algorithm: max
@@ -21,7 +20,7 @@ model:
   quantize_mtp: false
 
 calibration:
-  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 512
   max_seq_length: 2048
   batch_size: 1

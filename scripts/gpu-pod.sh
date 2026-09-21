@@ -8,8 +8,15 @@
 #   BF16 weights already at /model/ModelScope/Qwen/Qwen3.8-27B (read-only)
 #
 # Usage (on the pod, from the repo root):
-#   bash scripts/gpu-pod.sh plan
-#   bash scripts/gpu-pod.sh quantize
+#   bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]
+#
+# RECIPE env, if set, wins. Otherwise the committed 5090 packed recipe is used:
+#   recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml
+#   recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml
+#   recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+# If that file is missing, recipes/qwen3.8-27b-nvfp4-<scheme>.pod.yaml is
+# generated once (never overwritten). Scheme default is w4a8. Do not bake
+# 27B weights into images. Local snapshot, if present, overrides model.source.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,7 +27,7 @@ export MEGAQUANT_DEVICE_MAP="${MEGAQUANT_DEVICE_MAP:-auto}"
 export MEGAQUANT_LOW_MEMORY="${MEGAQUANT_LOW_MEMORY:-1}"
 export MEGAQUANT_OFFLOAD_DIR="${MEGAQUANT_OFFLOAD_DIR:-$ROOT/offload_folder}"
 # Leave MEGAQUANT_MAX_MEMORY unset so Python packs from real VRAM/RAM
-# (VRAM − 2 GiB, MemTotal − 6 GiB). Override explicitly if you need a cap.
+# (VRAM − 1 GiB, MemTotal − 6 GiB). Override explicitly if you need a cap.
 export MEGAQUANT_GPU_HEADROOM_GIB="${MEGAQUANT_GPU_HEADROOM_GIB:-1}"
 export MEGAQUANT_CPU_RESERVE_GIB="${MEGAQUANT_CPU_RESERVE_GIB:-6}"
 export MEGAQUANT_BATCH_SIZE="${MEGAQUANT_BATCH_SIZE:-4}"
@@ -55,7 +62,6 @@ if [[ -z "${PY}" ]]; then
   done
 fi
 
-RECIPE="${RECIPE:-$ROOT/recipes/qwen3.8-27b-nvfp4-w4a8.pod.yaml}"
 DEFAULT_MODEL="/workspace/models/Qwen3.8-27B"
 if [[ ! -f "${DEFAULT_MODEL}/config.json" ]]; then
   DEFAULT_MODEL="/model/ModelScope/Qwen/Qwen3.8-27B"
@@ -63,13 +69,50 @@ fi
 CMD="${1:-plan}"
 shift || true
 
+SCHEME="w4a8"
+if [[ "${1:-}" == "w4a8" || "${1:-}" == "w4a4" || "${1:-}" == "mixed" ]]; then
+  SCHEME="$1"
+  shift
+fi
+
+PACKED_RECIPE="$ROOT/recipes/qwen3.8-27b-nvfp4-${SCHEME}.5090.yaml"
+POD_RECIPE="$ROOT/recipes/qwen3.8-27b-nvfp4-${SCHEME}.pod.yaml"
+if [[ -z "${RECIPE:-}" ]]; then
+  if [[ -f "${PACKED_RECIPE}" ]]; then
+    RECIPE="${PACKED_RECIPE}"
+  else
+    RECIPE="${POD_RECIPE}"
+  fi
+fi
+
+MODEL_ARGS=()
+if [[ -f "${DEFAULT_MODEL}/config.json" ]]; then
+  MODEL_ARGS+=(--model "${DEFAULT_MODEL}")
+fi
+
 mkdir -p "$ROOT/outputs" "$MEGAQUANT_OFFLOAD_DIR" "$HF_HOME"
 
 if [[ ! -f "${RECIPE}" ]]; then
+  RECIPE="${POD_RECIPE}"
+  case "${SCHEME}" in
+    w4a4)
+      NV_SCHEME="nvfp4_w4a4"
+      OUT_NAME="Qwen3.8-27B-NVFP4-W4A4"
+      ;;
+    mixed)
+      NV_SCHEME="nvfp4_mixed"
+      OUT_NAME="Qwen3.8-27B-NVFP4-mixed"
+      ;;
+    *)
+      SCHEME="w4a8"
+      NV_SCHEME="nvfp4_w4a8"
+      OUT_NAME="Qwen3.8-27B-NVFP4-W4A8"
+      ;;
+  esac
   cat > "${RECIPE}" <<YAML
-name: qwen3.8-27b-nvfp4-w4a8-pod
+name: qwen3.8-27b-nvfp4-${SCHEME}-pod
 backend: modelopt
-scheme: nvfp4_w4a8
+scheme: ${NV_SCHEME}
 algorithm: max
 kv_cache: fp8
 family: qwen3_5
@@ -82,7 +125,7 @@ model:
   quantize_vision: false
   quantize_mtp: false
 calibration:
-  # Nemotron v2 is gated; ultrachat is public. Override RECIPE + HF_TOKEN for Nemotron.
+  # Nemotron is gated; ultrachat is public. Override RECIPE + HF_TOKEN for Nemotron.
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
@@ -90,7 +133,7 @@ calibration:
   seed: 42
   with_images: false
 export:
-  output_dir: ${ROOT}/outputs/Qwen3.8-27B-NVFP4-W4A8
+  output_dir: ${ROOT}/outputs/${OUT_NAME}
   format: hf
   pack: true
 YAML
@@ -99,6 +142,7 @@ fi
 log() { printf '[gpu-pod] %s\n' "$*"; }
 
 log "python=${PY} threads=${MEGAQUANT_NUM_THREADS} gpu_headroom=${MEGAQUANT_GPU_HEADROOM_GIB}GiB cpu_reserve=${MEGAQUANT_CPU_RESERVE_GIB}GiB batch=${MEGAQUANT_BATCH_SIZE}"
+log "recipe=${RECIPE} scheme=${SCHEME}"
 "${PY}" - <<'PY'
 import torch, sys, subprocess
 print("torch", torch.__version__, "cuda", torch.cuda.is_available())
@@ -141,10 +185,10 @@ PY
 
 case "${CMD}" in
   plan)
-    exec "${PY}" -m megaquant.cli plan -c "${RECIPE}" "$@"
+    exec "${PY}" -m megaquant.cli plan -c "${RECIPE}" "${MODEL_ARGS[@]}" "$@"
     ;;
   quantize)
-    exec "${PY}" -m megaquant.cli quantize -c "${RECIPE}" "$@"
+    exec "${PY}" -m megaquant.cli quantize -c "${RECIPE}" "${MODEL_ARGS[@]}" "$@"
     ;;
   schemes|families)
     exec "${PY}" -m megaquant.cli "${CMD}" "$@"

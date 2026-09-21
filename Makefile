@@ -1,4 +1,4 @@
-.PHONY: host-check build plan quantize mixed shell image-tar
+.PHONY: host-check build plan quantize mixed w4a4 shell image-tar
 
 host-check:
 	bash docker/host-check.sh
@@ -14,6 +14,9 @@ quantize:
 
 mixed:
 	docker compose --profile gpu run --rm mixed
+
+w4a4:
+	docker compose --profile gpu run --rm w4a4
 
 shell:
 	docker compose --profile dev run --rm shell

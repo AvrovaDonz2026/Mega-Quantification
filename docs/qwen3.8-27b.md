@@ -198,6 +198,21 @@ single-digit. Do not compile `causal-conv1d` while another PTQ is on the GPU.
 Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 `MEGAQUANT_NUM_THREADS`, `MEGAQUANT_BATCH_SIZE`, `MEGAQUANT_GPU_HEADROOM_GIB`.
 
+## OSS publish
+
+After a scheme finishes, upload the export with the same layout as W4A8:
+
+`https://zhiman-bj-public.oss-cn-beijing.aliyuncs.com/Mega-Quantification/<scheme>/<content-hash>/`
+
+`<scheme>` is `w4a8` / `w4a4` / `mixed`. `<content-hash>` is SHA256 of sorted
+`{safetensors-name} {sha256}\\n` lines. The bucket is public-readwrite;
+objects larger than 5 GiB use multipart upload.
+
+```bash
+python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
+python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme mixed
+```
+
 ## Serve (vLLM / SGLang / TensorRT-LLM)
 
 Patterns below follow the NVIDIA mixed model card (tested on Grace Blackwell

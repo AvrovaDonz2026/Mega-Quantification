@@ -1,8 +1,15 @@
 # NVIDIA-style mixed NVFP4/FP8 (intent of nvidia/Qwen3.8-27B-NVFP4):
-#   NVFP4 on MLP + lm_head, FP8 on self-attn + linear-attn.
-# Produced originally with nvidia-modelopt 0.48.0, Local-Hessian, 2048 samples.
+#   NVFP4 group_size 16 on MLP + lm_head, FP8 on self_attn / linear_attn.
+# Produced originally with nvidia-modelopt 0.48.0, Local-Hessian, 2048 samples
+# of nvidia/Nemotron-Post-Training-Dataset-v3.
 #
-# NVFP4 layers still use block size 32 (W4A8_NVFP4_FP8 / nvfp4_bs32), not 16.
+# This is not uniform W4A8 (nvfp4_bs32 / block 32). NVIDIA's public checkpoint
+# uses NVFP4 gs16 on MLP+lm_head and FP8 on attention, not W4A8 bs32.
+#
+# Dataset v3 is gated (HF_TOKEN). A single 32 GB 5090 cannot hold Local-Hessian
+# at 2048 samples — use qwen3.8-27b-nvfp4-mixed.5090.yaml or
+# qwen3.8-27b-nvfp4-mixed.public-calib.yaml (ultrachat, algorithm max) instead.
+#
 # Vision, MTP, embeddings, and GDN extras (conv1d / in_proj_a / in_proj_b)
 # stay BF16 via family qwen3_5. lm_head is quantized (do not extra_ignore it).
 
@@ -23,7 +30,7 @@ model:
   quantize_mtp: false
 
 calibration:
-  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  dataset: nvidia/Nemotron-Post-Training-Dataset-v3
   num_samples: 2048
   max_seq_length: 2048
   batch_size: 1

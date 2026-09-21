@@ -30,11 +30,16 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     text = compose_path.read_text()
     data = yaml.safe_load(text)
     services = data["services"]
-    for name in ("megaquant", "quantize", "mixed", "shell"):
+    for name in ("megaquant", "quantize", "mixed", "w4a4", "shell"):
         assert name in services, f"missing compose service {name}"
 
     profiles = services["quantize"].get("profiles") or []
     assert "gpu" in profiles
+    assert "gpu" in (services["w4a4"].get("profiles") or [])
+    mixed_cmd = " ".join(str(x) for x in (services["mixed"].get("command") or []))
+    assert "mixed.5090.yaml" in mixed_cmd
+    w4a4_cmd = " ".join(str(x) for x in (services["w4a4"].get("command") or []))
+    assert "w4a4.5090.yaml" in w4a4_cmd
 
     volume_blob = text
     megaquant_vols = services["megaquant"].get("volumes") or []
@@ -57,6 +62,13 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "0:26GiB,cpu:40GiB" not in script
     assert "batch_size: 4" in script
     assert "CUDA_DEVICE_MAX_CONNECTIONS" in script
+    assert "w4a4" in script
+    assert "mixed" in script
+    assert "qwen3.8-27b-nvfp4-${SCHEME}.5090.yaml" in script
+    assert "qwen3.8-27b-nvfp4-${SCHEME}.pod.yaml" in script or "qwen3.8-27b-nvfp4-w4a4.pod.yaml" in script
+    assert "nvfp4_mixed" in script
+    assert "nvfp4_w4a4" in script
+    assert 'MEGAQUANT_GPU_HEADROOM_GIB:-1' in script or 'MEGAQUANT_GPU_HEADROOM_GIB:-"1"' in script
 
 
 def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:

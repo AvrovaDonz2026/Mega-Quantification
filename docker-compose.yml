@@ -74,6 +74,8 @@ services:
         "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}",
       ]
 
+  # 5090-safe mixed NVFP4 (max + ultrachat). Quality Local-Hessian:
+  # RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm quantize
   mixed:
     <<: *megaquant
     profiles: ["gpu"]
@@ -81,7 +83,17 @@ services:
       [
         "quantize",
         "-c",
-        "recipes/qwen3.8-27b-nvfp4-mixed.yaml",
+        "recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml",
+      ]
+
+  w4a4:
+    <<: *megaquant
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml",
       ]
 
   shell:
