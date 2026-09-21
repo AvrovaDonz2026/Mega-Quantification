@@ -172,9 +172,9 @@ bash scripts/gpu-pod.sh plan mixed
 bash scripts/gpu-pod.sh quantize mixed
 ```
 
-Usage is `scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`. These commands
-start a job; they do not imply that W4A4 or mixed PTQ has already finished on
-the pod.
+Usage is `scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`.
+These commands start a job; they do not imply that W4A4 or mixed PTQ has
+already finished on the pod.
 
 Compose on a machine that has Docker:
 
@@ -221,11 +221,17 @@ or at `nvidia/Qwen3.8-27B-NVFP4`.
 ### vLLM
 
 ```sh
+# Prefer the recipe-built argv (adds native KV CPU offload on 32 GB cards):
+bash scripts/serve_vllm.sh outputs/Qwen3.8-27B-NVFP4-W4A8
+
+# Equivalent NVIDIA-card flags. On a 32 GB 5090 keep max-model-len 262144
+# and offload KV that does not fit HBM into host RAM (MemTotal − 6 GiB).
+# Do not also pass a large --swap-space; that would double-book RAM.
 vllm serve outputs/Qwen3.8-27B-NVFP4-W4A8 \
     --port 8000 \
     --quantization modelopt \
     --kv-cache-dtype fp8_e4m3 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 1 \
     --max-model-len 262144 \
     --reasoning-parser qwen3 \
     --enable-auto-tool-choice \
@@ -235,11 +241,15 @@ vllm serve outputs/Qwen3.8-27B-NVFP4-W4A8 \
     --gpu-memory-utilization 0.85 \
     --max-num-seqs 32 \
     --max-num-batched-tokens 32768 \
-    --enable-chunked-prefill
+    --enable-chunked-prefill \
+    --kv-offloading-backend native \
+    --kv-offloading-size 58
 ```
 
-Docker: `vllm/vllm-openai:nightly`. NVIDIA's mixed card omits
-`--quantization modelopt` and serves `nvidia/Qwen3.8-27B-NVFP4` directly.
+`megaquant serve --dry-run` prints the resolved argv, including the auto
+KV size. Docker: `vllm/vllm-openai:nightly`. NVIDIA's mixed card (GB300)
+omits `--quantization modelopt` and KV offload because that box has enough
+HBM for the 262k window.
 
 ### SGLang
 
@@ -279,6 +289,53 @@ trtllm-serve outputs/Qwen3.8-27B-NVFP4-W4A8 \
 
 Prefer TensorRT-LLM over vLLM when you need fused NVFP4+FP8 W4A8 kernels;
 vLLM support for that combo is limited.
+
+## GPQA Diamond (official card protocol)
+
+Evaluate each NVFP4 export with the **same sampling as the Qwen thinking
+card** and the **same vLLM serve flags as the NVIDIA NVFP4 card**. Do not
+greedy-decode. Do not cap generation at 512/2048 tokens.
+
+| Knob | Value |
+|---|---|
+| Sampling | `temperature=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true` |
+| Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
+| Context | `max_model_len=262144`; `max_new_tokens=0` means the remaining window |
+| Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
+| KV on 32 GB | `--kv-offloading-backend native` + `--kv-offloading-size` = MemTotal − 6 GiB (~58 GiB on a 64 GB box) |
+| Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong) |
+
+NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4**. The
+Qwen card reports **89.2**. Those numbers are thinking-mode, not greedy.
+
+On a 32 GB 5090 the 262k window does not fit in HBM. **Offload KV into host
+RAM** rather than shrinking `max_new_tokens`. Qwen GPQA traces can run tens
+of thousands of tokens; a short cap is not an official-card eval.
+
+```bash
+# Terminal 1 — serve (native KV → RAM)
+bash scripts/gpu-pod.sh serve w4a8
+# or: python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml \
+#        --model outputs/Qwen3.8-27B-NVFP4-W4A8
+
+# Terminal 2 — client (full 198; needs HF_TOKEN or GPQA_CSV for gated Hub)
+MEGAQUANT_VLLM_BASE_URL=http://127.0.0.1:8000/v1 \
+  bash scripts/gpu-pod.sh eval w4a8
+# same for w4a4 / mixed after those exports exist
+
+# No GPU, no 27B, no Hub:
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
+```
+
+Compose: `make serve-vllm` then `make eval-gpqa`. The client talks to
+`MEGAQUANT_VLLM_BASE_URL` (default `http://127.0.0.1:8000/v1`). Journals
+land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
+the full text; stdout is a one-line status).
+
+`Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local
+CSV with the Hub columns (`Question`, `Correct Answer`,
+`Incorrect Answer 1/2/3`, `Record ID`).
 
 ## Troubleshooting
 

@@ -5,7 +5,7 @@
 如果你的 5090 已经在 **K8s GPU 容器**里（没有 Docker、系统盘只有几十 GB、权重在只读盘），不要硬套 Compose，改用：
 
 ```bash
-bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]
+bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]
 ```
 
 省略 scheme 时默认 `w4a8`。这些命令会启动对应配方的 plan / PTQ，不表示 W4A4 或 mixed 已经在 pod 上跑完。
@@ -42,7 +42,11 @@ docker compose --profile gpu run --rm mixed      # 混合；默认 mixed.5090.ya
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-等价 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`。
+等价 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`、`make serve-vllm`、`make eval-gpqa`。
+
+GPQA Diamond 走官方 Qwen thinking 采样和 NVIDIA vLLM 卡参数。32 GB 卡上
+保持 `max-model-len 262144`，KV 放不下就 native offload 进主机内存
+（MemTotal − 6 GiB），不要截断生成。先 `serve-vllm` 再 `eval-gpqa`。
 
 ## 把已经建好的镜像拷到另一台 5090
 
@@ -91,6 +95,10 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml docker compose --profile gpu run
 # 混合：5090 打包（服务默认）vs NVIDIA 质量 Hessian
 docker compose --profile gpu run --rm mixed
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+
+# GPQA：先 serve（KV → RAM），再 eval
+docker compose --profile gpu run --rm serve-vllm
+MEGAQUANT_VLLM_BASE_URL=http://127.0.0.1:8000/v1 docker compose --profile gpu run --rm eval-gpqa
 
 # 只用第 0 张卡
 CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize

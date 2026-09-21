@@ -138,9 +138,23 @@ uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`. NVIDIA quality Local-Hessian:
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`.
+On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`.
 Those commands start a job; they do not mean W4A4 or mixed PTQ has already
 finished on the pod.
+
+### GPQA Diamond (after an export)
+
+Match the Qwen thinking card and the NVIDIA vLLM card. Generation uses the
+remaining 262144-token window (`max_new_tokens: 0`) and continues on length.
+On a 32 GB card, vLLM **native-offloads KV into host RAM** (MemTotal − 6 GiB)
+instead of truncating.
+
+```bash
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
+bash scripts/gpu-pod.sh serve w4a8
+MEGAQUANT_VLLM_BASE_URL=http://127.0.0.1:8000/v1 bash scripts/gpu-pod.sh eval w4a8
+```
 
 Copy a built image with `make image-tar` then `docker image load` on the 5090.
 Weights stay on the host (`./.cache/huggingface`, `./models`, `./outputs`).
@@ -256,8 +270,13 @@ Local-Hessian：
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`。
+K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`。
 这只是启动命令，不表示 W4A4 / mixed PTQ 已经在 pod 上跑完。
+
+量化产物评测 GPQA Diamond 时使用官方 thinking 采样 + NVIDIA vLLM 参数；
+`max_new_tokens: 0` 表示用完剩余 262k 窗口，length 后再续写。32 GB 显存
+放不下 262k KV 时走 vLLM native **CPU offload**（MemTotal − 6 GiB），不要
+靠截断生成来省显存。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
 默认 CPU offload；双卡或更大 Blackwell 更合适。

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mega-Quantification container entrypoint.
-# Usage: docker compose run --rm megaquant [plan|quantize|schemes|families|bash] ...
+# Usage: docker compose run --rm megaquant [plan|quantize|eval|serve|schemes|families|bash] ...
 set -euo pipefail
 
 log() { printf '[megaquant] %s\n' "$*"; }
@@ -88,6 +88,10 @@ if [[ $# -eq 0 ]]; then
 elif [[ "${1}" == "plan" || "${1}" == "quantize" ]]; then
   if ! _has_config_flag "$@"; then
     set -- "$@" -c "${DEFAULT_RECIPE}"
+  fi
+elif [[ "${1}" == "eval" || "${1}" == "serve" ]]; then
+  if ! _has_config_flag "$@"; then
+    set -- "$@" -c "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}"
   fi
 fi
 

@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from megaquant.config import CLI_OVERRIDE_MAP, load_recipe
+from megaquant.eval_gpqa import (
+    describe_eval,
+    load_eval_recipe,
+    run_gpqa,
+    vllm_serve_argv_from_recipe,
+)
 from megaquant.exceptions import MegaQuantError
 from megaquant.pipeline import QuantPipeline
 from megaquant.registry import list_families, list_schemes
@@ -93,6 +99,66 @@ def cmd_families(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _eval_recipe_from_args(args: argparse.Namespace):
+    import os
+
+    overrides: dict[str, Any] = {}
+    if getattr(args, "model", None):
+        overrides["model"] = args.model
+    if getattr(args, "output", None):
+        overrides["output_dir"] = args.output
+    if getattr(args, "base_url", None):
+        overrides["base_url"] = args.base_url
+    elif os.environ.get("MEGAQUANT_VLLM_BASE_URL"):
+        overrides["base_url"] = os.environ["MEGAQUANT_VLLM_BASE_URL"]
+    if getattr(args, "limit", None) is not None:
+        overrides["limit"] = args.limit
+    return load_eval_recipe(args.config, overrides or None)
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    import json
+
+    recipe = _eval_recipe_from_args(args)
+    result = run_gpqa(recipe, dry_run=bool(getattr(args, "dry_run", False)))
+    payload = result.get("plan") if result.get("dry_run") else result.get("scores")
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import json
+    import os
+
+    recipe = _eval_recipe_from_args(args)
+    argv = vllm_serve_argv_from_recipe(
+        recipe,
+        getattr(args, "model", None),
+        port=int(getattr(args, "port", 8000) or 8000),
+    )
+    if getattr(args, "dry_run", False):
+        plan = describe_eval(recipe)
+        print(
+            json.dumps(
+                {
+                    "argv": argv,
+                    "plan": plan,
+                    "kv_cpu_offload_gib": plan["kv_cpu_offload_gib"],
+                },
+                indent=2,
+            )
+        )
+        return 0
+    print("[serve]", " ".join(argv), flush=True)
+    try:
+        os.execvp(argv[0], argv)
+    except FileNotFoundError as exc:
+        raise MegaQuantError(
+            "vllm is not on PATH. Install a Blackwell vLLM build, then retry."
+        ) from exc
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="megaquant",
@@ -113,6 +179,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     families = sub.add_parser("families", help="List registered model families")
     families.set_defaults(func=cmd_families)
+
+    evaluate = sub.add_parser(
+        "eval",
+        help="GPQA Diamond (Qwen thinking + NVIDIA vLLM card flags; no short truncation)",
+    )
+    evaluate.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
+    evaluate.add_argument("--model", help="Export dir or served model name")
+    evaluate.add_argument("--output", help="Eval journal directory")
+    evaluate.add_argument("--base-url", dest="base_url", help="OpenAI-compatible vLLM URL")
+    evaluate.add_argument("--limit", type=int, help="Optional item cap (full run omits this)")
+    evaluate.add_argument("--dry-run", action="store_true")
+    evaluate.set_defaults(func=cmd_eval)
+
+    serve = sub.add_parser(
+        "serve",
+        help="vLLM serve with NVIDIA-card flags; KV that misses HBM goes to host RAM",
+    )
+    serve.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
+    serve.add_argument("--model", help="Export dir (NVFP4 checkpoint)")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--dry-run", action="store_true", help="Print argv; do not exec vLLM")
+    serve.set_defaults(func=cmd_serve)
 
     return parser
 

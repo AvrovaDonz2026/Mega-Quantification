@@ -21,5 +21,9 @@ class CalibrationError(MegaQuantError):
     """Calibration data loading or tokenization failed."""
 
 
+class EvalError(MegaQuantError):
+    """Benchmark eval failed."""
+
+
 class DryRun(MegaQuantError):
     """Signals a dry-run path (plan only; no weights loaded)."""

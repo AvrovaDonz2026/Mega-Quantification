@@ -83,11 +83,13 @@ COPY src ./src
 COPY recipes ./recipes
 COPY docs ./docs
 COPY docker ./docker
+COPY scripts ./scripts
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -e ".[dev]" \
     && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models \
-    && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh
+    && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh \
+          /opt/megaquant/scripts/*.sh
 
 WORKDIR /opt/megaquant
 ENTRYPOINT ["/opt/megaquant/docker/entrypoint.sh"]

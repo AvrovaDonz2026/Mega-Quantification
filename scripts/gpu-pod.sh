@@ -7,7 +7,7 @@
 #   Local BF16 snapshot via MEGAQUANT_MODEL or ./models / /workspace/models
 #
 # Usage (on the pod, from the repo root):
-#   bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]
+#   bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]
 #
 # RECIPE env, if set, wins. Otherwise the committed 5090 packed recipe is used:
 #   recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml
@@ -196,6 +196,23 @@ case "${CMD}" in
     ;;
   quantize)
     exec "${PY}" -m megaquant.cli quantize -c "${RECIPE}" "${MODEL_ARGS[@]}" "$@"
+    ;;
+  serve|eval)
+    EVAL_RECIPE="${EVAL_RECIPE:-$ROOT/recipes/eval-gpqa-diamond.yaml}"
+    case "${SCHEME}" in
+      w4a4) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A4" ;;
+      mixed) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-mixed" ;;
+      *) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A8" ;;
+    esac
+    EVAL_OUT="$ROOT/outputs/eval/gpqa_diamond-${SCHEME}"
+    if [[ "${CMD}" == "serve" ]]; then
+      log "serve recipe=${EVAL_RECIPE} model=${EVAL_MODEL} (KV CPU offload = MemTotal − reserve)"
+      exec "${PY}" -m megaquant.cli serve -c "${EVAL_RECIPE}" --model "${EVAL_MODEL}" "$@"
+    fi
+    export MEGAQUANT_VLLM_BASE_URL="${MEGAQUANT_VLLM_BASE_URL:-http://127.0.0.1:8000/v1}"
+    log "eval recipe=${EVAL_RECIPE} model=${EVAL_MODEL} out=${EVAL_OUT} base=${MEGAQUANT_VLLM_BASE_URL}"
+    exec "${PY}" -m megaquant.cli eval -c "${EVAL_RECIPE}" \
+      --model "${EVAL_MODEL}" --output "${EVAL_OUT}" "$@"
     ;;
   schemes|families)
     exec "${PY}" -m megaquant.cli "${CMD}" "$@"

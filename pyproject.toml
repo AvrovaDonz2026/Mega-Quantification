@@ -55,6 +55,7 @@ include = [
   "recipes",
   "docs",
   "docker",
+  "scripts",
   "Dockerfile",
   "docker-compose.yml",
   "README.md",

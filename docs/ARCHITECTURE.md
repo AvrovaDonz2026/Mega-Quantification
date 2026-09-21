@@ -35,6 +35,7 @@ src/megaquant/exceptions.py        # Agent Core
 src/megaquant/registry.py          # Agent Core
 src/megaquant/pipeline.py          # Agent Core
 src/megaquant/cli.py               # Agent Core
+src/megaquant/eval_gpqa.py         # GPQA Diamond (Qwen thinking + NVIDIA vLLM + KV CPU offload)
 src/megaquant/calibration.py       # Agent Core
 src/megaquant/__init__.py          # Agent Core
 src/megaquant/backends/base.py     # Agent ModelOpt — Protocol
@@ -225,7 +226,7 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
   `w4a4`, and `mixed` are behind `--profile gpu`. `mixed` defaults to
   `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`; NVIDIA quality Local-Hessian is
   `RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`.
-- GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`
+- GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`
   (starts a job; does not mean W4A4 or mixed PTQ has already finished).
 - Host check: `bash docker/host-check.sh` (driver 570+, NVIDIA Container Toolkit)
 - Move the box: `make image-tar` then `docker image load` on the 5090

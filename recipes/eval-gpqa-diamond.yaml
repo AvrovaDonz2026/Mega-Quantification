@@ -1,0 +1,65 @@
+# GPQA Diamond eval for Qwen3.8-27B NVFP4 exports.
+#
+# Protocol matches the public model cards, not a short-context smoke test:
+#   Qwen/Qwen3.8-27B thinking mode (generation_config.json):
+#     temperature=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0
+#     repetition_penalty=1.0 do_sample=true
+#     enable_thinking=true preserve_thinking=true reasoning_effort=xhigh
+#   nvidia/Qwen3.8-27B-NVFP4 vLLM serve:
+#     kv-cache-dtype fp8_e4m3, max-model-len 262144, reasoning-parser qwen3,
+#     seed 0, gpu-memory-utilization 0.85, max-num-seqs 32,
+#     max-num-batched-tokens 32768, enable-chunked-prefill
+#
+# max_new_tokens: 0 means "use the entire remaining context window".
+# continue_on_length continues if the server still hits length.
+# KV that does not fit GPU HBM is offloaded to host RAM
+# (`kv_offloading_backend: native`, size 0 = MemTotal − cpu_reserve_gib).
+# Do not greedy-decode; Qwen documents that it degrades thinking quality.
+
+name: gpqa-diamond-qwen38-official
+benchmark: gpqa_diamond
+dataset: Idavidrein/gpqa
+dataset_config: gpqa_diamond
+model: outputs/Qwen3.8-27B-NVFP4-W4A8
+backend: auto
+base_url: null
+shuffle_choices: true
+limit: null
+output_dir: outputs/eval/gpqa_diamond
+
+thinking:
+  enable: true
+  preserve: true
+  reasoning_effort: xhigh
+
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  do_sample: true
+
+generation:
+  max_model_len: 262144
+  max_new_tokens: 0
+  continue_on_length: true
+  seed: 0
+
+serve:
+  kv_cache_dtype: fp8_e4m3
+  gpu_memory_utilization: 0.85
+  max_num_seqs: 32
+  max_num_batched_tokens: 32768
+  reasoning_parser: qwen3
+  enable_chunked_prefill: true
+  enable_auto_tool_choice: true
+  tool_call_parser: qwen3_coder
+  mm_encoder_tp_mode: data
+  quantization: modelopt
+  tensor_parallel_size: null
+  kv_offloading_backend: native
+  kv_offloading_size_gb: 0
+  swap_space_gb: 0
+  cpu_reserve_gib: 6
