@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -14,7 +15,7 @@ from pydantic import ValidationError
 
 from megaquant.calibration import build_calibration_iter
 from megaquant.config import LayerGroup, PrecisionSpec, Recipe
-from megaquant.exceptions import BackendError, FamilyError, RecipeError
+from megaquant.exceptions import BackendError, FamilyError, MegaQuantError, RecipeError
 from megaquant.registry import (
     detect_family,
     get_backend,
@@ -102,6 +103,24 @@ def _placeholder_group(scheme: str) -> LayerGroup:
     return LayerGroup(name=scheme, targets=["*"], weights=weights, activations=activations)
 
 
+def _sanitize_group_dict(item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "format",
+        "bits",
+        "group_size",
+        "scale_dtype",
+        "dynamic",
+        "strategy",
+        "observer",
+    }
+    payload = dict(item)
+    for key in ("weights", "activations"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            payload[key] = {k: v for k, v in value.items() if k in allowed}
+    return payload
+
+
 def _coerce_groups(raw: object, scheme: str) -> list[LayerGroup]:
     if isinstance(raw, LayerGroup):
         return [raw]
@@ -122,7 +141,7 @@ def _coerce_groups(raw: object, scheme: str) -> list[LayerGroup]:
                     raise RecipeError(
                         f"Scheme '{scheme}' catalog entry '{key}' is not a layer group"
                     )
-                payload = dict(value)
+                payload = _sanitize_group_dict(value)
                 payload.setdefault("name", key)
                 try:
                     groups.append(LayerGroup.model_validate(payload))
@@ -143,7 +162,7 @@ def _coerce_groups(raw: object, scheme: str) -> list[LayerGroup]:
                 f"Invalid layer group in scheme '{scheme}': {type(item).__name__}"
             )
         try:
-            groups.append(LayerGroup.model_validate(item))
+            groups.append(LayerGroup.model_validate(_sanitize_group_dict(item)))
         except ValidationError as exc:
             raise RecipeError(f"Invalid layer group in scheme '{scheme}': {exc}") from exc
     return groups
@@ -167,14 +186,10 @@ def _load_hf_config(source: str) -> dict[str, Any]:
     try:
         from huggingface_hub import hf_hub_download
     except ImportError as exc:
-        raise FamilyError(
-            "huggingface_hub is required to inspect remote model configs"
-        ) from exc
+        raise FamilyError("huggingface_hub is required to inspect remote model configs") from exc
     try:
         cfg_path = hf_hub_download(repo_id=source, filename="config.json")
         payload = json.loads(Path(cfg_path).read_text())
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        raise FamilyError(f"Could not load config.json for '{source}': {exc}") from exc
     except Exception as exc:
         raise FamilyError(f"Could not load config.json for '{source}': {exc}") from exc
     if not isinstance(payload, dict):
@@ -191,7 +206,7 @@ def _backend_supports(backend: object, scheme: str) -> bool:
     except TypeError:
         if isinstance(backend, type):
             return bool(backend().supports(scheme))
-        raise
+        return False
 
 
 def _instantiate(obj: object) -> object:
@@ -239,9 +254,7 @@ def _family_ignore(family_name: str, recipe: Recipe, notes: list[str]) -> list[s
         family = _instantiate(get_family(family_name))
     except FamilyError:
         if family_name != "generic":
-            notes.append(
-                f"family '{family_name}' is not registered; using extra_ignore only"
-            )
+            notes.append(f"family '{family_name}' is not registered; using extra_ignore only")
         return []
     fn = getattr(family, "default_ignore", None)
     if not callable(fn):
@@ -287,20 +300,14 @@ def _torch_dtype(name: str) -> Any:
 
 
 def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, Any]:
-    try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-    except ImportError as exc:
+    missing_torch = importlib.util.find_spec("torch") is None
+    missing_hf = importlib.util.find_spec("transformers") is None
+    if missing_torch or missing_hf:
         raise BackendError(
             "transformers and torch are required to load weights. "
             "Install with: pip install megaquant[hf]"
-        ) from exc
-    try:
-        import torch  # noqa: F401 — presence check; dtype import happens in _torch_dtype
-    except ImportError as exc:
-        raise BackendError(
-            "transformers and torch are required to load weights. "
-            "Install with: pip install megaquant[hf]"
-        ) from exc
+        )
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tok_kwargs: dict[str, Any] = {"trust_remote_code": recipe.model.trust_remote_code}
     load_kwargs: dict[str, Any] = {
@@ -320,12 +327,17 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             model_cls = extra.pop("model_cls", extra.pop("auto_model_class", model_cls))
             load_kwargs.update(extra)
 
-    tokenizer = AutoTokenizer.from_pretrained(recipe.model.source, **tok_kwargs)
-    if isinstance(model_cls, str):
-        import transformers
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(recipe.model.source, **tok_kwargs)
+        if isinstance(model_cls, str):
+            import transformers
 
-        model_cls = getattr(transformers, model_cls)
-    model = model_cls.from_pretrained(recipe.model.source, **load_kwargs)
+            model_cls = getattr(transformers, model_cls)
+        model = model_cls.from_pretrained(recipe.model.source, **load_kwargs)
+    except MegaQuantError:
+        raise
+    except Exception as exc:
+        raise BackendError(f"Failed to load model '{recipe.model.source}': {exc}") from exc
     return model, tokenizer
 
 
@@ -392,13 +404,21 @@ class QuantPipeline:
             groups = list(recipe.groups)
         else:
             try:
-                groups = _coerce_groups(get_scheme(recipe.scheme), recipe.scheme)
+                catalog_entry = get_scheme(recipe.scheme)
             except RecipeError:
                 groups = [_placeholder_group(recipe.scheme)]
                 notes.append(
-                    f"scheme catalog has no '{recipe.scheme}'; "
-                    "synthesized a placeholder LayerGroup"
+                    f"scheme catalog has no '{recipe.scheme}'; synthesized a placeholder LayerGroup"
                 )
+            else:
+                try:
+                    groups = _coerce_groups(catalog_entry, recipe.scheme)
+                except RecipeError as exc:
+                    groups = [_placeholder_group(recipe.scheme)]
+                    notes.append(
+                        f"scheme '{recipe.scheme}' is registered but could not be "
+                        f"coerced into layer groups ({exc}); using a placeholder"
+                    )
 
         ignore = _unique(_family_ignore(family_name, recipe, notes) + list(recipe.extra_ignore))
         backend_name = _pick_backend(recipe, notes)

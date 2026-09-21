@@ -1,3 +1,17 @@
+# Qwen/Qwen3.8-27B BF16 → uniform NVFP4 W4A8
+#
+# Weights: NVFP4 (E2M1 micro-blocks, FP8 E4M3 local scales).
+# Activations: FP8 E4M3. This is W4A8, not W4A4.
+#
+# Block size: ModelOpt qformat `w4a8_nvfp4_fp8` uses NVFP4 block size 32
+# (`nvfp4_bs32`). The W4A4 default block size is 16 — do not mix them up.
+#
+# Algorithm `max` is the lighter PTQ path. NVIDIA's published mixed checkpoint
+# uses Local-Hessian + 2048 samples; see qwen3.8-27b-nvfp4-mixed.yaml.
+#
+# Ignore list comes from family `qwen3_5` (vision / MTP / embeddings /
+# linear_attn.conv1d,in_proj_a,in_proj_b stay BF16 unless model.quantize_*).
+
 name: qwen3.8-27b-nvfp4-w4a8
 backend: modelopt
 scheme: nvfp4_w4a8

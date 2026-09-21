@@ -192,10 +192,10 @@ def _register_catalog() -> None:
         return
     for scheme in SCHEME_CATALOG.values():
         try:
-            register_scheme(scheme)
+            register_scheme(scheme.name, scheme)
         except TypeError:
             try:
-                register_scheme(scheme.name, scheme)
+                register_scheme(scheme)
             except Exception:
                 return
         except Exception:

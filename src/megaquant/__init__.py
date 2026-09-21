@@ -1,7 +1,5 @@
 """Mega-Quantification: generic Hugging Face PTQ pipeline."""
 
-__version__ = "0.1.0"
-
 from megaquant.calibration import DummyCalibIter, build_calibration_iter
 from megaquant.config import (
     CLI_OVERRIDE_MAP,
@@ -35,6 +33,8 @@ from megaquant.registry import (
     register_family,
     register_scheme,
 )
+
+__version__ = "0.1.0"
 
 __all__ = [
     "CLI_OVERRIDE_MAP",

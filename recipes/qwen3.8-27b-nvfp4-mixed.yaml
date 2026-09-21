@@ -1,3 +1,11 @@
+# NVIDIA-style mixed NVFP4/FP8 (intent of nvidia/Qwen3.8-27B-NVFP4):
+#   NVFP4 on MLP + lm_head, FP8 on self-attn + linear-attn.
+# Produced originally with nvidia-modelopt 0.48.0, Local-Hessian, 2048 samples.
+#
+# NVFP4 layers still use block size 32 (W4A8_NVFP4_FP8 / nvfp4_bs32), not 16.
+# Vision, MTP, embeddings, and GDN extras (conv1d / in_proj_a / in_proj_b)
+# stay BF16 via family qwen3_5. lm_head is quantized (do not extra_ignore it).
+
 name: qwen3.8-27b-nvfp4-mixed
 backend: modelopt
 scheme: nvfp4_mixed

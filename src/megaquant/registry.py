@@ -12,16 +12,6 @@ from typing import Any
 
 from megaquant.exceptions import BackendError, FamilyError, RecipeError
 
-try:
-    from megaquant.backends.base import QuantBackend
-except ImportError:
-    QuantBackend = object  # type: ignore
-
-try:
-    from megaquant.models.base import ModelFamily
-except ImportError:
-    ModelFamily = object  # type: ignore
-
 _BACKENDS: dict[str, Any] = {}
 _FAMILIES: dict[str, Any] = {}
 _SCHEMES: dict[str, Any] = {}
@@ -42,18 +32,26 @@ def _ensure_plugins() -> None:
     _PLUGINS_LOADED = True
     for mod in _LAZY_MODULES:
         try:
-            importlib.import_module(mod)
+            module = importlib.import_module(mod)
         except ImportError:
             continue
+        # Re-run registration if a circular import skipped it the first time.
+        for fn_name in ("_register", "_register_catalog", "_try_register", "_try_register_backend"):
+            fn = getattr(module, fn_name, None)
+            if callable(fn):
+                try:
+                    fn()
+                except Exception:
+                    continue
 
 
-def register_backend(name: str, backend: QuantBackend) -> None:
+def register_backend(name: str, backend: Any) -> None:
     if not name:
         raise BackendError("Backend name must be a non-empty string")
     _BACKENDS[name] = backend
 
 
-def get_backend(name: str) -> QuantBackend:
+def get_backend(name: str) -> Any:
     _ensure_plugins()
     if name not in _BACKENDS:
         known = ", ".join(list_backends()) or "(none)"
@@ -66,13 +64,13 @@ def list_backends() -> list[str]:
     return sorted(_BACKENDS)
 
 
-def register_family(name: str, family: ModelFamily) -> None:
+def register_family(name: str, family: Any) -> None:
     if not name:
         raise FamilyError("Family name must be a non-empty string")
     _FAMILIES[name] = family
 
 
-def get_family(name: str) -> ModelFamily:
+def get_family(name: str) -> Any:
     _ensure_plugins()
     if name not in _FAMILIES:
         known = ", ".join(list_families()) or "(none)"

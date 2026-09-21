@@ -25,13 +25,15 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PrecisionSpec(StrictModel):
+class PrecisionSpec(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     format: Literal["nvfp4", "fp8", "mxfp4", "bf16", "int4"]
     bits: int
     group_size: int | None = None
     scale_dtype: str = "float8_e4m3fn"
-    dynamic: bool = False
+    dynamic: bool | str = False
     strategy: str | None = None
+    observer: str | None = None
 
 
 class LayerGroup(StrictModel):
