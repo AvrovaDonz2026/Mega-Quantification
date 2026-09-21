@@ -325,7 +325,7 @@ greedy-decode. Do not cap generation at 512/2048 tokens.
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache and leaves ~30 GiB for OS / Docker / eval (`eval-gpqa-diamond.5090.yaml`). |
-| Concurrency | default recipe 1; 5090 recipe **16** (`max_mamba_cache_size: 64` so 16×4 GDN slots) |
+| Concurrency | default recipe 1; 5090 recipe **24** (`max_mamba_cache_size: 96` bf16 GDN slots so 24×4; float32 64-slot mamba starved GPU KV) |
 | Attention | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8 Triton (`eval-gpqa-diamond.5090.yaml`) |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong) |

@@ -93,9 +93,11 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert recipe.serve.force_fp8_marlin is True
     assert recipe.serve.disable_cuda_graph is True
     assert recipe.serve.kv_offloading_size_gb == 64
-    assert recipe.concurrency == 16
-    assert recipe.serve.max_mamba_cache_size == 64
-    assert recipe.serve.max_running_requests == 16
+    assert recipe.concurrency == 24
+    assert recipe.serve.max_mamba_cache_size == 96
+    assert recipe.serve.max_running_requests == 24
+    assert recipe.serve.mamba_ssm_dtype == "bfloat16"
+    assert recipe.serve.mem_fraction_static == 0.95
     argv = sglang_serve_argv_from_recipe(recipe)
     joined = " ".join(argv)
     assert "--attention-backend triton" in joined
@@ -106,7 +108,10 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert "--fp8-gemm-backend triton" in joined
     assert "--fp4-gemm-backend marlin" in joined
     assert "--hicache-size 64" in joined
-    assert "--max-mamba-cache-size 64" in joined
+    assert "--max-mamba-cache-size 96" in joined
+    assert "--mamba-ssm-dtype bfloat16" in joined
+    assert "--max-running-requests 24" in joined
+    assert "--mem-fraction-static 0.95" in joined
     assert sglang_serve_environ(recipe) == {"SGLANG_FORCE_FP8_MARLIN": "1"}
 
 

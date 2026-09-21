@@ -287,7 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--concurrency",
         type=int,
         default=None,
-        help="Parallel GPQA HTTP requests (recipe concurrency; 5090 default 16)",
+        help="Parallel GPQA HTTP requests (recipe concurrency; 5090 default 24)",
     )
     evaluate.add_argument(
         "--dry-run",

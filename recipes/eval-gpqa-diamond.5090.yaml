@@ -18,9 +18,11 @@ base_url: null
 shuffle_choices: true
 limit: null
 output_dir: outputs/eval/gpqa_diamond
-# Serve mamba slots cap in-flight at size/4. 64 slots → 16-way; 94 GiB RAM
-# puts 64 GiB in HiCache and leaves ~30 GiB for OS / Docker / eval client.
-concurrency: 16
+# Serve mamba slots cap in-flight at size/4. 96 bf16 slots → 24-way. float32
+# 64 slots ate 9.3 GB HBM and left 0.88 GB GPU KV, so 16 HTTP workers queued
+# behind 3–4 decode slots. HiCache splits host RAM by GPU pool size, so a
+# fat GPU Mamba also steals the 64 GiB host pool from attention KV.
+concurrency: 24
 
 thinking:
   enable: true
@@ -46,10 +48,10 @@ serve:
   engine: sglang
   host: 0.0.0.0
   kv_cache_dtype: fp8_e4m3
-  gpu_memory_utilization: 0.85
-  mem_fraction_static: 0.85
+  gpu_memory_utilization: 0.95
+  mem_fraction_static: 0.95
   max_num_seqs: 32
-  max_running_requests: 16
+  max_running_requests: 24
   max_num_batched_tokens: 32768
   chunked_prefill_size: 2048
   reasoning_parser: qwen3
@@ -68,12 +70,13 @@ serve:
   force_fp8_marlin: true
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
-  mamba_ssm_dtype: float32
-  max_mamba_cache_size: 64
+  mamba_ssm_dtype: bfloat16
+  max_mamba_cache_size: 96
   enable_hierarchical_cache: true
   kv_offloading_backend: native
-  # This box has 94 GiB. Pin 64 GiB of HiCache (KV + GDN Mamba host pools)
-  # and leave ~30 GiB for OS, Docker, and the eval client.
+  # This box has 94 GiB. Pin 64 GiB of HiCache. SGLang splits that host
+  # pool by GPU Mamba vs GPU KV size, so bf16 96-slot GDN is what actually
+  # leaves attention KV on both HBM and host.
   kv_offloading_size_gb: 64
   swap_space_gb: 0
   cpu_reserve_gib: 6
