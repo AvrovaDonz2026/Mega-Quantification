@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -101,8 +103,23 @@ def forward_loop_from_iter(calib_iter: Iterable[Any]) -> Callable[[Any], None]:
 
     def forward_loop(model: Any) -> None:
         device = _first_param_device(model)
-        for batch in batches:
+        total = len(batches) if hasattr(batches, "__len__") else None
+        started = time.monotonic()
+        for index, batch in enumerate(batches, start=1):
             _run_forward(model, _move_to_device(batch, device))
+            if total is None:
+                continue
+            step = max(1, total // 20)
+            if index == 1 or index == total or index % step == 0:
+                elapsed = time.monotonic() - started
+                per = elapsed / index
+                eta = per * (total - index)
+                print(
+                    f"[megaquant] calib {index}/{total}  {elapsed:.1f}s elapsed  "
+                    f"{per:.2f}s/step  eta {eta:.0f}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
     return forward_loop
 

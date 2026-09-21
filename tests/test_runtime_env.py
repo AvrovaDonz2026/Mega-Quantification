@@ -18,6 +18,9 @@ _RUNTIME_KEYS = (
     "MEGAQUANT_LOW_MEMORY",
     "MEGAQUANT_OFFLOAD_DIR",
     "MEGAQUANT_MAX_MEMORY",
+    "MEGAQUANT_FAST",
+    "MEGAQUANT_NUM_SAMPLES",
+    "MEGAQUANT_MAX_SEQ_LENGTH",
 )
 
 
@@ -118,3 +121,16 @@ def test_low_memory_skips_max_memory_without_torch_or_spec(
         return
     if not torch.cuda.is_available():
         assert "max_memory" not in kwargs
+
+
+def test_fast_env_shrinks_calib(
+    clean_runtime_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+    w4a8_recipe_path,
+) -> None:
+    monkeypatch.setenv("MEGAQUANT_FAST", "1")
+    recipe = load_recipe(w4a8_recipe_path)
+    plan = QuantPipeline(recipe).resolve()
+    assert plan.recipe.calibration.num_samples == 128
+    assert plan.recipe.calibration.max_seq_length == 1024
+    assert any("fast calib" in note.lower() for note in plan.notes)

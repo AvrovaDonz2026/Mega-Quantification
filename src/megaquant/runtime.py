@@ -84,8 +84,13 @@ def _host_cpu_memory_str() -> str:
     return _bytes_to_gib_str(kib * 1024)
 
 
+_GPU_ACTIVATION_HEADROOM = 6 * 1024**3
+FAST_NUM_SAMPLES = 128
+FAST_MAX_SEQ_LENGTH = 1024
+
+
 def default_max_memory() -> dict[int | str, str] | None:
-    """~70% of each visible GPU plus host CPU RAM. None if torch/CUDA is missing."""
+    """Pack weights up to (VRAM − 6 GiB) so a 32 GB 5090 keeps ~26 GiB on-GPU."""
     try:
         import torch
     except ImportError:
@@ -96,7 +101,8 @@ def default_max_memory() -> dict[int | str, str] | None:
     mapping: dict[int | str, str] = {}
     for index in range(cuda.device_count()):
         total = cuda.get_device_properties(index).total_memory
-        mapping[index] = _bytes_to_gib_str(int(total * 0.7))
+        usable = max(4 * 1024**3, total - _GPU_ACTIVATION_HEADROOM)
+        mapping[index] = _bytes_to_gib_str(int(usable))
     mapping["cpu"] = _host_cpu_memory_str()
     return mapping
 
@@ -113,7 +119,7 @@ def from_pretrained_env_kwargs() -> dict[str, Any]:
 
     ``MEGAQUANT_DEVICE_MAP`` always wins when set. Low-memory mode adds
     ``offload_folder``, ``low_cpu_mem_usage=True``, and ``max_memory`` when it
-    can be resolved (explicit env, or ~70% of each GPU). If torch is missing
+    can be resolved (explicit env, or VRAM minus 6 GiB). If torch is missing
     at dry-run time, ``max_memory`` is omitted.
     """
     kwargs: dict[str, Any] = {}
@@ -131,14 +137,34 @@ def from_pretrained_env_kwargs() -> dict[str, Any]:
 
 
 def apply_env_to_recipe(recipe: Recipe) -> Recipe:
-    """Mutate ``recipe.model.device_map`` when ``MEGAQUANT_DEVICE_MAP`` is set."""
+    """Mutate device_map / calibration when Compose or gpu-pod env vars are set."""
     device_map = os.environ.get("MEGAQUANT_DEVICE_MAP", "").strip()
     if device_map:
         recipe.model.device_map = device_map
+    if env_flag("MEGAQUANT_FAST"):
+        recipe.calibration.num_samples = min(recipe.calibration.num_samples, FAST_NUM_SAMPLES)
+        recipe.calibration.max_seq_length = min(
+            recipe.calibration.max_seq_length, FAST_MAX_SEQ_LENGTH
+        )
+    raw_samples = os.environ.get("MEGAQUANT_NUM_SAMPLES", "").strip()
+    if raw_samples:
+        recipe.calibration.num_samples = int(raw_samples)
+    raw_seq = os.environ.get("MEGAQUANT_MAX_SEQ_LENGTH", "").strip()
+    if raw_seq:
+        recipe.calibration.max_seq_length = int(raw_seq)
     return recipe
 
 
 def low_memory_plan_note() -> str | None:
     if low_memory_enabled():
         return LOW_MEMORY_NOTE
+    return None
+
+
+def fast_plan_note() -> str | None:
+    if env_flag("MEGAQUANT_FAST"):
+        return (
+            f"fast calib: num_samples≤{FAST_NUM_SAMPLES}, "
+            f"max_seq_length≤{FAST_MAX_SEQ_LENGTH} (max/absmax still real PTQ)"
+        )
     return None

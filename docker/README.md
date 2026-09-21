@@ -50,7 +50,7 @@ docker compose --profile gpu run --rm quantize
 
 | 机器 | 建议 |
 |---|---|
-| 单卡 5090 32 GB | 开 `MEGAQUANT_LOW_MEMORY=1` + `device_map=auto`（CPU offload，校准会慢） |
+| 单卡 5090 32 GB | 开 `MEGAQUANT_LOW_MEMORY=1` + `device_map=auto`，用 `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml`（256×1024）。把 BF16 拷到本地盘，不要打 UPFS `/model`。 |
 | 双卡 5090 / 96 GB 级 Blackwell | `CUDA_VISIBLE_DEVICES=0,1`，正常 PTQ |
 | B200 / GB300 | 直接跑，可把 `num_samples` 加到 2048 |
 

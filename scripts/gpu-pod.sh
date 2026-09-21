@@ -19,6 +19,7 @@ export PYTHONUNBUFFERED=1
 export MEGAQUANT_DEVICE_MAP="${MEGAQUANT_DEVICE_MAP:-auto}"
 export MEGAQUANT_LOW_MEMORY="${MEGAQUANT_LOW_MEMORY:-1}"
 export MEGAQUANT_OFFLOAD_DIR="${MEGAQUANT_OFFLOAD_DIR:-$ROOT/offload_folder}"
+export MEGAQUANT_MAX_MEMORY="${MEGAQUANT_MAX_MEMORY:-0:26GiB,cpu:40GiB}"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -36,7 +37,10 @@ if [[ -z "${PY}" ]]; then
 fi
 
 RECIPE="${RECIPE:-$ROOT/recipes/qwen3.8-27b-nvfp4-w4a8.pod.yaml}"
-DEFAULT_MODEL="/model/ModelScope/Qwen/Qwen3.8-27B"
+DEFAULT_MODEL="/workspace/models/Qwen3.8-27B"
+if [[ ! -f "${DEFAULT_MODEL}/config.json" ]]; then
+  DEFAULT_MODEL="/model/ModelScope/Qwen/Qwen3.8-27B"
+fi
 CMD="${1:-plan}"
 shift || true
 
@@ -61,8 +65,8 @@ model:
 calibration:
   # Nemotron v2 is gated; ultrachat is public. Override RECIPE + HF_TOKEN for Nemotron.
   dataset: HuggingFaceH4/ultrachat_200k
-  num_samples: 512
-  max_seq_length: 2048
+  num_samples: 256
+  max_seq_length: 1024
   batch_size: 1
   seed: 42
   with_images: false

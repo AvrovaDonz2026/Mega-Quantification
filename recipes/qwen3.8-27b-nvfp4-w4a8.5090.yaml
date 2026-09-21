@@ -1,0 +1,37 @@
+# Single-32GB-5090 profile: real NVFP4 W4A8 PTQ with cheaper max-calib.
+#
+# 512 × 2048 tokens + the vision tower will CPU-offload so hard that GPU SM
+# sits at ~5%. This recipe keeps max/absmax (still real PTQ) but:
+#   - 256 samples × 1024 tokens (~4× fewer tokens than the default recipe)
+#   - family load_kwargs sets language_model_only when quantize_vision is false
+# Point model.source at a *local* snapshot on fast disk when possible
+# (UPFS /model mmap is the other 5090 bottleneck).
+
+name: qwen3.8-27b-nvfp4-w4a8-5090
+backend: modelopt
+scheme: nvfp4_w4a8
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: HuggingFaceH4/ultrachat_200k
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A8
+  format: hf
+  pack: true

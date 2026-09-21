@@ -23,7 +23,12 @@ from megaquant.registry import (
     get_scheme,
     list_backends,
 )
-from megaquant.runtime import apply_env_to_recipe, from_pretrained_env_kwargs, low_memory_plan_note
+from megaquant.runtime import (
+    apply_env_to_recipe,
+    fast_plan_note,
+    from_pretrained_env_kwargs,
+    low_memory_plan_note,
+)
 
 
 @dataclass
@@ -338,12 +343,36 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             import transformers
 
             model_cls = getattr(transformers, model_cls)
-        model = model_cls.from_pretrained(recipe.model.source, **load_kwargs)
+        model = _from_pretrained(model_cls, recipe.model.source, load_kwargs)
     except MegaQuantError:
         raise
     except Exception as exc:
         raise BackendError(f"Failed to load model '{recipe.model.source}': {exc}") from exc
     return model, tokenizer
+
+
+def _from_pretrained(model_cls: Any, source: str, load_kwargs: dict[str, Any]) -> Any:
+    """``from_pretrained`` with a fallback if ``language_model_only`` is unknown."""
+    dropping = ("language_model_only",)
+    kwargs = dict(load_kwargs)
+    while True:
+        try:
+            return model_cls.from_pretrained(source, **kwargs)
+        except TypeError as exc:
+            dropped = False
+            message = str(exc)
+            for key in dropping:
+                if key in kwargs and key in message:
+                    kwargs.pop(key)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
+        except ValueError as exc:
+            if "language_model_only" in kwargs and "language_model_only" in str(exc):
+                kwargs.pop("language_model_only")
+                continue
+            raise
 
 
 def _require_backend(plan: ResolvedPlan) -> Any:
@@ -398,6 +427,9 @@ class QuantPipeline:
         low_mem_note = low_memory_plan_note()
         if low_mem_note:
             notes.append(low_mem_note)
+        fast_note = fast_plan_note()
+        if fast_note:
+            notes.append(fast_note)
 
         if recipe.family:
             family_name = recipe.family

@@ -61,6 +61,10 @@ class Qwen35Family(BaseFamily):
         kwargs["dtype"] = "bfloat16"
         # ConditionalGeneration VLM, not AutoModelForCausalLM / Qwen3-8B.
         kwargs.setdefault("model_cls", "AutoModelForImageTextToText")
+        # Language-model W4A8 does not need the ViT in VRAM/RAM. Skipping it
+        # leaves more of the 27B LM on a 32 GB 5090.
+        if not recipe_flag(recipe, "model", "quantize_vision", default=False):
+            kwargs["language_model_only"] = True
         return kwargs
 
 

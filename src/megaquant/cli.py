@@ -33,6 +33,12 @@ def _add_recipe_flags(parser: argparse.ArgumentParser, *, with_dry_run: bool) ->
         type=int,
         help="Override calibration.num_samples",
     )
+    parser.add_argument(
+        "--max-seq-length",
+        type=int,
+        dest="max_seq_length",
+        help="Override calibration.max_seq_length",
+    )
     parser.add_argument("--algorithm", help="Override algorithm")
     parser.add_argument("--scheme", help="Override scheme catalog key")
 
