@@ -7,7 +7,7 @@
 #   Local BF16 snapshot via MEGAQUANT_MODEL or ./models / /workspace/models
 #
 # Usage (on the pod, from the repo root):
-#   bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]
+#   bash scripts/gpu-pod.sh plan|quantize|serve|eval|publish|rewrite-sglang [w4a8|w4a4|mixed]
 #
 # RECIPE env, if set, wins. Otherwise the committed 5090 packed recipe is used:
 #   recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml
@@ -150,7 +150,11 @@ log() { printf '[gpu-pod] %s\n' "$*"; }
 
 log "python=${PY} threads=${MEGAQUANT_NUM_THREADS} gpu_headroom=${MEGAQUANT_GPU_HEADROOM_GIB}GiB cpu_reserve=${MEGAQUANT_CPU_RESERVE_GIB}GiB batch=${MEGAQUANT_BATCH_SIZE}"
 log "recipe=${RECIPE} scheme=${SCHEME}"
-"${PY}" - <<'PY'
+case "${CMD}" in
+  publish|rewrite-sglang|schemes|families)
+    ;;
+  *)
+    "${PY}" - <<'PY'
 import torch, sys, subprocess
 print("torch", torch.__version__, "cuda", torch.cuda.is_available())
 if not torch.cuda.is_available():
@@ -168,6 +172,8 @@ try:
 except Exception as exc:
     print("pcie query skipped", type(exc).__name__)
 PY
+    ;;
+esac
 
 if [[ "${CMD}" == "quantize" && "${MEGAQUANT_INSTALL_FLA}" == "1" ]]; then
   log "installing GDN Python kernels (kernels + flash-linear-attention; no CUDA compile)"
@@ -180,7 +186,11 @@ if [[ "${CMD}" == "quantize" && "${MEGAQUANT_INSTALL_CAUSAL_CONV1D}" == "1" ]]; 
     "${PY}" -m pip install -q causal-conv1d \
     || log "causal-conv1d skipped"
 fi
-"${PY}" - <<'PY'
+case "${CMD}" in
+  publish|rewrite-sglang|schemes|families)
+    ;;
+  *)
+    "${PY}" - <<'PY'
 mods = ["kernels", "fla", "causal_conv1d"]
 for name in mods:
     try:
@@ -189,6 +199,8 @@ for name in mods:
     except Exception as exc:
         print(f"[gpu-pod] {name} missing ({type(exc).__name__})")
 PY
+    ;;
+esac
 
 case "${CMD}" in
   plan)
@@ -213,6 +225,19 @@ case "${CMD}" in
     log "eval recipe=${EVAL_RECIPE} model=${EVAL_MODEL} out=${EVAL_OUT} base=${MEGAQUANT_SGLANG_BASE_URL}"
     exec "${PY}" -m megaquant.cli eval -c "${EVAL_RECIPE}" \
       --model "${EVAL_MODEL}" --output "${EVAL_OUT}" "$@"
+    ;;
+  publish|rewrite-sglang)
+    case "${SCHEME}" in
+      w4a4) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A4" ;;
+      mixed) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-mixed" ;;
+      *) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A8" ;;
+    esac
+    if [[ "${CMD}" == "publish" ]]; then
+      log "publish model=${EVAL_MODEL} scheme=${SCHEME}"
+      exec "${PY}" "${ROOT}/scripts/oss_publish.py" "${EVAL_MODEL}" --scheme "${SCHEME}" "$@"
+    fi
+    log "rewrite-sglang model=${EVAL_MODEL}"
+    exec "${PY}" -m megaquant.cli rewrite-sglang "${EVAL_MODEL}"
     ;;
   schemes|families)
     exec "${PY}" -m megaquant.cli "${CMD}" "$@"

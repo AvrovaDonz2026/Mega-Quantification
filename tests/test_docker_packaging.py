@@ -95,6 +95,30 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "gpqa_diamond-${SCHEME}" in script
     assert "MEGAQUANT_SGLANG_BASE_URL" in script
     assert "http://127.0.0.1:30000/v1" in script
+    assert "publish|rewrite-sglang" in script
+    assert "oss_publish.py" in script
+    assert "publish|rewrite-sglang|schemes|families" in script
+
+
+def test_gpu_pod_publish_and_rewrite_sglang_skip_cuda_probe(repo_root: Path) -> None:
+    script = (repo_root / "scripts" / "gpu-pod.sh").read_text()
+    assert "plan|quantize|serve|eval|publish|rewrite-sglang" in script
+    assert "publish|rewrite-sglang" in script
+    assert "oss_publish.py" in script
+    assert "--scheme" in script
+    assert "megaquant.cli rewrite-sglang" in script
+    skip_idx = script.find("publish|rewrite-sglang|schemes|families")
+    probe_idx = script.find("torch.cuda.is_available")
+    smi_idx = script.find("nvidia-smi")
+    publish_exec = script.find("oss_publish.py")
+    assert skip_idx != -1
+    assert probe_idx != -1
+    assert smi_idx != -1
+    assert skip_idx < probe_idx
+    assert skip_idx < smi_idx
+    assert skip_idx < publish_exec
+    # Probe remains for GPU commands (plan/quantize/serve/eval).
+    assert "sys.exit(" in script[probe_idx : probe_idx + 400] or "CUDA not available" in script
 
 
 def test_ngc_compose_covers_eval_and_serve(repo_root: Path) -> None:
