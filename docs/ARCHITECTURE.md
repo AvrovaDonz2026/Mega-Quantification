@@ -237,9 +237,18 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
   `w4a4`, and `mixed` are behind `--profile gpu`. `mixed` defaults to
   `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`; NVIDIA quality Local-Hessian is
   `RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`.
-- GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`
-  (starts a job; does not mean W4A4 or mixed PTQ has already finished).
+- GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`
+  (starts a job; does not mean W4A4 / mixed PTQ or OSS upload has already finished).
   `serve`/`eval` default to SGLang (`:30000`, HiCache KV → RAM).
+- After mixed / default-W4A8 export: `megaquant rewrite-sglang <export_dir>`
+  before SGLang serve if `hf_quant_config.json` is bare NVFP4 without
+  `quantized_layers`. Uniform `w4a8_nvfp4_fp8` is TensorRT-LLM only — not
+  SGLang-loadable.
+- Publish: `python scripts/oss_publish.py <export> --scheme w4a4|mixed|w4a8`
+  and/or `bash scripts/gpu-pod.sh publish [scheme]`. Bucket/endpoint from
+  `OSS_BUCKET` / `OSS_ENDPOINT` (optional `.oss.env`). Mixed encoding **is**
+  default W4A8 — publish the same mixed export twice as `mixed` and `w4a8`
+  (same content-hash); do not run a second PTQ.
 - Host check: `bash docker/host-check.sh` (driver 570+, NVIDIA Container Toolkit)
 - Move the box: `make image-tar` then `docker image load` on the 5090
 - Weights stay on the host: `./.cache/huggingface`, `./models`, `./outputs`
@@ -253,6 +262,7 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
+megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 megaquant serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
@@ -261,3 +271,5 @@ megaquant families
 ```
 
 CLI overrides: `--model`, `--output`, `--backend`, `--num-samples`, `--algorithm`.
+`serve` / `eval` default to SGLang `:30000` (HiCache). Pass `--engine vllm`
+only when you want the optional GB300 vLLM flags.

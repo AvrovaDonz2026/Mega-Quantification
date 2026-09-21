@@ -143,21 +143,25 @@ uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`. NVIDIA quality Local-Hessian:
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`.
+On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`.
 Those commands start a job; they do not mean W4A4 or mixed PTQ has already
 finished on the pod.
 
 ### GPQA Diamond (after an export)
 
-Match the Qwen thinking card. Serve and score through **SGLang** (NVIDIA
-Qwen3.8 cookbook flags). Generation uses the remaining 262144-token window
-(`max_new_tokens: 0`) and continues on length. On a 32 GB card, SGLang
-**HiCache-offloads KV into host RAM** (MemTotal − 6 GiB) instead of truncating.
+Two terminals: **serve**, then **eval**. Match the Qwen thinking card on
+**SGLang** `:30000` (NVIDIA Qwen3.8 cookbook flags). Official thinking
+sampling; do not greedy-decode or cap generation at 512/2048. Generation
+uses the remaining 262144-token window (`max_new_tokens: 0`) and continues
+on length. On a 32 GB card, SGLang **HiCache-offloads KV into host RAM**
+(MemTotal − 6 GiB) instead of truncating.
 
 ```bash
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
+# Terminal 1
 bash scripts/gpu-pod.sh serve w4a8
+# Terminal 2
 MEGAQUANT_SGLANG_BASE_URL=http://127.0.0.1:30000/v1 bash scripts/gpu-pod.sh eval w4a8
 ```
 
@@ -275,13 +279,14 @@ Local-Hessian：
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
-K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`。
+K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`。
 这只是启动命令，不表示 W4A4 / mixed PTQ 已经在 pod 上跑完。
 
-量化产物评测 GPQA Diamond 时使用官方 thinking 采样，推理走 **SGLang**
-（NVIDIA Qwen3.8 cookbook）；`max_new_tokens: 0` 表示用完剩余 262k 窗口，
-length 后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU
-offload**（MemTotal − 6 GiB），不要靠截断生成来省显存。
+量化产物评测 GPQA Diamond：两个终端，先 **serve** 再 **eval**。官方
+thinking 采样，推理走 **SGLang** `:30000`（NVIDIA Qwen3.8 cookbook）；
+不要 greedy 或短截断。`max_new_tokens: 0` 用完剩余 262k 窗口，length
+后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU offload**
+（MemTotal − 6 GiB）。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
 默认 CPU offload；双卡或更大 Blackwell 更合适。

@@ -148,11 +148,18 @@ Export is a Hugging Face unified checkpoint
 is `export.output_dir`. The pipeline also writes `provenance.json` (base
 model, scheme, backend, calib, git sha, timestamp).
 
-To patch an already-exported mixed directory without re-running PTQ:
+To patch an already-exported mixed / default-W4A8 directory without
+re-running PTQ:
 
 ```bash
+megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 ```
+
+Do this **before SGLang serve** when `hf_quant_config.json` is still a
+bare `NVFP4` tag without `quantized_layers` (ModelOpt 0.46 often writes
+that). Uniform `w4a8_nvfp4_fp8` is TensorRT-LLM only — do not rewrite it
+and call it SGLang-loadable.
 
 27B BF16 ≈ 54 GiB of weights plus activations. Set `model.device_map` (`auto`
 by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
@@ -183,9 +190,9 @@ bash scripts/gpu-pod.sh plan mixed
 bash scripts/gpu-pod.sh quantize mixed
 ```
 
-Usage is `scripts/gpu-pod.sh plan|quantize|serve|eval [w4a8|w4a4|mixed]`.
-These commands start a job; they do not imply that W4A4 or mixed PTQ has
-already finished on the pod.
+Usage is `scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`.
+These commands start a job; they do not imply that W4A4 / mixed PTQ or an
+OSS upload has already finished on the pod.
 
 Compose on a machine that has Docker:
 
@@ -218,9 +225,19 @@ Bucket and endpoint come from `OSS_BUCKET` / `OSS_ENDPOINT` or `--bucket` /
 `--endpoint` (optional gitignored `.oss.env`). Objects larger than 5 GiB use
 multipart upload.
 
+Mixed encoding **is** the default W4A8. A finished mixed export can be
+published twice (`--scheme mixed` and `--scheme w4a8`) under the **same
+content-hash** — do not run a second PTQ. Uniform `w4a8_nvfp4_fp8` is
+TensorRT-LLM only; do not publish or advertise it as SGLang-loadable `w4a8`.
+
 ```bash
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme mixed
+python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme w4a8
+# intended gpu-pod wrapper (same env / prefix):
+bash scripts/gpu-pod.sh publish w4a4
+bash scripts/gpu-pod.sh publish mixed
+bash scripts/gpu-pod.sh publish w4a8
 ```
 
 ## Serve (SGLang / vLLM / TensorRT-LLM)
@@ -261,10 +278,11 @@ sglang serve \
   --port 30000
 ```
 
-Docker: `lmsysorg/sglang:dev` or `make serve-sglang`. If
-`hf_quant_config.json` still says `quant_algo: W4A8_NVFP4_FP8` or a bare
-`NVFP4` without `quantized_layers`, run `megaquant rewrite-sglang <export_dir>`
-first. GPQA client: `http://127.0.0.1:30000/v1`.
+Docker: `lmsysorg/sglang:dev` or `make serve-sglang` (not `make serve-vllm`
+as the primary path). If `hf_quant_config.json` still says
+`quant_algo: W4A8_NVFP4_FP8` or a bare `NVFP4` without `quantized_layers`,
+run `megaquant rewrite-sglang <export_dir>` first. GPQA client:
+`MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`).
 
 ### vLLM
 
@@ -333,11 +351,10 @@ python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 ```
 
 Compose: `make serve-sglang` then `make eval-gpqa`. The client talks to
-`MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`;
-`MEGAQUANT_VLLM_BASE_URL` is a leftover alias). Journals land in
-`outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps the
-full text; stdout is a one-line status). Optional `--engine vllm` keeps
-the NVIDIA GB300 vLLM flags on port 8000.
+`MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`). Journals
+land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
+the full text; stdout is a one-line status). Optional `--engine vllm`
+keeps the NVIDIA GB300 vLLM flags on port 8000.
 
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local
 CSV with the Hub columns (`Question`, `Correct Answer`,
