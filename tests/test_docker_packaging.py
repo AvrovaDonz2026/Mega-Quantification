@@ -60,6 +60,7 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "MEGAQUANT_SGLANG_BASE_URL" in text
     assert "30000" in text
     assert "serve-sglang:30000" in text
+    assert "SGLANG_ENABLE_JIT_DEEPGEMM" in text
     serve_build = services["serve-sglang"].get("build") or {}
     if isinstance(serve_build, dict):
         assert serve_build.get("dockerfile") == "Dockerfile.sglang"

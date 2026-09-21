@@ -89,6 +89,8 @@ x-sglang: &sglang
     <<: *common-env
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    # sglang 0.5.20 deep_gemm JIT wants nvcc 12.9+; disable on CUDA 12.8 devel.
+    SGLANG_ENABLE_JIT_DEEPGEMM: ${SGLANG_ENABLE_JIT_DEEPGEMM:-0}
   volumes: *common-volumes
   working_dir: /opt/megaquant
 
