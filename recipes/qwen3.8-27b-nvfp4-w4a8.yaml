@@ -1,0 +1,48 @@
+# Qwen/Qwen3.8-27B BF16 → SGLang-serving NVFP4 (default "W4A8")
+#
+# Same mixed map as nvidia/Qwen3.8-27B-NVFP4 and scheme nvfp4_mixed:
+#   NVFP4 group_size 16 on mlp.{gate,up,down}_proj + lm_head
+#   FP8 on self_attn.{q,k,v,o}_proj and linear_attn.{in_proj_qkv,in_proj_z,out_proj}
+#
+# Export rewrites hf_quant_config.json to quant_algo=MIXED_PRECISION plus
+# quantized_layers so SGLang modelopt_mixed can load it. ModelOpt 0.46 often
+# writes a single NVFP4 / W4A8_NVFP4_FP8 tag; do not ship that as-is.
+#
+# This is NOT uniform W4A8_NVFP4_FP8 (NVFP4 block 32 + FP8 activations).
+# SGLang rejects that quant_algo. TensorRT-LLM uniform W4A8 is
+# recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml (scheme w4a8_nvfp4_fp8).
+#
+# Algorithm `max` is the lighter PTQ path. NVIDIA's published mixed checkpoint
+# uses Local-Hessian + 2048 samples; see qwen3.8-27b-nvfp4-mixed.yaml.
+#
+# Ignore list comes from family `qwen3_5` (vision / MTP / embeddings /
+# linear_attn.conv1d,in_proj_a,in_proj_b stay BF16 unless model.quantize_*).
+
+name: qwen3.8-27b-nvfp4-w4a8
+backend: modelopt
+scheme: nvfp4_w4a8
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  num_samples: 512
+  max_seq_length: 2048
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A8
+  format: hf
+  pack: true

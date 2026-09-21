@@ -1,0 +1,34 @@
+# Comparison recipe: uniform NVFP4 W4A4 (weights + activations both NVFP4).
+#
+# Block size: stock NVFP4 uses group_size / block size 16, unlike W4A8's 32.
+# Single 32 GB 5090 / k8s GPU pod: use qwen3.8-27b-nvfp4-w4a4.5090.yaml
+# (or `bash scripts/gpu-pod.sh plan|quantize w4a4`), not this quality YAML.
+
+name: qwen3.8-27b-nvfp4-w4a4
+backend: modelopt
+scheme: nvfp4_w4a4
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  num_samples: 512
+  max_seq_length: 2048
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4
+  format: hf
+  pack: true

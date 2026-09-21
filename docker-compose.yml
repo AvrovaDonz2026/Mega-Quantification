@@ -1,0 +1,224 @@
+name: "${COMPOSE_PROJECT_NAME:-megaquant}"
+
+x-build-args: &build-args
+  BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
+  INSTALL_TORCH: ${INSTALL_TORCH:-1}
+  TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
+
+x-common-env: &common-env
+  HF_TOKEN: ${HF_TOKEN:-}
+  HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+  HF_HOME: /cache/huggingface
+  RECIPE: ${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}
+  MEGAQUANT_DEVICE_MAP: ${MEGAQUANT_DEVICE_MAP:-auto}
+  MEGAQUANT_LOW_MEMORY: ${MEGAQUANT_LOW_MEMORY:-1}
+  MEGAQUANT_OFFLOAD_DIR: ${MEGAQUANT_OFFLOAD_DIR:-/opt/megaquant/offload}
+  MEGAQUANT_MAX_MEMORY: ${MEGAQUANT_MAX_MEMORY:-}
+  MEGAQUANT_GPU_HEADROOM_GIB: ${MEGAQUANT_GPU_HEADROOM_GIB:-1}
+  MEGAQUANT_CPU_RESERVE_GIB: ${MEGAQUANT_CPU_RESERVE_GIB:-6}
+  MEGAQUANT_BATCH_SIZE: ${MEGAQUANT_BATCH_SIZE:-}
+  MEGAQUANT_NUM_THREADS: ${MEGAQUANT_NUM_THREADS:-}
+  MEGAQUANT_PIN_MEMORY: ${MEGAQUANT_PIN_MEMORY:-1}
+  OMP_NUM_THREADS: ${OMP_NUM_THREADS:-16}
+  MKL_NUM_THREADS: ${MKL_NUM_THREADS:-16}
+  TOKENIZERS_PARALLELISM: ${TOKENIZERS_PARALLELISM:-true}
+  PYTORCH_CUDA_ALLOC_CONF: ${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+  CUDA_DEVICE_MAX_CONNECTIONS: ${CUDA_DEVICE_MAX_CONNECTIONS:-16}
+  MEGAQUANT_EXTRA_ARGS: ${MEGAQUANT_EXTRA_ARGS:-}
+  MEGAQUANT_VLLM_BASE_URL: ${MEGAQUANT_VLLM_BASE_URL:-}
+  MEGAQUANT_SGLANG_BASE_URL: ${MEGAQUANT_SGLANG_BASE_URL:-http://serve-sglang:30000/v1}
+  EVAL_RECIPE: ${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}
+  GPQA_CSV: ${GPQA_CSV:-/data/dataset/gpqa_diamond.csv}
+  CC: /usr/bin/gcc
+  CXX: /usr/bin/g++
+  CUDAHOSTCXX: /usr/bin/g++
+
+x-common-volumes: &common-volumes
+  - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
+  - ${MODELS_DIR:-./models}:/models
+  - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
+  - ${OFFLOAD_DIR:-./offload_folder}:/opt/megaquant/offload
+  - ${DATA_DIR:-./data}:/data
+  - ./recipes:/opt/megaquant/recipes
+  - ./docs:/opt/megaquant/docs:ro
+  # Live git src over the baked COPY so compose up picks up latest Python
+  # (EvalServe.sampling_backend, etc.) without rebuilding megaquant:sglang.
+  - ./src:/opt/megaquant/src
+
+x-gpu: &gpu
+  ipc: host
+  shm_size: 64gb
+  ulimits:
+    memlock: -1
+    stack: 67108864
+  gpus: all
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-ptq: &ptq
+  <<: *gpu
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      <<: *build-args
+  image: ${MEGAQUANT_IMAGE:-megaquant:nvfp4}
+  pull_policy: missing
+  stdin_open: true
+  tty: true
+  environment:
+    <<: *common-env
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+  volumes: *common-volumes
+  working_dir: /opt/megaquant
+
+x-sglang: &sglang
+  build:
+    context: .
+    dockerfile: Dockerfile.sglang
+    args:
+      # Default 12.8.1-devel keeps existing 5090 images. Optional SM 12.0 JIT:
+      #   SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
+      # Confirm 12.9.1 (or 13.0-devel) on NGC. ~28G+ free for a new sglang image.
+      BASE_IMAGE: ${SGLANG_BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
+  image: ${SGLANG_IMAGE:-megaquant:sglang}
+  pull_policy: missing
+  stdin_open: true
+  tty: true
+  environment:
+    <<: *common-env
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    # sglang 0.5.20 deep_gemm.set_pdl asserts nvcc>=12.9. Default 0 on CUDA 12.8
+    # devel. After a 12.9+ SGLANG_BASE_IMAGE rebuild, set this to 1 (or unset
+    # only if you also drop the :-0 default). Do not probe nvcc in Python.
+    SGLANG_ENABLE_JIT_DEEPGEMM: ${SGLANG_ENABLE_JIT_DEEPGEMM:-0}
+  volumes: *common-volumes
+  working_dir: /opt/megaquant
+
+services:
+  # Default: dry-run. Safe on `compose up`.
+  megaquant:
+    <<: *ptq
+    command: ["plan", "-c", "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}"]
+
+  quantize:
+    <<: *ptq
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}",
+      ]
+
+  mixed:
+    <<: *ptq
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml",
+      ]
+
+  w4a4:
+    <<: *ptq
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml",
+      ]
+
+  serve-sglang:
+    <<: [*sglang, *gpu]
+    profiles: ["gpu"]
+    ports:
+      - "${SGLANG_PORT:-30000}:30000"
+    command:
+      [
+        "serve",
+        "-c",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
+        "--model",
+        "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
+      ]
+
+  serve-vllm:
+    <<: [*sglang, *gpu]
+    profiles: ["gpu"]
+    ports:
+      - "${SGLANG_PORT:-30000}:30000"
+    command:
+      [
+        "serve",
+        "-c",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
+        "--model",
+        "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
+      ]
+
+  # HTTP client only — do not attach the GPU (serve already holds it).
+  eval-gpqa:
+    <<: *sglang
+    profiles: ["gpu"]
+    environment:
+      <<: *common-env
+      MEGAQUANT_SGLANG_BASE_URL: ${MEGAQUANT_SGLANG_BASE_URL:-http://serve-sglang:30000/v1}
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+      NVIDIA_VISIBLE_DEVICES: ""
+    command:
+      [
+        "eval",
+        "-c",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
+        "--model",
+        "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
+      ]
+
+  fetch-export:
+    <<: *sglang
+    profiles: ["gpu"]
+    environment:
+      <<: *common-env
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+      NVIDIA_VISIBLE_DEVICES: ""
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      OSS_PREFIX: ${OSS_PREFIX:-Mega-Quantification}
+      MEGAQUANT_OSS_ENV: ${MEGAQUANT_OSS_ENV:-}
+    entrypoint: ["python", "scripts/oss_fetch.py"]
+    command:
+      [
+        "--scheme",
+        "${OSS_FETCH_SCHEME:-w4a8}",
+        "--hash",
+        "${OSS_FETCH_HASH:-}",
+        "--dest",
+        "${OSS_FETCH_DEST:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
+      ]
+
+  fetch-gpqa:
+    <<: *sglang
+    profiles: ["gpu"]
+    environment:
+      <<: *common-env
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+      NVIDIA_VISIBLE_DEVICES: ""
+      GPQA_DIR: /data
+    entrypoint: ["bash", "scripts/fetch_gpqa.sh"]
+    command: []
+
+  shell:
+    <<: *ptq
+    profiles: ["dev"]
+    entrypoint: ["/bin/bash"]
+    command: ["-l"]

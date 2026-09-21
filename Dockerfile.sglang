@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+#
+# SGLang serve + GPQA eval image. Separate from the ModelOpt PTQ image so
+# SGLang can pin its own torch without breaking nvidia-modelopt.
+# Weights are NOT baked in; mount outputs/ and data/.
+#
+# Default BASE_IMAGE stays CUDA 12.8.1-devel so existing 5090 images remain
+# the default. FlashInfer + DeepGEMM JIT cannot target SM 12.0 until nvcc
+# is 12.9+ ("SM 12.x requires CUDA >= 12.9"; deep_gemm.set_pdl asserts).
+# Optional later rebuild (confirm the tag on NGC / Docker Hub; ~28G+ free
+# for a second sglang image — skip on a tight disk):
+#   SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
+# CUDA 13.0 devel is also fine (confirm the exact 13.0-*-devel-ubuntu24.04
+# tag on NGC). After a 12.9+ rebuild, set SGLANG_ENABLE_JIT_DEEPGEMM=1.
+# On 12.8 keep the compose default 0. Do not probe nvcc at runtime.
+#
+# sglang==0.5.20 pulls torch 2.13+cu130. That needs host driver 580+
+# (CUDA 13). Driver 570 / CUDA 12.8 can run megaquant:nvfp4 (cu128) but
+# not this serve image. Do not add `pip install --pre` without pinning a
+# cu128 torch — --pre is how cu130 landed on a 12.8 box.
+
+ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+FROM ${BASE_IMAGE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH} \
+    HF_HOME=/cache/huggingface \
+    MEGAQUANT_ROOT=/opt/megaquant \
+    PYTHONPATH=/opt/megaquant/src \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
+    CUDAHOSTCXX=/usr/bin/g++ \
+    TORCH_CUDA_ARCH_LIST="9.0;10.0;12.0"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        ca-certificates \
+        build-essential \
+        ninja-build \
+        pkg-config \
+        python3 \
+        python3-venv \
+        python3-dev \
+        python3-pip \
+    && python3 -m venv /opt/venv \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/megaquant
+
+COPY docker/requirements-sglang.txt /tmp/requirements-sglang.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel \
+    && pip install --pre -r /tmp/requirements-sglang.txt
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY recipes ./recipes
+COPY docs ./docs
+COPY docker ./docker
+COPY scripts ./scripts
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e . \
+    && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models /data \
+    && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/scripts/*.sh
+
+WORKDIR /opt/megaquant
+ENTRYPOINT ["/opt/megaquant/docker/entrypoint.sh"]
+CMD ["serve", "-c", "recipes/eval-gpqa-diamond.yaml"]
