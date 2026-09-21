@@ -167,6 +167,10 @@ def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:
     assert "systemd-resolved" in script
     assert "gai.conf" in script
     assert "MEGAQUANT_PREFER_IPV4" in script
+    assert "--dns-only" in script
+    assert "megaquant-docker-hub-pin" in script
+    assert "MEGAQUANT_DOCKER_PIN_CANARY" in script
+    assert "registry-1.docker.io" in script
     assert "get.docker.com" not in script
     assert "100.90.90.90" not in script
     assert "100.90.90.100" not in script

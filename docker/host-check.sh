@@ -66,6 +66,12 @@ else
   echo "  [!] no /etc/docker/daemon.json — optional MEGAQUANT_DOCKER_DNS on install-host.sh"
 fi
 
+if grep -qF "# megaquant-docker-hub-pin" /etc/hosts 2>/dev/null; then
+  ok "Docker Hub names pinned in /etc/hosts"
+else
+  echo "  [!] no Hub pin in /etc/hosts — install-host.sh --dns-only can add one when MEGAQUANT_DOCKER_DNS is set"
+fi
+
 free_gb="$(df -BG . | awk 'NR==2 {print $4}' | tr -d 'G')"
 if [[ "${free_gb}" =~ ^[0-9]+$ ]] && (( free_gb < 15 )); then
   bad "free disk ${free_gb}G on $(pwd) — need ~15G+ for the venv/export (BF16 weights can live on another mount)"

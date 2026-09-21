@@ -15,8 +15,11 @@ SGLang 与 ModelOpt 不能共用一个 torch，所以不要把它们装进同一
 # 0) 驱动 570+ 已装好后
 bash docker/install-host.sh
 # 可选：云厂商加速 DNS 只写在这台宿主机（systemd-resolved + Docker daemon）。
+# 部分加速器不改写 registry-1.docker.io / CloudFront，install-host 会用
+# canary（默认 pypi.org）查到的内网 IP 把 Hub 主机名写进 /etc/hosts。
 # 不要把具体 IP 提交进 git / 镜像；换机时再 export 一次。
 # MEGAQUANT_DOCKER_DNS="<ip> <ip>" bash docker/install-host.sh
+# MEGAQUANT_DOCKER_DNS="<ip> <ip>" bash docker/install-host.sh --dns-only
 bash docker/host-check.sh
 
 # 1) 可选 token / OSS
