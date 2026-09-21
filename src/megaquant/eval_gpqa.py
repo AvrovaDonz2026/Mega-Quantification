@@ -223,6 +223,19 @@ class ItemResult:
     choices: dict[str, str]
 
 
+# Chat-template / special-token headroom. The eval client estimates prompt
+# tokens before the first HTTP round trip; Qwen3.8 templates add tens of
+# tokens, and SGLang 400s if prompt + max_tokens exceeds context_length.
+CHAT_TEMPLATE_TOKEN_RESERVE = 256
+
+_CONTEXT_OVERFLOW = re.compile(
+    r"maximum context length of (\d+) tokens.*?"
+    r"(\d+) tokens from the input messages and "
+    r"(\d+) tokens for the completion",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
 def remaining_new_tokens(
     prompt_tokens: int,
     max_model_len: int,
@@ -782,21 +795,40 @@ def openai_chat_complete(
             "reasoning_effort": thinking.reasoning_effort,
         },
     }
-    payload = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise EvalError(f"chat completion HTTP {exc.code}: {detail[:500]}") from exc
-    except urllib.error.URLError as exc:
-        raise EvalError(f"chat completion failed: {exc}") from exc
+    current_max = int(max_tokens)
+    data: dict[str, Any] | None = None
+    last_detail = ""
+    for attempt in range(2):
+        body["max_tokens"] = current_max
+        payload = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            last_detail = exc.read().decode("utf-8", errors="replace")
+            match = _CONTEXT_OVERFLOW.search(last_detail) if exc.code == 400 else None
+            if match is None or attempt == 1:
+                raise EvalError(
+                    f"chat completion HTTP {exc.code}: {last_detail[:500]}"
+                ) from exc
+            ctx, prompt_n, _comp = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            retried = max(1, ctx - prompt_n - 8)
+            if retried >= current_max:
+                raise EvalError(
+                    f"chat completion HTTP {exc.code}: {last_detail[:500]}"
+                ) from exc
+            current_max = retried
+        except urllib.error.URLError as exc:
+            raise EvalError(f"chat completion failed: {exc}") from exc
+    if data is None:
+        raise EvalError(f"chat completion HTTP 400: {last_detail[:500]}")
 
     choice = (data.get("choices") or [{}])[0]
     message = choice.get("message") or {}
@@ -829,7 +861,9 @@ def generate_untruncated(
     max_len = recipe.generation.max_model_len
     cap = recipe.generation.max_new_tokens
     messages = chat_messages(prompt)
-    budget = remaining_new_tokens(prompt_tokens, max_len, cap)
+    budget = remaining_new_tokens(
+        prompt_tokens + CHAT_TEMPLATE_TOKEN_RESERVE, max_len, cap
+    )
     first = complete(
         model=model,
         messages=messages,
@@ -848,7 +882,9 @@ def generate_untruncated(
     if recipe.generation.continue_on_length:
         while truncated:
             spent = prompt_tokens + completion_tokens
-            leftover = remaining_new_tokens(spent, max_len, cap)
+            leftover = remaining_new_tokens(
+                spent + CHAT_TEMPLATE_TOKEN_RESERVE, max_len, cap
+            )
             if leftover <= 1:
                 break
             continued += 1

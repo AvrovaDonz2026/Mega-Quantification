@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from megaquant.eval_gpqa import (
+    CHAT_TEMPLATE_TOKEN_RESERVE,
     DEFAULT_EVAL_BASE_URL,
     DEFAULT_MAX_MODEL_LEN,
     NVIDIA_SGLANG_SERVE,
@@ -191,7 +192,9 @@ def test_continue_on_length_appends_full_text(tmp_path: Path) -> None:
     journal = (tmp_path / "gpqa_diamond.jsonl").read_text()
     assert "long trace" in journal
     assert "Answer: C" in journal
-    assert calls[0] == remaining_new_tokens(100, recipe.generation.max_model_len, 0)
+    assert calls[0] == remaining_new_tokens(
+        100 + CHAT_TEMPLATE_TOKEN_RESERVE, recipe.generation.max_model_len, 0
+    )
 
 
 def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
