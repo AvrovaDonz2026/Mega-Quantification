@@ -18,9 +18,9 @@ base_url: null
 shuffle_choices: true
 limit: null
 output_dir: outputs/eval/gpqa_diamond
-# Serve already caps at ~9 in-flight (mamba slots). Sequential HTTP was the
-# 35 tok/s bottleneck. 8-way matches that cap; HiCache 24 GiB holds the traces.
-concurrency: 8
+# Serve mamba slots cap in-flight at size/4. 64 slots → 16-way; 94 GiB RAM
+# puts 64 GiB in HiCache and leaves ~30 GiB for OS / Docker / eval client.
+concurrency: 16
 
 thinking:
   enable: true
@@ -49,7 +49,7 @@ serve:
   gpu_memory_utilization: 0.85
   mem_fraction_static: 0.85
   max_num_seqs: 32
-  max_running_requests: 32
+  max_running_requests: 16
   max_num_batched_tokens: 32768
   chunked_prefill_size: 2048
   reasoning_parser: qwen3
@@ -69,12 +69,12 @@ serve:
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
   mamba_ssm_dtype: float32
-  max_mamba_cache_size: null
+  max_mamba_cache_size: 64
   enable_hierarchical_cache: true
   kv_offloading_backend: native
-  # 12 GiB was a 64G-pod OOM hangover. This box has 94 GiB; 8 long traces
-  # need more host KV than the 71k-token pool hicache-12 provides.
-  kv_offloading_size_gb: 24
+  # This box has 94 GiB. Pin 64 GiB of HiCache (KV + GDN Mamba host pools)
+  # and leave ~30 GiB for OS, Docker, and the eval client.
+  kv_offloading_size_gb: 64
   swap_space_gb: 0
   cpu_reserve_gib: 6
   disable_cuda_graph: true

@@ -117,7 +117,7 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquan
 
 默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
 
-这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。
+这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**（KV + GDN Mamba host pool），剩下 ~30 GiB 给 OS / Docker / eval client；GPQA 并发 **16**（`max_mamba_cache_size: 64`）。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` 改成同样的数，否则 recipe 不会生效。
 
 ```bash
 EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang

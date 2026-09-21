@@ -151,10 +151,10 @@ def _assert_eval_serve_dry_run_payload(kind: str, out: str, recipe: str) -> None
         assert data["sampling"]["temperature"] == 1.0
         assert data["sampling"]["top_p"] == 0.95
         assert data["sampling"]["top_k"] == 20
-        kv_gb = 24 if recipe.endswith("5090.yaml") else 12
+        kv_gb = 64 if recipe.endswith("5090.yaml") else 12
         assert data["serve"]["kv_offloading_size_gb"] == kv_gb
         if recipe.endswith("5090.yaml"):
-            assert data["concurrency"] == 8
+            assert data["concurrency"] == 16
         else:
             assert data["concurrency"] == 1
         assert data["serve"]["disable_cuda_graph"] is True

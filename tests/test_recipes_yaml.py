@@ -186,10 +186,11 @@ def test_gpqa_eval_recipe_matches_official_cards() -> None:
 def test_gpqa_5090_recipe_matches_official_cards_except_triton() -> None:
     data = _load(GPQA_5090)
     _assert_gpqa_official_cards(
-        data, attention_backend="triton", kv_offloading_size_gb=24
+        data, attention_backend="triton", kv_offloading_size_gb=64
     )
     assert data["name"] == "gpqa-diamond-qwen38-official-5090"
-    assert data.get("concurrency") == 8
+    assert data.get("concurrency") == 16
+    assert data["serve"].get("max_mamba_cache_size") == 64
     serve = data["serve"]
     # Extra 5090 GEMM/sampling knobs may land in later commits; skip if absent.
     optional = {
