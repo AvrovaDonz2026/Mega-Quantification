@@ -156,9 +156,19 @@ uses the remaining 262144-token window (`max_new_tokens: 0`) and continues
 on length. On a 32 GB card, SGLang **HiCache-offloads KV into host RAM**
 (MemTotal − 6 GiB) instead of truncating.
 
+`--dry-run` plans against the local export `outputs/Qwen3.8-27B-NVFP4-W4A8`
+and does **not** download `Qwen/Qwen3.8-27B`. Compose `eval-gpqa` is HTTP-only
+(no `gpus:` / deploy devices, empty `NVIDIA_VISIBLE_DEVICES`,
+`MEGAQUANT_SKIP_GPU_REPORT=1`); `serve-sglang` holds the GPU.
+Default recipe is FlashInfer (`recipes/eval-gpqa-diamond.yaml`). RTX 5090 /
+CUDA 12.8 uses Triton (`recipes/eval-gpqa-diamond.5090.yaml`) — keep them
+distinct.
+
 ```bash
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 # Terminal 1
 bash scripts/gpu-pod.sh serve w4a8
 # Terminal 2
@@ -286,7 +296,11 @@ K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publi
 thinking 采样，推理走 **SGLang** `:30000`（NVIDIA Qwen3.8 cookbook）；
 不要 greedy 或短截断。`max_new_tokens: 0` 用完剩余 262k 窗口，length
 后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU offload**
-（MemTotal − 6 GiB）。
+（MemTotal − 6 GiB）。`--dry-run` 只看本地导出
+`outputs/Qwen3.8-27B-NVFP4-W4A8`，不会去拉 `Qwen/Qwen3.8-27B`。Compose
+`eval-gpqa` 不挂 GPU；`serve-sglang` 才挂。默认 FlashInfer
+（`eval-gpqa-diamond.yaml`），5090 / CUDA 12.8 用 Triton
+（`eval-gpqa-diamond.5090.yaml`），两套配方不要混。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
 默认 CPU offload；双卡或更大 Blackwell 更合适。

@@ -325,6 +325,8 @@ greedy-decode. Do not cap generation at 512/2048 tokens.
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size` = MemTotal − 6 GiB (~58 GiB on a 64 GB box) |
+| Attention | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8 Triton (`eval-gpqa-diamond.5090.yaml`) |
+| Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong) |
 
 NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4**. The
@@ -345,12 +347,16 @@ MEGAQUANT_SGLANG_BASE_URL=http://127.0.0.1:30000/v1 \
   bash scripts/gpu-pod.sh eval w4a8
 # same for w4a4 / mixed after those exports exist
 
-# No GPU, no 27B, no Hub:
+# No GPU, no 27B, no Hub (local export, not Qwen/Qwen3.8-27B):
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 ```
 
-Compose: `make serve-sglang` then `make eval-gpqa`. The client talks to
+Compose: `make serve-sglang` then `make eval-gpqa`. `eval-gpqa` does not
+attach a GPU; `serve-sglang` does. On CUDA 12.8 / SM 12.0 set
+`EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml`. The client talks to
 `MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`). Journals
 land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
 the full text; stdout is a one-line status). Optional `--engine vllm`

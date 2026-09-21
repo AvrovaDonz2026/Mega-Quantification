@@ -1,7 +1,13 @@
 # GPQA Diamond on a 5090 / CUDA 12.8 serve image.
 # Same official cards as eval-gpqa-diamond.yaml, but FlashInfer JIT cannot
-# read SM 12.0 until nvcc is 12.9+ ("SM 12.x requires CUDA >= 12.9").
-# Use Triton attention + PyTorch sampling on this box.
+# read SM 12.0 until nvcc is 12.9+ ("SM 12.x requires CUDA >= 12.9"). The
+# swallowed warning is "SM 12.x requires CUDA >= 12.9"; the raised error is
+# the misleading "FlashInfer requires GPUs with sm75 or higher".
+# Triton attention is not enough: ModelOpt mixed NVFP4 uses FP8 linear_attn
+# projections that call FlashInfer BMM after the SM120 KDA kernel returns
+# None. NVFP4 GEMM auto on SM120 is flashinfer_cutlass (no Triton FP4
+# backend in SGLang 0.5.20). Use Triton attn/GDN, PyTorch sampling, Triton
+# FP8 GEMM, Marlin NVFP4, and SGLANG_FORCE_FP8_MARLIN so FP8 skips BMM.
 name: gpqa-diamond-qwen38-official-5090
 benchmark: gpqa_diamond
 dataset: Idavidrein/gpqa
@@ -53,6 +59,10 @@ serve:
   attention_backend: triton
   # SM12 + CUDA 12.8 FlashInfer cannot sampling-JIT either.
   sampling_backend: pytorch
+  linear_attn_backend: triton
+  fp8_gemm_backend: triton
+  fp4_gemm_backend: marlin
+  force_fp8_marlin: true
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
   mamba_ssm_dtype: float32

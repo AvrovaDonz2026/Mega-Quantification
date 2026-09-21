@@ -28,6 +28,10 @@ W4A4_5090 = RECIPES / "qwen3.8-27b-nvfp4-w4a4.5090.yaml"
 W4A4_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-w4a4.public-calib.yaml"
 MIXED_5090 = RECIPES / "qwen3.8-27b-nvfp4-mixed.5090.yaml"
 MIXED_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-mixed.public-calib.yaml"
+GPQA = RECIPES / "eval-gpqa-diamond.yaml"
+GPQA_5090 = RECIPES / "eval-gpqa-diamond.5090.yaml"
+LOCAL_EXPORT = "outputs/Qwen3.8-27B-NVFP4-W4A8"
+HUB_BF16 = "Qwen/Qwen3.8-27B"
 
 
 def _load(path: Path) -> dict:
@@ -151,4 +155,48 @@ def test_5090_and_public_calib_recipes() -> None:
     assert mixed_pub["calibration"]["num_samples"] == 512
     assert mixed_pub["calibration"]["max_seq_length"] == 2048
     assert mixed_pub["calibration"]["batch_size"] == 1
+
+
+def _assert_gpqa_official_cards(data: dict, *, attention_backend: str) -> None:
+    """Lock the Qwen thinking / NVIDIA cookbook knobs shared by both GPQA recipes."""
+    assert data["model"] == LOCAL_EXPORT
+    assert data["model"] != HUB_BF16
+    assert data["thinking"]["reasoning_effort"] == "xhigh"
+    assert data["sampling"]["temperature"] == 1.0
+    assert data["sampling"]["top_p"] == 0.95
+    assert data["sampling"]["top_k"] == 20
+    assert data["generation"]["max_new_tokens"] == 0
+    assert data["generation"]["seed"] == 0
+    assert data["generation"]["max_model_len"] == 262144
+    serve = data["serve"]
+    assert serve["engine"] == "sglang"
+    assert serve["attention_backend"] == attention_backend
+    assert serve["kv_offloading_size_gb"] == 12
+    assert serve["disable_cuda_graph"] is True
+
+
+def test_gpqa_eval_recipe_matches_official_cards() -> None:
+    data = _load(GPQA)
+    _assert_gpqa_official_cards(data, attention_backend="flashinfer")
+    assert data["name"] == "gpqa-diamond-qwen38-official"
+
+
+def test_gpqa_5090_recipe_matches_official_cards_except_triton() -> None:
+    data = _load(GPQA_5090)
+    _assert_gpqa_official_cards(data, attention_backend="triton")
+    assert data["name"] == "gpqa-diamond-qwen38-official-5090"
+    # Other agents may still land sampling_backend: pytorch; do not fail if absent.
+    if "sampling_backend" in data["serve"]:
+        assert data["serve"]["sampling_backend"] == "pytorch"
+
+
+def test_gpqa_5090_recipe_stays_distinct_from_default() -> None:
+    default = _load(GPQA)
+    fivek = _load(GPQA_5090)
+    assert default["name"] != fivek["name"]
+    assert default["serve"]["attention_backend"] == "flashinfer"
+    assert fivek["serve"]["attention_backend"] == "triton"
+    assert default["serve"]["attention_backend"] != fivek["serve"]["attention_backend"]
+    assert default["serve"]["engine"] == fivek["serve"]["engine"] == "sglang"
+    assert GPQA.read_text() != GPQA_5090.read_text()
 

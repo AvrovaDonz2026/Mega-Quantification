@@ -16,6 +16,7 @@ from megaquant.eval_gpqa import (
     load_eval_recipe,
     run_gpqa,
     serve_argv_from_recipe,
+    sglang_serve_environ,
 )
 from megaquant.exceptions import MegaQuantError
 from megaquant.pipeline import QuantPipeline
@@ -167,6 +168,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         getattr(args, "model", None),
         port=int(port),
     )
+    extra_env = sglang_serve_environ(recipe)
     if getattr(args, "dry_run", False):
         plan = describe_eval(recipe)
         print(
@@ -175,6 +177,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
                     "argv": argv,
                     "plan": plan,
                     "engine": recipe.serve.engine,
+                    "environ": extra_env,
                     "kv_cpu_offload_gib": plan["kv_cpu_offload_gib"],
                     "sglang_quant": plan.get("sglang_quant"),
                 },
@@ -193,6 +196,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             "NVFP4 tag; do not rewrite uniform W4A8_NVFP4_FP8 weights in place."
         )
     print("[serve]", " ".join(argv), flush=True)
+    os.environ.update(extra_env)
     try:
         os.execvp(argv[0], argv)
     except FileNotFoundError as exc:
@@ -252,8 +256,19 @@ def build_parser() -> argparse.ArgumentParser:
         "eval",
         help="GPQA Diamond via OpenAI-compatible SGLang (Qwen thinking; no short truncation)",
     )
-    evaluate.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
-    evaluate.add_argument("--model", help="Export dir or served model name")
+    evaluate.add_argument(
+        "-c",
+        "--config",
+        default="recipes/eval-gpqa-diamond.yaml",
+        help=(
+            "Eval recipe. Default FlashInfer; on CUDA 12.8 / SM 12.0 use "
+            "recipes/eval-gpqa-diamond.5090.yaml (Triton)."
+        ),
+    )
+    evaluate.add_argument(
+        "--model",
+        help="Local NVFP4 export (outputs/Qwen3.8-27B-NVFP4-W4A8), not Qwen/Qwen3.8-27B",
+    )
     evaluate.add_argument("--output", help="Eval journal directory")
     evaluate.add_argument(
         "--base-url",
@@ -266,15 +281,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override serve.engine in the eval plan (default sglang)",
     )
     evaluate.add_argument("--limit", type=int, help="Optional item cap (full run omits this)")
-    evaluate.add_argument("--dry-run", action="store_true")
+    evaluate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the eval plan; no GPU, no 27B Hub download",
+    )
     evaluate.set_defaults(func=cmd_eval)
 
     serve = sub.add_parser(
         "serve",
         help="SGLang serve (NVIDIA Qwen3.8 cookbook); KV that misses HBM goes to host RAM",
     )
-    serve.add_argument("-c", "--config", default="recipes/eval-gpqa-diamond.yaml")
-    serve.add_argument("--model", help="Export dir (NVFP4 checkpoint)")
+    serve.add_argument(
+        "-c",
+        "--config",
+        default="recipes/eval-gpqa-diamond.yaml",
+        help=(
+            "Serve recipe. Default FlashInfer; on CUDA 12.8 / SM 12.0 use "
+            "recipes/eval-gpqa-diamond.5090.yaml (Triton)."
+        ),
+    )
+    serve.add_argument(
+        "--model",
+        help="Local NVFP4 export dir (not the BF16 Hub id Qwen/Qwen3.8-27B)",
+    )
     serve.add_argument(
         "--engine",
         choices=["sglang", "vllm"],
@@ -286,7 +316,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Listen port (default 30000 for SGLang, 8000 for vLLM)",
     )
-    serve.add_argument("--dry-run", action="store_true", help="Print argv; do not exec the server")
+    serve.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print argv; do not exec, load weights, or download 27B",
+    )
     serve.set_defaults(func=cmd_serve)
 
     return parser

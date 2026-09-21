@@ -150,6 +150,13 @@ class EvalServe(StrictModel):
     tensor_parallel_size: int | None = None
     attention_backend: str | None = "flashinfer"
     sampling_backend: str | None = None
+    linear_attn_backend: str | None = None
+    fp8_gemm_backend: str | None = None
+    fp4_gemm_backend: str | None = None
+    # ModelOpt FP8 linear on SM120 tries KDA, then FlashInfer BMM, and only
+    # then --fp8-gemm-backend. CUDA 12.8 FlashInfer JIT cannot see SM 12.0, so
+    # 5090 recipes set this and cmd_serve exports SGLANG_FORCE_FP8_MARLIN=1.
+    force_fp8_marlin: bool = False
     mamba_full_memory_ratio: float | None = 4.59
     mamba_radix_cache_strategy: str = "extra_buffer_lazy"
     mamba_ssm_dtype: str = "float32"
@@ -464,6 +471,9 @@ def sglang_serve_argv(
     mamba_ssm_dtype: str | None = None,
     attention_backend: str | None = None,
     sampling_backend: str | None = None,
+    linear_attn_backend: str | None = None,
+    fp8_gemm_backend: str | None = None,
+    fp4_gemm_backend: str | None = None,
     max_mamba_cache_size: int | None = None,
     seed: int | None = None,
     enable_hierarchical_cache: bool = True,
@@ -539,6 +549,12 @@ def sglang_serve_argv(
         argv.extend(["--attention-backend", str(backend)])
     if sampling_backend:
         argv.extend(["--sampling-backend", str(sampling_backend)])
+    if linear_attn_backend:
+        argv.extend(["--linear-attn-backend", str(linear_attn_backend)])
+    if fp8_gemm_backend:
+        argv.extend(["--fp8-gemm-backend", str(fp8_gemm_backend)])
+    if fp4_gemm_backend:
+        argv.extend(["--fp4-gemm-backend", str(fp4_gemm_backend)])
     if max_mamba_cache_size is not None and int(max_mamba_cache_size) > 0:
         argv.extend(["--max-mamba-cache-size", str(int(max_mamba_cache_size))])
     offload = (kv_offloading_backend or "native").strip().lower()
@@ -582,6 +598,9 @@ def sglang_serve_argv_from_recipe(
         mamba_ssm_dtype=serve.mamba_ssm_dtype,
         attention_backend=serve.attention_backend,
         sampling_backend=serve.sampling_backend,
+        linear_attn_backend=serve.linear_attn_backend,
+        fp8_gemm_backend=serve.fp8_gemm_backend,
+        fp4_gemm_backend=serve.fp4_gemm_backend,
         max_mamba_cache_size=serve.max_mamba_cache_size,
         seed=recipe.generation.seed,
         enable_hierarchical_cache=serve.enable_hierarchical_cache,
@@ -590,6 +609,14 @@ def sglang_serve_argv_from_recipe(
         cpu_reserve_gib=serve.cpu_reserve_gib,
         disable_cuda_graph=serve.disable_cuda_graph,
     )
+
+
+def sglang_serve_environ(recipe: EvalRecipe) -> dict[str, str]:
+    """Extra process env for ``sglang serve`` (not CLI flags)."""
+    env: dict[str, str] = {}
+    if recipe.serve.engine == "sglang" and recipe.serve.force_fp8_marlin:
+        env["SGLANG_FORCE_FP8_MARLIN"] = "1"
+    return env
 
 
 def serve_argv_from_recipe(

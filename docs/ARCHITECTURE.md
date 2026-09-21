@@ -265,6 +265,8 @@ megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 megaquant serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.yaml --dry-run
+megaquant serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+megaquant eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
 megaquant schemes
 megaquant families

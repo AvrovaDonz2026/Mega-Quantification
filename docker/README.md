@@ -36,10 +36,14 @@ docker compose --profile gpu run --rm quantize   # SGLang mixed W4A8
 docker compose --profile gpu run --rm w4a4
 docker compose --profile gpu run --rm mixed
 
-# 5) 评测：先拉起 serve，再 eval（eval 不占 GPU）
+# 5) 评测：先拉起 serve，再 eval（eval 不占 GPU：无 gpus/deploy devices，
+#    NVIDIA_VISIBLE_DEVICES=""。serve-sglang 才挂 GPU）
 make fetch-gpqa
 docker compose --profile gpu up serve-sglang
 docker compose --profile gpu run --rm eval-gpqa
+# 5090 / CUDA 12.8：Triton，不要用默认 FlashInfer 配方
+# EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang
+# EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu run --rm eval-gpqa
 ```
 
 `docker compose up` 默认只跑 `plan`，不会误触发 27B 校准。
@@ -113,7 +117,7 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquan
 
 默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
 
-这台 5090 上先用 Triton 注意力（不要改 Compose 里的默认 `EVAL_RECIPE`）：
+这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。
 
 ```bash
 EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang

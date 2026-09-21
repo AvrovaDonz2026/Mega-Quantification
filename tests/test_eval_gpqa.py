@@ -28,6 +28,7 @@ from megaquant.eval_gpqa import (
     serve_argv_from_recipe,
     sglang_serve_argv,
     sglang_serve_argv_from_recipe,
+    sglang_serve_environ,
     visible_answer_span,
     vllm_serve_argv,
     vllm_serve_argv_from_recipe,
@@ -83,6 +84,10 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.5090.yaml")
     assert recipe.serve.attention_backend == "triton"
     assert recipe.serve.sampling_backend == "pytorch"
+    assert recipe.serve.linear_attn_backend == "triton"
+    assert recipe.serve.fp8_gemm_backend == "triton"
+    assert recipe.serve.fp4_gemm_backend == "marlin"
+    assert recipe.serve.force_fp8_marlin is True
     assert recipe.serve.disable_cuda_graph is True
     assert recipe.serve.kv_offloading_size_gb == 12
     argv = sglang_serve_argv_from_recipe(recipe)
@@ -91,6 +96,10 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert "--attention-backend flashinfer" not in joined
     assert "--sampling-backend pytorch" in joined
     assert argv[argv.index("--sampling-backend") + 1] == "pytorch"
+    assert "--linear-attn-backend triton" in joined
+    assert "--fp8-gemm-backend triton" in joined
+    assert "--fp4-gemm-backend marlin" in joined
+    assert sglang_serve_environ(recipe) == {"SGLANG_FORCE_FP8_MARLIN": "1"}
 
 
 def test_remaining_tokens_never_uses_small_default_cap() -> None:
@@ -221,6 +230,12 @@ def test_sglang_argv_matches_cookbook_and_hicache() -> None:
     assert "vllm" not in joined
     assert "--seed" not in argv
     assert "--disable-cuda-graph" not in argv
+    assert "--fp8-gemm-backend" not in argv
+    assert "--fp4-gemm-backend" not in argv
+    assert "--linear-attn-backend" not in argv
+    assert "--sampling-backend" not in argv
+    default_recipe = load_eval_recipe(RECIPE)
+    assert sglang_serve_environ(default_recipe) == {}
     with_graphs_off = sglang_serve_argv("/ckpt", disable_cuda_graph=True)
     assert "--disable-cuda-graph" in with_graphs_off
 
