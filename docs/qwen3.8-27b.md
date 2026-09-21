@@ -160,7 +160,7 @@ instead of leaving headroom idle:
 | PCIe | Idle 5090 reports **gen1 x16**. PTQ runs a pinned H2D/D2H warmup so the link trains to **gen5 x16** (~50 GiB/s DMA). CPU-resident weights are pinned; accelerate copies use `non_blocking=True`; calib prefetches the next batch on a CUDA copy stream. `CUDA_DEVICE_MAX_CONNECTIONS=16`. |
 | Calib | 5090 recipes use `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
 
-Compshare / k8s GPU pod (already a container). Scheme argument selects the
+K8s GPU pod (already a container). Scheme argument selects the
 5090-packed recipe (`w4a8` default):
 
 ```bash
@@ -200,13 +200,12 @@ Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 
 ## OSS publish
 
-After a scheme finishes, upload the export with the same layout as W4A8:
-
-`https://zhiman-bj-public.oss-cn-beijing.aliyuncs.com/Mega-Quantification/<scheme>/<content-hash>/`
-
-`<scheme>` is `w4a8` / `w4a4` / `mixed`. `<content-hash>` is SHA256 of sorted
-`{safetensors-name} {sha256}\\n` lines. The bucket is public-readwrite;
-objects larger than 5 GiB use multipart upload.
+After a scheme finishes, upload the export as
+`<prefix>/<scheme>/<content-hash>/` (`w4a8` / `w4a4` / `mixed`).
+`<content-hash>` is SHA256 of sorted `{safetensors-name} {sha256}\\n` lines.
+Bucket and endpoint come from `OSS_BUCKET` / `OSS_ENDPOINT` or `--bucket` /
+`--endpoint` (optional gitignored `.oss.env`). Objects larger than 5 GiB use
+multipart upload.
 
 ```bash
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4

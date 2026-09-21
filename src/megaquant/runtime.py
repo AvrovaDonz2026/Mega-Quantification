@@ -434,7 +434,7 @@ def pcie_plan_note() -> str | None:
 def warmup_pcie_link(nbytes: int = 512 * 1024 * 1024, rounds: int = 4) -> str | None:
     """Create a CUDA context and DMA a pinned buffer so the link trains to gen5.
 
-    Compshare / idle driver power-saving leaves RTX 5090 at PCIe **gen1 x16**
+    Idle driver power-saving leaves RTX 5090 at PCIe **gen1 x16**
     (~4 GB/s). After a few GiB of pinned H2D/D2H the same card reports
     **gen5 x16** and ~50 GiB/s. Run this before ``from_pretrained``.
     """

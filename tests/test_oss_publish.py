@@ -46,11 +46,29 @@ def test_dry_run_writes_sidecars(tmp_path: Path) -> None:
     oss = _load()
     (tmp_path / "model.safetensors").write_bytes(b"weights")
     (tmp_path / "config.json").write_text("{}\n")
-    manifest = oss.publish(tmp_path, scheme="w4a4", dry_run=True)
+    manifest = oss.publish(
+        tmp_path,
+        scheme="w4a4",
+        bucket_name="example-bucket",
+        endpoint="https://oss.example.com",
+        dry_run=True,
+    )
     assert manifest["scheme"] == "w4a4"
+    assert manifest["bucket"] == "example-bucket"
     assert (tmp_path / "SHA256SUMS.txt").is_file()
     assert (tmp_path / "oss_manifest.json").is_file()
     assert "Mega-Quantification/w4a4/" in manifest["prefix"]
     assert manifest["content_hash"] in manifest["prefix"]
     with pytest.raises(ValueError):
         oss.canonical_scheme("fp16", tmp_path)
+
+
+def test_publish_requires_bucket_and_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    oss = _load()
+    (tmp_path / "model.safetensors").write_bytes(b"weights")
+    monkeypatch.delenv("OSS_BUCKET", raising=False)
+    monkeypatch.delenv("OSS_BUCKET_NAME", raising=False)
+    monkeypatch.delenv("OSS_ENDPOINT", raising=False)
+    monkeypatch.delenv("MEGAQUANT_OSS_ENV", raising=False)
+    with pytest.raises(ValueError, match="OSS_BUCKET"):
+        oss.publish(tmp_path, scheme="w4a4", dry_run=True)

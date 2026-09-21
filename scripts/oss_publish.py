@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Publish a Mega-Quantification HF export to Aliyun OSS.
+"""Publish a Mega-Quantification HF export to object storage.
 
-Layout (matches the published W4A8 checkpoint):
+Layout::
 
-    https://zhiman-bj-public.oss-cn-beijing.aliyuncs.com/Mega-Quantification/<scheme>/<content-hash>/
+    <prefix>/<scheme>/<content-hash>/
 
 ``content-hash`` is SHA256 of sorted ``{filename} {sha256}\\n`` lines for every
 ``*.safetensors`` in the export directory. Files larger than 5 GiB use
-multipart ``resumable_upload``. Default auth is anonymous public-write on
-bucket ``zhiman-bj-public``. Optional ``OSS_ACCESS_KEY_ID`` /
-``OSS_ACCESS_KEY_SECRET`` override that.
+multipart ``resumable_upload``. Bucket and endpoint come from ``--bucket`` /
+``--endpoint`` or ``OSS_BUCKET`` / ``OSS_ENDPOINT`` (optional gitignored
+``.oss.env``). Anonymous auth unless ``OSS_ACCESS_KEY_ID`` and
+``OSS_ACCESS_KEY_SECRET`` are set.
 
-Usage on the GPU pod after PTQ::
+Usage after PTQ::
 
     python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
     python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme mixed
@@ -28,8 +29,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-DEFAULT_BUCKET = "zhiman-bj-public"
-DEFAULT_ENDPOINT = "https://oss-cn-beijing.aliyuncs.com"
 DEFAULT_PREFIX = "Mega-Quantification"
 SIMPLE_PUT_LIMIT = 5 * 1024**3
 READ_CHUNK = 8 * 1024 * 1024
@@ -44,6 +43,52 @@ SCHEME_ALIASES: dict[str, str] = {
 }
 
 SKIP_NAMES = frozenset({"SHA256SUMS.txt", "oss_manifest.json"})
+
+
+def _load_optional_env_file() -> None:
+    """Load KEY=VAL from a gitignored .oss.env; never overrides the process env."""
+    candidates = []
+    explicit = os.environ.get("MEGAQUANT_OSS_ENV", "").strip()
+    if explicit:
+        candidates.append(Path(explicit))
+    here = Path(__file__).resolve()
+    candidates.extend(
+        (
+            Path.cwd() / ".oss.env",
+            here.parent.parent / ".oss.env",
+            here.parent / ".oss.env",
+        )
+    )
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        for raw in resolved.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip("'").strip('"')
+            if key and key not in os.environ:
+                os.environ[key] = value
+        return
+
+
+def _require_setting(cli: str | None, *env_names: str, flag: str) -> str:
+    if cli and cli.strip():
+        return cli.strip()
+    for name in env_names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    joined = " / ".join(env_names)
+    raise ValueError(f"set {flag} or {joined}")
 
 
 def sha256_file(path: Path) -> str:
@@ -171,12 +216,15 @@ def publish(
     export_dir: Path,
     *,
     scheme: str | None = None,
-    bucket_name: str = DEFAULT_BUCKET,
-    endpoint: str = DEFAULT_ENDPOINT,
+    bucket_name: str | None = None,
+    endpoint: str | None = None,
     prefix: str = DEFAULT_PREFIX,
     dry_run: bool = False,
     force: bool = False,
 ) -> dict[str, Any]:
+    _load_optional_env_file()
+    bucket_name = _require_setting(bucket_name, "OSS_BUCKET", "OSS_BUCKET_NAME", flag="--bucket")
+    endpoint = _require_setting(endpoint, "OSS_ENDPOINT", flag="--endpoint")
     export_dir = export_dir.resolve()
     if not export_dir.is_dir():
         raise FileNotFoundError(export_dir)
@@ -245,8 +293,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export_dir", type=Path)
     parser.add_argument("--scheme", help="w4a8 | w4a4 | mixed (or nvfp4_*)")
-    parser.add_argument("--bucket", default=DEFAULT_BUCKET)
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument("--bucket", default=None, help="or OSS_BUCKET")
+    parser.add_argument("--endpoint", default=None, help="or OSS_ENDPOINT")
     parser.add_argument("--prefix", default=DEFAULT_PREFIX)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="re-upload even if size matches")

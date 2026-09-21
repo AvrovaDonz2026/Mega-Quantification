@@ -2,7 +2,7 @@
 
 把 Mega-Quantification 的 CUDA、PyTorch（sm_90 / sm_120）、NVIDIA ModelOpt、llm-compressor 和 CLI 打进一个镜像。权重不进镜像：Hugging Face 缓存和导出目录挂到宿主机，方便在 5090 / 5090 D / Blackwell 工作站之间搬。
 
-如果你的 5090 已经在 Compshare / AutoDL 这类 **K8s GPU 容器**里（没有 Docker、系统盘只有几十 GB、权重在 `/model`），不要硬套 Compose，改用：
+如果你的 5090 已经在 **K8s GPU 容器**里（没有 Docker、系统盘只有几十 GB、权重在只读盘），不要硬套 Compose，改用：
 
 ```bash
 bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]

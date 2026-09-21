@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Run Mega-Quantification on a GPU *cloud pod that is already a container*
-# (Compshare / AutoDL / similar k8s GPU boxes). Those machines have no Docker,
-# often a ~50G overlay, and a large read-only model mount.
+# Run Mega-Quantification on a GPU cloud pod that is already a container
+# (no nested Docker, often a small overlay plus a large read-only model mount).
 #
-# Typical 5090 pod we tested:
+# Typical 5090 box:
 #   1x RTX 5090 32 GB (sm_120), 64 GB RAM, CUDA 13.2, conda py312 + torch cu132
-#   BF16 weights already at /model/ModelScope/Qwen/Qwen3.8-27B (read-only)
+#   Local BF16 snapshot via MEGAQUANT_MODEL or ./models / /workspace/models
 #
 # Usage (on the pod, from the repo root):
 #   bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]
@@ -62,9 +61,17 @@ if [[ -z "${PY}" ]]; then
   done
 fi
 
-DEFAULT_MODEL="/workspace/models/Qwen3.8-27B"
-if [[ ! -f "${DEFAULT_MODEL}/config.json" ]]; then
-  DEFAULT_MODEL="/model/ModelScope/Qwen/Qwen3.8-27B"
+DEFAULT_MODEL="${MEGAQUANT_MODEL:-}"
+if [[ -z "${DEFAULT_MODEL}" ]]; then
+  for candidate in \
+      "$ROOT/models/Qwen3.8-27B" \
+      "/workspace/models/Qwen3.8-27B" \
+      "/models/Qwen3.8-27B"; do
+    if [[ -f "${candidate}/config.json" ]]; then
+      DEFAULT_MODEL="${candidate}"
+      break
+    fi
+  done
 fi
 CMD="${1:-plan}"
 shift || true

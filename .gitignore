@@ -7,6 +7,7 @@ build/
 .venv/
 venv/
 .env
+.oss.env
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
