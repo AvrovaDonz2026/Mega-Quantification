@@ -160,6 +160,9 @@ class EvalServe(StrictModel):
     # Legacy vLLM paging. Leave 0 when native KV offload is on (avoid double RAM).
     swap_space_gb: float = 0
     cpu_reserve_gib: int = 6
+    # Mixed NVFP4 + Mamba + HiCache on a 32 GB card OOMs during CUDA-graph capture.
+    # Cookbook GB300 boxes can set this false.
+    disable_cuda_graph: bool = False
 
 
 class EvalRecipe(StrictModel):
@@ -458,6 +461,7 @@ def sglang_serve_argv(
     kv_offloading_backend: str = "native",
     kv_offloading_size_gb: float | int = 0,
     cpu_reserve_gib: int = 6,
+    disable_cuda_graph: bool = False,
 ) -> list[str]:
     """NVIDIA/SGLang cookbook flags plus HiCache so 262k gen fits a 32 GB card.
 
@@ -529,6 +533,8 @@ def sglang_serve_argv(
     offload = (kv_offloading_backend or "native").strip().lower()
     if enable_hierarchical_cache and offload not in {"none", "off", "false"}:
         argv.extend(["--enable-hierarchical-cache", "--hicache-size", str(kv_ram)])
+    if disable_cuda_graph:
+        argv.append("--disable-cuda-graph")
     # SGLang 0.5.x `serve` has no --seed; sampling seed stays on the eval client.
     _ = seed
     return argv
@@ -570,6 +576,7 @@ def sglang_serve_argv_from_recipe(
         kv_offloading_backend=serve.kv_offloading_backend,
         kv_offloading_size_gb=serve.kv_offloading_size_gb,
         cpu_reserve_gib=serve.cpu_reserve_gib,
+        disable_cuda_graph=serve.disable_cuda_graph,
     )
 
 

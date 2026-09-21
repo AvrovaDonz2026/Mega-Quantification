@@ -62,6 +62,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert serve["kv_offloading_size_gb"] == 0
     assert serve["swap_space_gb"] == 0
     assert serve["cpu_reserve_gib"] == 6
+    assert serve["disable_cuda_graph"] is True
     plan = describe_eval(recipe)
     assert plan["engine"] == "sglang"
     assert plan["base_url"] is None
@@ -199,6 +200,9 @@ def test_sglang_argv_matches_cookbook_and_hicache() -> None:
     assert "--port 30000" in joined
     assert "vllm" not in joined
     assert "--seed" not in argv
+    assert "--disable-cuda-graph" not in argv
+    with_graphs_off = sglang_serve_argv("/ckpt", disable_cuda_graph=True)
+    assert "--disable-cuda-graph" in with_graphs_off
 
 
 def test_vllm_argv_matches_nvidia_card_flags() -> None:
@@ -242,6 +246,7 @@ def test_sglang_argv_from_recipe_follows_yaml_kv_offload() -> None:
     assert "--enable-hierarchical-cache" in joined
     assert "--hicache-size 40" in joined
     assert "--context-length 262144" in joined
+    assert "--disable-cuda-graph" in joined
     assert describe_eval(recipe)["kv_cpu_offload_gib"] == 40
     default = serve_argv_from_recipe(recipe, "/export")
     assert default[:2] == ["sglang", "serve"]

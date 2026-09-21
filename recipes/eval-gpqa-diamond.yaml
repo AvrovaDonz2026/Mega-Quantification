@@ -77,3 +77,5 @@ serve:
   kv_offloading_size_gb: 0
   swap_space_gb: 0
   cpu_reserve_gib: 6
+  # 32 GB 5090: mixed NVFP4 + Mamba + HiCache OOMs in CUDA-graph capture.
+  disable_cuda_graph: true
