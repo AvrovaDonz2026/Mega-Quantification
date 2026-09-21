@@ -217,7 +217,10 @@ def test_sglang_requirements_pin_engine(repo_root: Path) -> None:
     assert "580" in req or "CUDA 13" in req
 
 
-def test_compose_omp_threads_not_empty(repo_root: Path) -> None:
+def test_compose_does_not_export_empty_cuda_visible_devices(repo_root: Path) -> None:
+    text = (repo_root / "docker-compose.yml").read_text()
+    assert "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-}" not in text
+    # Empty CUDA_VISIBLE_DEVICES hides every GPU from torch.
     text = (repo_root / "docker-compose.yml").read_text()
     assert "OMP_NUM_THREADS: ${OMP_NUM_THREADS:-16}" in text
     assert "MKL_NUM_THREADS: ${MKL_NUM_THREADS:-16}" in text
