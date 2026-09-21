@@ -41,6 +41,9 @@ x-common-volumes: &common-volumes
   - ${DATA_DIR:-./data}:/data
   - ./recipes:/opt/megaquant/recipes
   - ./docs:/opt/megaquant/docs:ro
+  # Live git src over the baked COPY so compose up picks up latest Python
+  # (EvalServe.sampling_backend, etc.) without rebuilding megaquant:sglang.
+  - ./src:/opt/megaquant/src
 
 x-gpu: &gpu
   ipc: host

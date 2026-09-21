@@ -142,6 +142,9 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 | `./outputs` | `/opt/megaquant/outputs` |
 | `./offload_folder` | `/opt/megaquant/offload` |
 | `./recipes` | `/opt/megaquant/recipes` |
+| `./src` | `/opt/megaquant/src` |
+
+`compose up` bind-mounts git `./src` over `/opt/megaquant/src` so the baked `megaquant:sglang` image picks up latest Python without a rebuild.
 
 ## 镜像里有什么
 

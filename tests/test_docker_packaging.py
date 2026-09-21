@@ -66,6 +66,13 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
         assert serve_build.get("dockerfile") == "Dockerfile.sglang"
     eval_svc = services["eval-gpqa"]
     assert eval_svc.get("gpus") in (None, False, [])
+    eval_deploy = eval_svc.get("deploy") or {}
+    eval_devices = (
+        (eval_deploy.get("resources") or {}).get("reservations") or {}
+    ).get("devices")
+    assert not eval_devices
+    serve_image = str(services["serve-sglang"].get("image") or "")
+    assert "megaquant:sglang" in serve_image
     assert "fetch-export" in services
     assert "fetch-gpqa" in services
 
@@ -77,6 +84,7 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "/models" in volume_blob
     assert "/opt/megaquant/outputs" in volume_blob
     assert "/opt/megaquant/offload" in volume_blob
+    assert "./src:/opt/megaquant/src" in volume_blob
     assert "offload" in text
 
 

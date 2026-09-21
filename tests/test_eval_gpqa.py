@@ -63,6 +63,12 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert serve["swap_space_gb"] == 0
     assert serve["cpu_reserve_gib"] == 6
     assert serve["disable_cuda_graph"] is True
+    assert serve["attention_backend"] == "flashinfer"
+    assert serve["sampling_backend"] is None
+    default_argv = sglang_serve_argv_from_recipe(recipe)
+    assert "--attention-backend" in default_argv
+    assert default_argv[default_argv.index("--attention-backend") + 1] == "flashinfer"
+    assert "--sampling-backend" not in default_argv
     plan = describe_eval(recipe)
     assert plan["engine"] == "sglang"
     assert plan["base_url"] is None
@@ -76,11 +82,15 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
 def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.5090.yaml")
     assert recipe.serve.attention_backend == "triton"
+    assert recipe.serve.sampling_backend == "pytorch"
     assert recipe.serve.disable_cuda_graph is True
     assert recipe.serve.kv_offloading_size_gb == 12
-    joined = " ".join(sglang_serve_argv_from_recipe(recipe))
+    argv = sglang_serve_argv_from_recipe(recipe)
+    joined = " ".join(argv)
     assert "--attention-backend triton" in joined
     assert "--attention-backend flashinfer" not in joined
+    assert "--sampling-backend pytorch" in joined
+    assert argv[argv.index("--sampling-backend") + 1] == "pytorch"
 
 
 def test_remaining_tokens_never_uses_small_default_cap() -> None:

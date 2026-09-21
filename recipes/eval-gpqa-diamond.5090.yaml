@@ -51,6 +51,8 @@ serve:
   quantization: modelopt
   tensor_parallel_size: null
   attention_backend: triton
+  # SM12 + CUDA 12.8 FlashInfer cannot sampling-JIT either.
+  sampling_backend: pytorch
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
   mamba_ssm_dtype: float32
