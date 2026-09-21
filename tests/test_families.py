@@ -85,23 +85,17 @@ def test_qwen35_detect_from_fake_config() -> None:
 
 def test_qwen35_vision_and_mtp_flags() -> None:
     family = Qwen35Family()
-    vision_on = family.default_ignore(
-        {"model": {"quantize_vision": True, "quantize_mtp": False}}
-    )
+    vision_on = family.default_ignore({"model": {"quantize_vision": True, "quantize_mtp": False}})
     assert not any("visual" in p or "vision" in p for p in vision_on)
     assert any("mtp" in p for p in vision_on)
 
-    mtp_on = family.default_ignore(
-        {"model": {"quantize_vision": False, "quantize_mtp": True}}
-    )
+    mtp_on = family.default_ignore({"model": {"quantize_vision": False, "quantize_mtp": True}})
     assert any("visual" in p for p in mtp_on)
     assert not any("mtp" in p for p in mtp_on)
 
 
 def test_qwen35_load_kwargs_no_torch() -> None:
-    kwargs = Qwen35Family().load_kwargs(
-        {"model": {"device_map": "cpu", "dtype": "bfloat16"}}
-    )
+    kwargs = Qwen35Family().load_kwargs({"model": {"device_map": "cpu", "dtype": "bfloat16"}})
     assert kwargs["trust_remote_code"] is True
     assert kwargs["device_map"] == "cpu"
     assert "bfloat16" in str(kwargs["torch_dtype"]).lower()

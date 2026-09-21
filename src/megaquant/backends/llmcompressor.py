@@ -299,6 +299,28 @@ def _normalize_row(item: Any, text_field: str) -> dict[str, Any]:
     return {text_field: item}
 
 
+def _dataset_has_column(dataset: Any, column: str) -> bool:
+    if dataset is None or not column:
+        return False
+    if isinstance(dataset, str):
+        return True
+    names = getattr(dataset, "column_names", None)
+    if names is not None:
+        return column in names
+    if isinstance(dataset, Mapping):
+        return column in dataset
+    if isinstance(dataset, (list, tuple)) and dataset:
+        first = dataset[0]
+        if isinstance(first, Mapping):
+            return column in first
+        if hasattr(first, "keys"):
+            try:
+                return column in first.keys()
+            except Exception:
+                return False
+    return False
+
+
 def _is_hf_dataset(obj: Any) -> bool:
     if obj is None:
         return False
@@ -580,6 +602,10 @@ class LLMCompressorBackend:
             "save": False,
             "output_dir": None,
         }
+        # Pipeline calib iter is already tokenized (input_ids / attention_mask).
+        # oneshot looking for text_column="text" would KeyError.
+        if not _dataset_has_column(dataset, str(calib_kwargs.get("text_column") or "text")):
+            call.pop("text_column", None)
         return _call_oneshot(oneshot, call)
 
     def export(self, model: Any, recipe: Any, tokenizer: Any = None) -> Path:

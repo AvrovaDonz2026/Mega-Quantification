@@ -23,6 +23,7 @@ from megaquant.registry import (
     get_scheme,
     list_backends,
 )
+from megaquant.runtime import apply_env_to_recipe, from_pretrained_env_kwargs, low_memory_plan_note
 
 
 @dataclass
@@ -52,6 +53,7 @@ def format_plan(plan: ResolvedPlan) -> str:
         groups.append(item)
     payload: dict[str, Any] = {
         "model": recipe.model.source,
+        "device_map": recipe.model.device_map,
         "scheme": recipe.scheme,
         "backend": plan.backend_name,
         "algorithm": recipe.algorithm,
@@ -324,6 +326,11 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             extra = dict(extra_fn(recipe) or {})
             model_cls = extra.pop("model_cls", extra.pop("auto_model_class", model_cls))
             load_kwargs.update(extra)
+    # Env overrides win over family.load_kwargs (device_map, CPU offload, max_memory).
+    load_kwargs.update(from_pretrained_env_kwargs())
+    offload = load_kwargs.get("offload_folder")
+    if offload:
+        Path(offload).mkdir(parents=True, exist_ok=True)
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(recipe.model.source, **tok_kwargs)
@@ -385,8 +392,12 @@ class QuantPipeline:
         self.recipe = recipe
 
     def resolve(self) -> ResolvedPlan:
-        recipe = self.recipe
+        recipe = apply_env_to_recipe(self.recipe)
+        self.recipe = recipe
         notes: list[str] = []
+        low_mem_note = low_memory_plan_note()
+        if low_mem_note:
+            notes.append(low_mem_note)
 
         if recipe.family:
             family_name = recipe.family

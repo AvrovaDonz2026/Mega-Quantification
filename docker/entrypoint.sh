@@ -61,10 +61,34 @@ fi
 if [[ -n "${MEGAQUANT_LOW_MEMORY:-}" ]]; then
   export MEGAQUANT_LOW_MEMORY
 fi
+if [[ -n "${MEGAQUANT_OFFLOAD_DIR:-}" ]]; then
+  export MEGAQUANT_OFFLOAD_DIR
+fi
+if [[ -n "${MEGAQUANT_MAX_MEMORY:-}" ]]; then
+  export MEGAQUANT_MAX_MEMORY
+fi
+
+DEFAULT_RECIPE="${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}"
+
+_has_config_flag() {
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+      -c|--config|-c=*|--config=*) return 0 ;;
+    esac
+  done
+  return 1
+}
 
 # Default: if the user passes nothing, run the recipe plan (dry-run).
+# `docker compose run --rm megaquant plan` replaces CMD with just `plan`,
+# and the CLI requires -c/--config — append the recipe in that case too.
 if [[ $# -eq 0 ]]; then
-  set -- plan -c "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}"
+  set -- plan -c "${DEFAULT_RECIPE}"
+elif [[ "${1}" == "plan" || "${1}" == "quantize" ]]; then
+  if ! _has_config_flag "$@"; then
+    set -- "$@" -c "${DEFAULT_RECIPE}"
+  fi
 fi
 
 # Allow `docker compose run megaquant --dry-run` style passthrough plus extras.

@@ -323,8 +323,25 @@ def _disable_pattern(cfg: dict[str, Any], pattern: str) -> None:
     _append_entry(cfg, {"quantizer_name": pattern, "enable": False})
 
 
-def _enable_pattern(cfg: dict[str, Any], pattern: str, attr: Mapping[str, Any]) -> None:
-    _append_entry(cfg, {"quantizer_name": pattern, "cfg": copy.deepcopy(dict(attr))})
+def _enable_pattern(cfg: dict[str, Any], pattern: str, attr: Any) -> None:
+    # QuantizerCfgEntry.enable defaults True, but later disable entries must be
+    # overridden by an explicit enable=True (list order, last match wins).
+    if isinstance(attr, str):
+        _append_entry(cfg, {"quantizer_name": pattern, "cfg": attr, "enable": True})
+        return
+    if isinstance(attr, list):
+        _append_entry(
+            cfg, {"quantizer_name": pattern, "cfg": copy.deepcopy(attr), "enable": True}
+        )
+        return
+    _append_entry(
+        cfg,
+        {
+            "quantizer_name": pattern,
+            "cfg": copy.deepcopy(dict(attr)),
+            "enable": True,
+        },
+    )
 
 
 def _find_list_cfg(quant_cfg: list[Any], name: str) -> dict[str, Any] | None:
@@ -367,6 +384,10 @@ def _weight_input_attrs(cfg: Mapping[str, Any]) -> tuple[dict[str, Any], dict[st
                 input_attr = copy.deepcopy(i_raw)
     if weight is None:
         weight = copy.deepcopy(_NVFP4_BS32)
+    if isinstance(weight, dict):
+        weight = {k: v for k, v in weight.items() if k != "enable"}
+    if isinstance(input_attr, dict):
+        input_attr = {k: v for k, v in input_attr.items() if k != "enable"}
     if input_disabled:
         return weight, None
     return weight, input_attr
@@ -429,13 +450,25 @@ def _load_base_cfg(mtq: Any, canonical: str) -> tuple[dict[str, Any], str]:
     return _fallback_for_scheme(canonical), _SCHEME_CFG_NAME[canonical] + "(constructed)"
 
 
-def _apply_algorithm(cfg: dict[str, Any], algorithm: str) -> None:
+def _hessian_block_size(canonical: str) -> int:
+    # ModelOpt LocalHessianCalibConfig.block_size defaults to 16 (W4A4). W4A8
+    # NVFP4 uses nvfp4_bs32 — Hessian blocks must match the quantizer.
+    if canonical in {"nvfp4_w4a8", "nvfp4_mixed"}:
+        return 32
+    return 16
+
+
+def _apply_algorithm(cfg: dict[str, Any], algorithm: str, canonical: str = "") -> None:
     key = algorithm.strip().lower().replace("-", "_")
     if key in {"", "max", "max_calib"}:
         cfg["algorithm"] = "max"
         return
     if key == "local_hessian":
-        cfg["algorithm"] = {"method": "local_hessian", "fp8_scale_sweep": True}
+        cfg["algorithm"] = {
+            "method": "local_hessian",
+            "fp8_scale_sweep": True,
+            "block_size": _hessian_block_size(canonical),
+        }
         return
     if key == "mse":
         cfg["algorithm"] = {"method": "mse"}
@@ -647,7 +680,18 @@ def _output_dir(recipe: Any) -> Path:
 
 
 def _call_export_hf(export_fn: Any, model: Any, output_dir: Path) -> None:
+    """Call ``export_hf_checkpoint`` without passing the path as ``dtype``.
+
+    Current ModelOpt signature is ``(model, dtype=None, export_dir=...)``.
+    A positional ``export_fn(model, path)`` would bind the directory to
+    ``dtype`` and write to ``tempfile.gettempdir()``.
+    """
     path = str(output_dir)
+    try:
+        export_fn(model, export_dir=path)
+        return
+    except TypeError:
+        pass
     try:
         params = inspect.signature(export_fn).parameters
     except (TypeError, ValueError):
@@ -655,7 +699,7 @@ def _call_export_hf(export_fn: Any, model: Any, output_dir: Path) -> None:
     if "export_dir" in params:
         export_fn(model, export_dir=path)
         return
-    export_fn(model, path)
+    export_fn(model, dtype=None, export_dir=path)
 
 
 class ModelOptBackend:
@@ -700,8 +744,9 @@ class ModelOptBackend:
             _reenable_lm_head(cfg, weight_attr, input_attr)
 
         _apply_groups(cfg, recipe)
-        _apply_algorithm(cfg, _algorithm_of(plan, recipe))
         _apply_kv_cache(cfg, recipe, mtq)
+        # Algorithm after KV merge so a replacement quant_cfg cannot drop it.
+        _apply_algorithm(cfg, _algorithm_of(plan, recipe), canonical)
         return cfg
 
     def quantize(self, model: Any, plan: Any, calib_iter: Any) -> Any:
@@ -713,7 +758,7 @@ class ModelOptBackend:
             )
         cfg = copy.deepcopy(self.build_quant_cfg(plan))
         forward_loop = forward_loop_from_iter(calib_iter)
-        return mtq.quantize(model, cfg, forward_loop)
+        return mtq.quantize(model, cfg, forward_loop=forward_loop)
 
     def export(self, model: Any, recipe: Any, tokenizer: Any = None) -> Path:
         try:

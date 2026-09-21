@@ -33,11 +33,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TORCH_CUDA_ARCH_LIST="9.0;10.0;12.0" \
     MODELOPT_NVFP4_TRITON_SWEEP=1
 
+# NGC PyTorch (INSTALL_TORCH=0) already ships Python + torch. Do not apt-install
+# a second Ubuntu python on those images — it hides NGC's torch from an isolated
+# venv. Always use --system-site-packages when INSTALL_TORCH=0.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-venv \
-        python3-dev \
-        python3-pip \
         git \
         git-lfs \
         curl \
@@ -47,8 +46,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
         libnuma1 \
         libnuma-dev \
+    && if [ "${INSTALL_TORCH}" = "0" ] && command -v python >/dev/null 2>&1; then \
+         python -m venv --system-site-packages /opt/venv; \
+       else \
+         apt-get install -y --no-install-recommends \
+            python3 \
+            python3-venv \
+            python3-dev \
+            python3-pip \
+         && if [ "${INSTALL_TORCH}" = "0" ]; then \
+              python3 -m venv --system-site-packages /opt/venv; \
+            else \
+              python3 -m venv /opt/venv; \
+            fi; \
+       fi \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/venv \
     && git lfs install --system
 
 WORKDIR /opt/megaquant
@@ -74,7 +86,7 @@ COPY docker ./docker
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -e ".[dev]" \
-    && mkdir -p /cache/huggingface /opt/megaquant/outputs /models \
+    && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models \
     && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh
 
 WORKDIR /opt/megaquant

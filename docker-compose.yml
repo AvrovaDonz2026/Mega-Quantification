@@ -25,6 +25,8 @@ x-megaquant: &megaquant
     CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-}
     MEGAQUANT_DEVICE_MAP: ${MEGAQUANT_DEVICE_MAP:-auto}
     MEGAQUANT_LOW_MEMORY: ${MEGAQUANT_LOW_MEMORY:-1}
+    MEGAQUANT_OFFLOAD_DIR: ${MEGAQUANT_OFFLOAD_DIR:-/opt/megaquant/offload}
+    MEGAQUANT_MAX_MEMORY: ${MEGAQUANT_MAX_MEMORY:-}
     MEGAQUANT_EXTRA_ARGS: ${MEGAQUANT_EXTRA_ARGS:-}
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -32,6 +34,7 @@ x-megaquant: &megaquant
     - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
     - ${MODELS_DIR:-./models}:/models
     - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
+    - ${OFFLOAD_DIR:-./offload_folder}:/opt/megaquant/offload
     - ./recipes:/opt/megaquant/recipes
     - ./docs:/opt/megaquant/docs:ro
   working_dir: /opt/megaquant

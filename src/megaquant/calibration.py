@@ -38,6 +38,27 @@ class DummyCalibIter:
             }
 
 
+class CalibrationBatches:
+    """Reusable, sized iterable of already-tokenized PTQ batches.
+
+    ModelOpt ``forward_loop`` (especially Local-Hessian) may iterate calibration
+    data more than once. A generator would be exhausted after the first pass, and
+    some ModelOpt / tqdm paths call ``len()``.
+    """
+
+    def __init__(self, batches: list[dict[str, Any]]):
+        self.batches = list(batches)
+
+    def __len__(self) -> int:
+        return len(self.batches)
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self.batches)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        return self.batches[index]
+
+
 def _messages_to_text(messages: Any, tokenizer: Any | None) -> str:
     if isinstance(messages, str):
         return messages
@@ -118,6 +139,62 @@ def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
             yield row
 
 
+# Nemotron-Post-Training-Dataset-v2/v3 have splits chat/stem/math/code/…, not ``train``.
+# ``chat`` is a split name, not a BuilderConfig (``name=``).
+_NEMOTRON_PREFIX = "nvidia/Nemotron-Post-Training-Dataset"
+_SPLIT_CANDIDATES = (
+    "train",
+    "train_sft",
+    "chat",
+    "stem",
+    "math",
+    "code",
+    "validation",
+    "test",
+)
+
+
+def _is_dataset_dict(ds: Any) -> bool:
+    if ds is None or isinstance(ds, dict):
+        # Row dicts are mappings; HuggingFace DatasetDict is a dedicated type.
+        return False
+    name = type(ds).__name__
+    if name in {"DatasetDict", "IterableDatasetDict"}:
+        return True
+    keys_fn = getattr(ds, "keys", None)
+    getitem = getattr(ds, "__getitem__", None)
+    if not callable(keys_fn) or not callable(getitem):
+        return False
+    # A streaming IterableDataset is iterable but is not a split mapping.
+    if hasattr(ds, "column_names") or hasattr(ds, "features"):
+        return False
+    try:
+        keys = list(keys_fn())
+    except Exception:
+        return False
+    return bool(keys) and all(isinstance(k, str) for k in keys)
+
+
+def _unwrap_dataset_dict(ds: Any, preferred: tuple[str, ...] = _SPLIT_CANDIDATES) -> Any:
+    if not _is_dataset_dict(ds):
+        return ds
+    keys = list(ds.keys())
+    for split in preferred:
+        if split in keys:
+            return ds[split]
+    return ds[keys[0]]
+
+
+def _nemotron_splits(dataset_id: str) -> tuple[str, ...]:
+    if _NEMOTRON_PREFIX in dataset_id:
+        return ("chat", "stem", "math", "code", "train", "train_sft")
+    if dataset_id == "cnn_dailymail":
+        return ("train",)
+    if dataset_id.endswith("ultrachat_200k"):
+        return ("train_sft", "train")
+    return _SPLIT_CANDIDATES
+
+
 def _load_hf_dataset(dataset_id: str) -> Any:
     try:
         from datasets import get_dataset_config_names, load_dataset
@@ -127,22 +204,27 @@ def _load_hf_dataset(dataset_id: str) -> Any:
             "Install with: pip install megaquant[hf]"
         ) from exc
 
+    splits = _nemotron_splits(dataset_id)
     attempts: list[dict[str, Any]] = []
     if dataset_id == "cnn_dailymail":
         attempts.append({"path": dataset_id, "name": "3.0.0", "split": "train", "streaming": True})
-    elif dataset_id == "HuggingFaceH4/ultrachat_200k" or dataset_id.endswith("ultrachat_200k"):
-        attempts.append({"path": dataset_id, "split": "train_sft", "streaming": True})
-        attempts.append({"path": dataset_id, "split": "train", "streaming": True})
-    elif dataset_id == "nvidia/Nemotron-Post-Training-Dataset-v2":
-        attempts.append({"path": dataset_id, "split": "train", "streaming": True})
-        attempts.append({"path": dataset_id, "name": "chat", "split": "train", "streaming": True})
+    elif dataset_id.endswith("ultrachat_200k"):
+        for split in splits:
+            attempts.append({"path": dataset_id, "split": split, "streaming": True})
     else:
-        attempts.append({"path": dataset_id, "split": "train", "streaming": True})
+        for split in splits:
+            attempts.append({"path": dataset_id, "split": split, "streaming": True})
+        # README for Nemotron v2 shows a config named "SFT"; try it after default.
+        if _NEMOTRON_PREFIX in dataset_id:
+            for split in splits:
+                attempts.append(
+                    {"path": dataset_id, "name": "SFT", "split": split, "streaming": True}
+                )
 
     errors: list[str] = []
     for kwargs in attempts:
         try:
-            return load_dataset(**kwargs)
+            return _unwrap_dataset_dict(load_dataset(**kwargs), splits)
         except Exception as exc:
             errors.append(f"{kwargs}: {exc}")
 
@@ -152,22 +234,55 @@ def _load_hf_dataset(dataset_id: str) -> Any:
         configs = []
         errors.append(str(exc))
     for name in configs[:8]:
+        for split in splits:
+            try:
+                return _unwrap_dataset_dict(
+                    load_dataset(dataset_id, name=name, split=split, streaming=True),
+                    splits,
+                )
+            except Exception as exc:
+                errors.append(f"name={name} split={split}: {exc}")
         try:
-            return load_dataset(dataset_id, name=name, split="train", streaming=True)
+            return _unwrap_dataset_dict(
+                load_dataset(dataset_id, name=name, streaming=True), splits
+            )
         except Exception as exc:
-            errors.append(f"name={name}: {exc}")
+            errors.append(f"name={name} (no split): {exc}")
 
     detail = errors[-1] if errors else "unknown error"
     raise CalibrationError(f"Could not load calibration dataset '{dataset_id}': {detail}")
 
 
+def _ensure_pad_token(tokenizer: Any) -> None:
+    """Qwen3.8 ``text_config.pad_token_id`` is null; padding=True would raise."""
+    pad_id = getattr(tokenizer, "pad_token_id", None)
+    pad_tok = getattr(tokenizer, "pad_token", None)
+    if pad_id is not None and pad_tok is not None:
+        return
+    eos = getattr(tokenizer, "eos_token", None)
+    if eos is not None:
+        try:
+            tokenizer.pad_token = eos
+            return
+        except (TypeError, ValueError, AttributeError):
+            pass
+    unk = getattr(tokenizer, "unk_token", None)
+    if unk is not None:
+        try:
+            tokenizer.pad_token = unk
+        except (TypeError, ValueError, AttributeError):
+            pass
+
+
 def _tokenize_batch(tokenizer: Any, texts: list[str], max_seq_length: int) -> dict[str, Any]:
+    _ensure_pad_token(tokenizer)
+    pad = True if len(texts) > 1 else False
     try:
         encoded = tokenizer(
             texts,
             truncation=True,
             max_length=max_seq_length,
-            padding=True,
+            padding=pad,
             return_tensors="pt",
         )
     except Exception as exc:
@@ -181,8 +296,12 @@ def _tokenize_batch(tokenizer: Any, texts: list[str], max_seq_length: int) -> di
     return encoded
 
 
-def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> Iterator[dict[str, Any]]:
-    """Yield tokenized batches with ``input_ids`` / ``attention_mask``."""
+def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> CalibrationBatches:
+    """Return tokenized batches with ``input_ids`` / ``attention_mask``.
+
+    The result is sized (``len``) and re-iterable so ModelOpt can run the
+    forward loop more than once (Local-Hessian) without a second Hub pass.
+    """
     if tokenizer is None:
         raise CalibrationError("A tokenizer is required to build the calibration iterator")
 
@@ -206,6 +325,7 @@ def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> Iterator[dict[str,
                 "The datasets library is required for Hugging Face calibration. "
                 "Install with: pip install megaquant[hf]"
             ) from exc
+        ds = _unwrap_dataset_dict(ds)
         if hasattr(ds, "shuffle"):
             try:
                 ds = ds.shuffle(seed=calib.seed, buffer_size=10_000)
@@ -233,11 +353,13 @@ def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> Iterator[dict[str,
             f"(num_samples={calib.num_samples}, text_field={calib.text_field!r})"
         )
 
+    batches: list[dict[str, Any]] = []
     batch: list[str] = []
     for text in texts:
         batch.append(text)
         if len(batch) >= calib.batch_size:
-            yield _tokenize_batch(tokenizer, batch, calib.max_seq_length)
+            batches.append(_tokenize_batch(tokenizer, batch, calib.max_seq_length))
             batch = []
     if batch:
-        yield _tokenize_batch(tokenizer, batch, calib.max_seq_length)
+        batches.append(_tokenize_batch(tokenizer, batch, calib.max_seq_length))
+    return CalibrationBatches(batches)

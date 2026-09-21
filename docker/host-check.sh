@@ -48,10 +48,16 @@ else
 fi
 
 free_gb="$(df -BG . | awk 'NR==2 {print $4}' | tr -d 'G')"
-if [[ "${free_gb}" =~ ^[0-9]+$ ]] && (( free_gb < 80 )); then
-  bad "free disk ${free_gb}G — need ~20G for the image plus ~60G for Qwen3.8-27B BF16 + export"
+if [[ "${free_gb}" =~ ^[0-9]+$ ]] && (( free_gb < 15 )); then
+  bad "free disk ${free_gb}G on $(pwd) — need ~15G+ for the venv/export (BF16 weights can live on another mount)"
+elif [[ "${free_gb}" =~ ^[0-9]+$ ]] && (( free_gb < 80 )); then
+  echo "  [!] free disk ${free_gb}G on $(pwd) — OK if 27B BF16 is already on another mount (e.g. /model) and you are not baking weights into a Docker image"
 else
   ok "free disk ~${free_gb}G"
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "  [!] no Docker — this looks like a GPU cloud pod. Use: bash scripts/gpu-pod.sh plan"
 fi
 
 echo
@@ -59,7 +65,7 @@ if [[ "${FAIL}" -eq 0 ]]; then
   echo "Host looks ready. Next:"
   echo "  docker compose build"
   echo "  docker compose run --rm megaquant plan"
-  echo "  docker compose run --rm quantize"
+  echo "  docker compose --profile gpu run --rm quantize"
   exit 0
 fi
 echo "Fix the items marked [x], then re-run: bash docker/host-check.sh"
