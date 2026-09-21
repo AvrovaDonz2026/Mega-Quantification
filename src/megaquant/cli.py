@@ -99,6 +99,25 @@ def cmd_families(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rewrite_sglang(args: argparse.Namespace) -> int:
+    import json
+
+    from megaquant.sglang_export import rewrite_sglang_mixed_export
+
+    layers = rewrite_sglang_mixed_export(args.export_dir)
+    print(
+        json.dumps(
+            {
+                "export_dir": str(args.export_dir),
+                "quant_algo": "MIXED_PRECISION",
+                "n_quantized_layers": len(layers),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _eval_recipe_from_args(args: argparse.Namespace):
     import os
 
@@ -179,6 +198,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     families = sub.add_parser("families", help="List registered model families")
     families.set_defaults(func=cmd_families)
+
+    rewrite = sub.add_parser(
+        "rewrite-sglang",
+        help=(
+            "Rewrite an exported HF dir to quant_algo=MIXED_PRECISION + "
+            "quantized_layers (SGLang modelopt_mixed)"
+        ),
+    )
+    rewrite.add_argument(
+        "export_dir",
+        type=Path,
+        help="Directory with model.safetensors.index.json / hf_quant_config.json",
+    )
+    rewrite.set_defaults(func=cmd_rewrite_sglang)
 
     evaluate = sub.add_parser(
         "eval",

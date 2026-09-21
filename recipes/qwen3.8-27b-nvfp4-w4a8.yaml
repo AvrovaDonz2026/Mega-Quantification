@@ -1,10 +1,16 @@
-# Qwen/Qwen3.8-27B BF16 → uniform NVFP4 W4A8
+# Qwen/Qwen3.8-27B BF16 → SGLang-serving NVFP4 (default "W4A8")
 #
-# Weights: NVFP4 (E2M1 micro-blocks, FP8 E4M3 local scales).
-# Activations: FP8 E4M3. This is W4A8, not W4A4.
+# Same mixed map as nvidia/Qwen3.8-27B-NVFP4 and scheme nvfp4_mixed:
+#   NVFP4 group_size 16 on mlp.{gate,up,down}_proj + lm_head
+#   FP8 on self_attn.{q,k,v,o}_proj and linear_attn.{in_proj_qkv,in_proj_z,out_proj}
 #
-# Block size: ModelOpt qformat `w4a8_nvfp4_fp8` uses NVFP4 block size 32
-# (`nvfp4_bs32`). The W4A4 default block size is 16 — do not mix them up.
+# Export rewrites hf_quant_config.json to quant_algo=MIXED_PRECISION plus
+# quantized_layers so SGLang modelopt_mixed can load it. ModelOpt 0.46 often
+# writes a single NVFP4 / W4A8_NVFP4_FP8 tag; do not ship that as-is.
+#
+# This is NOT uniform W4A8_NVFP4_FP8 (NVFP4 block 32 + FP8 activations).
+# SGLang rejects that quant_algo. TensorRT-LLM uniform W4A8 is
+# recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml (scheme w4a8_nvfp4_fp8).
 #
 # Algorithm `max` is the lighter PTQ path. NVIDIA's published mixed checkpoint
 # uses Local-Hessian + 2048 samples; see qwen3.8-27b-nvfp4-mixed.yaml.

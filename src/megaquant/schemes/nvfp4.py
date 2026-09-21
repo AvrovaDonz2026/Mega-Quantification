@@ -13,21 +13,21 @@ NVFP4 W4A4 (stock ``NVFP4``)
 NVFP4 W4A16 (stock ``NVFP4A16``)
     Weights only: FP4 ``tensor_group`` ``group_size=16``. Activations stay BF16.
 
-NVFP4 W4A8 (our target; **no** stock ``NVFP4A8`` preset)
+NVIDIA mixed / SGLang W4A8 (``nvfp4_mixed``, default ``nvfp4_w4a8``)
+    MLP + ``lm_head``: NVFP4 W4A4 ``group_size=16`` (weights and activations).
+    Attention: FP8 on ``self_attn.{q,k,v,o}_proj`` and
+    ``linear_attn.{in_proj_qkv,in_proj_z,out_proj}``. Export metadata is
+    ``MIXED_PRECISION`` + ``quantized_layers`` so SGLang ``modelopt_mixed``
+    can load it. Not ModelOpt ``W4A8_NVFP4_FP8`` gs32.
+
+TensorRT-LLM uniform W4A8 (``w4a8_nvfp4_fp8``; **no** stock ``NVFP4A8``)
     Weights: FP4 ``tensor_group`` **``group_size=32``** (ModelOpt
     ``w4a8_nvfp4_fp8`` / ``nvfp4_bs32``), FP8 E4M3 scales.
-    Activations: FP8 E4M3. Default is **dynamic per-token** (``strategy=token``,
-    ``dynamic=True``). Alternative is static per-tensor FP8 with a minmax
-    observer.
+    Activations: FP8 E4M3. SGLang rejects ``quant_algo=W4A8_NVFP4_FP8``.
 
 FP8 W8A8 (stock ``FP8_DYNAMIC``)
     Channel-wise FP8 weights + dynamic per-token FP8 activations, or static
     per-tensor FP8 (``FP8``).
-
-NVIDIA mixed (``nvfp4_mixed``; public ``nvidia/Qwen3.8-27B-NVFP4``)
-    MLP + ``lm_head``: NVFP4 W4A4 ``group_size=16`` (weights and activations).
-    Attention: FP8 on ``self_attn.{q,k,v,o}_proj`` and
-    ``linear_attn.{in_proj_qkv,in_proj_z,out_proj}``. Not W4A8 gs32.
 
 Qwen3.8 module names
 --------------------

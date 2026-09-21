@@ -10,20 +10,24 @@ Scheme → ModelOpt mapping
 ====================== ================================= ===================
 Our scheme             ModelOpt object                   qformat
 ====================== ================================= ===================
-``nvfp4_w4a8``         ``mtq.W4A8_NVFP4_FP8_CFG``        ``w4a8_nvfp4_fp8``
-``w4a8_nvfp4_fp8``     alias of ``nvfp4_w4a8``
+``nvfp4_w4a8``         mixed (SGLang)                    ``mixed_nvfp4_fp8``
+``nvfp4_mixed``        mixed (NVIDIA quality)            ``mixed_nvfp4_fp8``
+``w4a8_nvfp4_fp8``     ``mtq.W4A8_NVFP4_FP8_CFG``        ``w4a8_nvfp4_fp8``
 ``nvfp4_w4a4``         ``mtq.NVFP4_DEFAULT_CFG``         ``nvfp4``
 ``nvfp4``              alias of ``nvfp4_w4a4``
 ``nvfp4_w4a16``        ``mtq.W4A16_NVFP4_CFG``           ``w4a16_nvfp4``
 ``w4a16_nvfp4``        alias of ``nvfp4_w4a16``
 ``fp8_w8a8``           ``mtq.FP8_DEFAULT_CFG``           ``fp8``
 ``fp8``                alias of ``fp8_w8a8``
-``nvfp4_mixed``        custom (see below)                ``mixed_nvfp4_fp8``
 ====================== ================================= ===================
 
-``W4A8_NVFP4_FP8_CFG`` is NVFP4 block-size **32** weights + FP8 E4M3 inputs
-(``w4a8_nvfp4_fp8.yaml``: ``nvfp4_bs32`` + ``fp8``, algorithm ``max``).
-``NVFP4_DEFAULT_CFG`` is NVFP4 block-size **16** W4A4.
+Default ``nvfp4_w4a8`` is the **SGLang-serving** encoding: NVFP4 group_size 16
+on MLP + ``lm_head``, FP8 on self-attn + linear-attn (same map as
+``nvidia/Qwen3.8-27B-NVFP4``). Export rewrites ``hf_quant_config.json`` to
+``quant_algo=MIXED_PRECISION`` plus ``quantized_layers``.
+
+``w4a8_nvfp4_fp8`` is TensorRT-LLM uniform W4A8 (NVFP4 block 32 + FP8
+activations). SGLang rejects that ``quant_algo``.
 
 ``nvfp4_mixed`` expression
 --------------------------
@@ -91,7 +95,7 @@ except ImportError:  # Core exceptions.py may not exist yet.
 
 
 SCHEME_ALIASES: dict[str, str] = {
-    "w4a8_nvfp4_fp8": "nvfp4_w4a8",
+    "nvfp4_w4a8_trtllm": "w4a8_nvfp4_fp8",
     "nvfp4": "nvfp4_w4a4",
     "w4a16_nvfp4": "nvfp4_w4a16",
     "fp8": "fp8_w8a8",
@@ -100,36 +104,42 @@ SCHEME_ALIASES: dict[str, str] = {
 CANONICAL_SCHEMES: frozenset[str] = frozenset(
     {
         "nvfp4_w4a8",
+        "nvfp4_mixed",
+        "w4a8_nvfp4_fp8",
         "nvfp4_w4a4",
         "nvfp4_w4a16",
         "fp8_w8a8",
-        "nvfp4_mixed",
     }
 )
 
 _SCHEME_QFORMAT: dict[str, str] = {
-    "nvfp4_w4a8": "w4a8_nvfp4_fp8",
+    "nvfp4_w4a8": "mixed_nvfp4_fp8",
+    "nvfp4_mixed": "mixed_nvfp4_fp8",
+    "w4a8_nvfp4_fp8": "w4a8_nvfp4_fp8",
     "nvfp4_w4a4": "nvfp4",
     "nvfp4_w4a16": "w4a16_nvfp4",
     "fp8_w8a8": "fp8",
-    "nvfp4_mixed": "mixed_nvfp4_fp8",
 }
 
 _SCHEME_CFG_NAME: dict[str, str] = {
-    "nvfp4_w4a8": "W4A8_NVFP4_FP8_CFG",
+    "nvfp4_w4a8": "NVFP4_DEFAULT_CFG+mixed_overrides",
+    "nvfp4_mixed": "NVFP4_DEFAULT_CFG+mixed_overrides",
+    "w4a8_nvfp4_fp8": "W4A8_NVFP4_FP8_CFG",
     "nvfp4_w4a4": "NVFP4_DEFAULT_CFG",
     "nvfp4_w4a16": "W4A16_NVFP4_CFG",
     "fp8_w8a8": "FP8_DEFAULT_CFG",
-    "nvfp4_mixed": "NVFP4_DEFAULT_CFG+mixed_overrides",
 }
 
 _PRESET_ATTR: dict[str, tuple[str, ...]] = {
-    "nvfp4_w4a8": ("W4A8_NVFP4_FP8_CFG",),
+    "nvfp4_w4a8": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
+    "nvfp4_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
+    "w4a8_nvfp4_fp8": ("W4A8_NVFP4_FP8_CFG",),
     "nvfp4_w4a4": ("NVFP4_DEFAULT_CFG",),
     "nvfp4_w4a16": ("W4A16_NVFP4_CFG", "NVFP4_MLP_WEIGHT_ONLY_CFG"),
     "fp8_w8a8": ("FP8_DEFAULT_CFG",),
-    "nvfp4_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
 }
+
+_SGLANG_MIXED = frozenset({"nvfp4_w4a8", "nvfp4_mixed"})
 
 # ModelOpt numeric fallbacks (v0.48 tuple form). YAML presets use "e2m1"/"e4m3".
 _NVFP4_BS16: dict[str, Any] = {
@@ -171,7 +181,7 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         }
 
     group_size: int | None
-    if canonical == "nvfp4_w4a8":
+    if canonical == "w4a8_nvfp4_fp8":
         group_size = 32
     elif canonical == "fp8_w8a8":
         group_size = None
@@ -188,14 +198,46 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         "algorithm": algorithm or "max",
         "requires_modelopt": True,
     }
-    if canonical == "nvfp4_w4a8":
+    if canonical in _SGLANG_MIXED:
+        summary.update(
+            {
+                "weight_format": "nvfp4+fp8",
+                "activation_format": "nvfp4+fp8",
+                "mlp_weight_format": "nvfp4",
+                "mlp_activation_format": "nvfp4",
+                "mlp_group_size": 16,
+                "attn_weight_format": "fp8",
+                "attn_activation_format": "fp8",
+                "sglang": "MIXED_PRECISION + quantized_layers (modelopt_mixed)",
+                "targets": {
+                    "nvfp4": list(_MIXED_NVFP4_PATTERNS),
+                    "fp8": list(_MIXED_ATTN_PATTERNS),
+                    "disabled": [
+                        "*visual*",
+                        "*vision*",
+                        "*embed*",
+                        "*linear_attn.conv1d*",
+                        "*linear_attn.in_proj_a*",
+                        "*linear_attn.in_proj_b*",
+                        "*mtp*",
+                    ],
+                },
+                "notes": (
+                    "SGLang-serving mixed NVFP4/FP8 (nvidia/Qwen3.8-27B-NVFP4 map): "
+                    "NVFP4 group_size 16 on *mlp* and *lm_head*; FP8 on *self_attn* "
+                    "and *linear_attn*. Export writes MIXED_PRECISION + "
+                    "quantized_layers. TensorRT-LLM uniform W4A8 is w4a8_nvfp4_fp8."
+                ),
+            }
+        )
+    elif canonical == "w4a8_nvfp4_fp8":
         summary.update(
             {
                 "weight_format": "nvfp4",
                 "activation_format": "fp8",
                 "notes": (
-                    "W4A8_NVFP4_FP8_CFG: NVFP4 block-size 32 weights + FP8 E4M3 inputs "
-                    "(yaml w4a8_nvfp4_fp8.yaml: nvfp4_bs32 + fp8, algorithm max)."
+                    "W4A8_NVFP4_FP8_CFG: NVFP4 block-size 32 weights + FP8 E4M3 inputs. "
+                    "SGLang rejects quant_algo=W4A8_NVFP4_FP8; TensorRT-LLM only."
                 ),
             }
         )
@@ -431,7 +473,7 @@ def _fallback_uniform(
 
 
 def _fallback_for_scheme(canonical: str) -> dict[str, Any]:
-    if canonical == "nvfp4_w4a8":
+    if canonical == "w4a8_nvfp4_fp8":
         return _fallback_uniform(_NVFP4_BS32, _FP8_ATTR)
     if canonical == "nvfp4_w4a4":
         return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
@@ -439,7 +481,8 @@ def _fallback_for_scheme(canonical: str) -> dict[str, Any]:
         return _fallback_uniform(_NVFP4_BS16, None)
     if canonical == "fp8_w8a8":
         return _fallback_uniform(_FP8_ATTR, _FP8_ATTR)
-    # nvfp4_mixed (and any unknown canonical): NVFP4 W4A4 bs16, then overlays.
+    # nvfp4_w4a8 / nvfp4_mixed (and any unknown canonical): NVFP4 W4A4
+    # bs16, then _apply_mixed overlays FP8 attention + NVFP4 gs16 MLP.
     return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
 
 
@@ -459,10 +502,9 @@ def _load_base_cfg(mtq: Any, canonical: str) -> tuple[dict[str, Any], str]:
 
 
 def _hessian_block_size(canonical: str) -> int:
-    # ModelOpt LocalHessianCalibConfig.block_size defaults to 16 (W4A4). W4A8
-    # NVFP4 uses nvfp4_bs32 — Hessian blocks must match the quantizer.
-    # NVIDIA mixed (nvidia/Qwen3.8-27B-NVFP4) is NVFP4 gs16 on MLP+lm_head.
-    if canonical == "nvfp4_w4a8":
+    # LocalHessianCalibConfig.block_size must match the NVFP4 quantizer.
+    # TensorRT-LLM uniform W4A8 is nvfp4_bs32. SGLang mixed / W4A4 use gs16.
+    if canonical == "w4a8_nvfp4_fp8":
         return 32
     return 16
 
@@ -711,6 +753,26 @@ def _call_export_hf(export_fn: Any, model: Any, output_dir: Path) -> None:
     export_fn(model, dtype=None, export_dir=path)
 
 
+def _rewrite_sglang_export(
+    output_dir: Path, canonical: str
+) -> dict[str, dict[str, Any]] | None:
+    """Patch ModelOpt HF metadata so SGLang ``modelopt_mixed`` can load it."""
+    if canonical not in _SGLANG_MIXED:
+        return None
+    try:
+        from megaquant.sglang_export import rewrite_sglang_mixed_export
+    except ImportError as exc:
+        raise BackendError(
+            "megaquant.sglang_export is required to write SGLang MIXED_PRECISION metadata"
+        ) from exc
+    try:
+        return rewrite_sglang_mixed_export(output_dir)
+    except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as exc:
+        raise BackendError(
+            f"SGLang MIXED_PRECISION rewrite failed under {output_dir}: {exc}"
+        ) from exc
+
+
 class ModelOptBackend:
     """NVIDIA ModelOpt PTQ backend (NVFP4 W4A8 first-class path)."""
 
@@ -741,14 +803,14 @@ class ModelOptBackend:
         cfg, used_name = _load_base_cfg(mtq, canonical)
         cfg = copy.deepcopy(cfg)
 
-        if canonical == "nvfp4_mixed":
+        if canonical in _SGLANG_MIXED:
             _apply_mixed(cfg, used_name)
 
         ignore = _collect_ignore(plan, recipe)
         _apply_ignores(cfg, ignore)
         _apply_opt_in_enables(cfg, recipe)
 
-        if canonical != "nvfp4_mixed" and not _lm_head_ignored(ignore):
+        if canonical not in _SGLANG_MIXED and not _lm_head_ignored(ignore):
             weight_attr, input_attr = _weight_input_attrs(cfg)
             _reenable_lm_head(cfg, weight_attr, input_attr)
 
@@ -788,6 +850,7 @@ class ModelOptBackend:
                 save(str(output_dir))
 
         canonical = canonicalize_scheme(str(_attr(recipe, "scheme", "") or ""))
+        sglang_layers = _rewrite_sglang_export(output_dir, canonical)
         meta = {
             "backend": self.name,
             "qformat": _SCHEME_QFORMAT.get(canonical, canonical),
@@ -796,6 +859,9 @@ class ModelOptBackend:
             "scheme": canonical or _attr(recipe, "scheme", None),
             "model_source": _attr(_attr(recipe, "model", None), "source", None),
         }
+        if sglang_layers is not None:
+            meta["sglang_quant_algo"] = "MIXED_PRECISION"
+            meta["sglang_quantized_layers"] = len(sglang_layers)
         (output_dir / "backend_meta.json").write_text(
             json.dumps(meta, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

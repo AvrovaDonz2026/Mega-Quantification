@@ -1,0 +1,40 @@
+# Qwen/Qwen3.8-27B BF16 → TensorRT-LLM uniform NVFP4 W4A8
+#
+# Weights: NVFP4 E2M1 micro-blocks, group_size **32** (`nvfp4_bs32`).
+# Activations: FP8 E4M3. ModelOpt qformat `w4a8_nvfp4_fp8` /
+# `W4A8_NVFP4_FP8_CFG`.
+#
+# SGLang rejects quant_algo=W4A8_NVFP4_FP8. For SGLang use the default
+# recipes/qwen3.8-27b-nvfp4-w4a8.yaml (scheme nvfp4_w4a8, MIXED_PRECISION).
+#
+# Ignore list comes from family `qwen3_5` (vision / MTP / embeddings /
+# linear_attn.conv1d,in_proj_a,in_proj_b stay BF16 unless model.quantize_*).
+
+name: qwen3.8-27b-nvfp4-w4a8-trtllm
+backend: modelopt
+scheme: w4a8_nvfp4_fp8
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  num_samples: 512
+  max_seq_length: 2048
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A8-TRTLLM
+  format: hf
+  pack: true

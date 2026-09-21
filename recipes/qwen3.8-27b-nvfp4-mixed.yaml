@@ -3,8 +3,9 @@
 # Produced originally with nvidia-modelopt 0.48.0, Local-Hessian, 2048 samples
 # of nvidia/Nemotron-Post-Training-Dataset-v3.
 #
-# This is not uniform W4A8 (nvfp4_bs32 / block 32). NVIDIA's public checkpoint
-# uses NVFP4 gs16 on MLP+lm_head and FP8 on attention, not W4A8 bs32.
+# This is not TensorRT-LLM uniform W4A8 (nvfp4_bs32 / block 32). NVIDIA's
+# public checkpoint uses NVFP4 gs16 on MLP+lm_head and FP8 on attention.
+# Default nvfp4_w4a8 uses the same mixed map (max calib) so SGLang can serve it.
 #
 # Dataset v3 is gated (HF_TOKEN). A single 32 GB 5090 cannot hold Local-Hessian
 # at 2048 samples — use qwen3.8-27b-nvfp4-mixed.5090.yaml or

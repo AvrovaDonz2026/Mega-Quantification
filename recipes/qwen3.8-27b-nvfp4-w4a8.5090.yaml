@@ -1,4 +1,7 @@
-# Single-32GB-5090 + 64 GB RAM profile: real NVFP4 W4A8 PTQ.
+# Single-32GB-5090 + 64 GB RAM profile: SGLang-serving mixed NVFP4/FP8 PTQ.
+#
+# Same scheme as qwen3.8-27b-nvfp4-w4a8.yaml (nvfp4_w4a8 = NVIDIA mixed map,
+# MIXED_PRECISION export). Not W4A8_NVFP4_FP8 block 32.
 #
 # Packs VRAM−1GiB of weights, keeps the rest in RAM (MemTotal−6GiB, not disk),
 # uses every CPU thread, and runs max-calib at 256×1024 with batch_size 4 so

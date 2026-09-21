@@ -61,12 +61,27 @@ def test_w4a8_recipe_yaml_shape_and_source() -> None:
     assert data["model"]["quantize_mtp"] is False
 
 
-def test_w4a8_recipe_documents_block_size_32() -> None:
+def test_w4a8_recipe_documents_sglang_mixed() -> None:
     text = W4A8.read_text()
     lowered = text.lower()
+    assert "mixed" in lowered
+    assert "16" in text
+    assert "sglang" in lowered or "mixed_precision" in lowered
+    assert "w4a8_nvfp4_fp8" in lowered
+    assert "not" in lowered and "block 32" in lowered
+
+
+def test_trtllm_w4a8_recipe_if_present() -> None:
+    path = RECIPES / "qwen3.8-27b-nvfp4-w4a8-trtllm.yaml"
+    assert path.is_file()
+    data = _load(path)
+    _assert_schema(data, path)
+    assert data["scheme"] == "w4a8_nvfp4_fp8"
+    assert data["backend"] == "modelopt"
+    assert data["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A8-TRTLLM"
+    text = path.read_text().lower()
     assert "32" in text
-    assert "block" in lowered or "nvfp4_bs32" in lowered or "group" in lowered
-    assert "w4a8" in lowered
+    assert "sglang" in text
 
 
 def test_mixed_recipe_matches_nvidia_intent() -> None:

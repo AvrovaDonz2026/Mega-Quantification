@@ -61,6 +61,35 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
     "nvfp4_w4a8": SchemeDef(
         name="nvfp4_w4a8",
         groups=[
+            layer_group(
+                "mlp_lm_head",
+                targets=MIXED_NVFP4_TARGETS,
+                weights=NVFP4_W4A4_WEIGHTS,
+                activations=NVFP4_W4A4_ACTIVATIONS,
+            ),
+            layer_group(
+                "attn_fp8",
+                targets=MIXED_FP8_TARGETS,
+                weights=FP8_W8A8_WEIGHTS,
+                activations=FP8_W8A8_ACTIVATIONS,
+            ),
+        ],
+        kv_cache="fp8",
+        notes=(
+            "SGLang-serving Qwen3.8 NVFP4: same mixed map as nvidia/Qwen3.8-27B-NVFP4. "
+            "NVFP4 W4A4 group_size=16 on mlp.{gate,up,down}_proj + lm_head; FP8 W8A8 "
+            "on self_attn and linear_attn projections. Export writes "
+            "quant_algo=MIXED_PRECISION + quantized_layers so SGLang modelopt_mixed "
+            "loads the checkpoint. This is NOT ModelOpt W4A8_NVFP4_FP8 (block 32); "
+            "SGLang rejects that tag. TensorRT-LLM uniform W4A8 is scheme "
+            "w4a8_nvfp4_fp8."
+        ),
+        vllm_support="SGLang modelopt_mixed + vLLM quantization modelopt",
+        trtllm_support="native mixed NVFP4 MLP + FP8 attn",
+    ),
+    "w4a8_nvfp4_fp8": SchemeDef(
+        name="w4a8_nvfp4_fp8",
+        groups=[
             uniform_group(
                 "language_linears",
                 weights=NVFP4_W4A8_WEIGHTS,
@@ -70,16 +99,13 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
         ],
         kv_cache="fp8",
         notes=(
-            "Uniform NVFP4 weights (tensor_group group_size=32, FP8 E4M3 scales) "
-            "plus dynamic per-token FP8 E4M3 activations. This is W4A8, not W4A4. "
-            "Matches ModelOpt W4A8_NVFP4_FP8 / nvfp4_bs32. compressed-tensors has "
-            "no stock NVFP4A8 preset — the llm-compressor backend emits a custom "
-            "QuantizationScheme. Alternative activations: static per-tensor FP8 "
-            "with a minmax observer (see NVFP4_W4A8_ACTIVATIONS_STATIC). "
-            "Gated DeltaNet extras (linear_attn.conv1d / in_proj_a / in_proj_b) "
-            "belong on the family ignore list, not in targets."
+            "TensorRT-LLM uniform W4A8: NVFP4 weights tensor_group group_size=32 "
+            "plus dynamic per-token FP8 E4M3 activations (ModelOpt "
+            "W4A8_NVFP4_FP8 / nvfp4_bs32). SGLang currently rejects "
+            "quant_algo=W4A8_NVFP4_FP8. Do not use this scheme when the "
+            "runtime is SGLang."
         ),
-        vllm_support="limited; prefer TensorRT-LLM/ModelOpt",
+        vllm_support="limited; prefer TensorRT-LLM",
         trtllm_support="native W4A8_NVFP4_FP8",
     ),
     "nvfp4_w4a4": SchemeDef(
@@ -161,9 +187,10 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
             "+ lm_head; FP8 W8A8 on self_attn.{q,k,v,o}_proj and linear_attn "
             "{in_proj_qkv, in_proj_z, out_proj}. conv1d / in_proj_a / in_proj_b "
             "stay on the ignore list. Prefer ModelOpt custom quant_cfg for "
-            "production mixed checkpoints (recipes keep groups: null)."
+            "production mixed checkpoints (recipes keep groups: null). "
+            "Export rewrites MIXED_PRECISION + quantized_layers for SGLang."
         ),
-        vllm_support="limited mixed NVFP4/FP8; prefer TensorRT-LLM/ModelOpt",
+        vllm_support="SGLang modelopt_mixed + vLLM quantization modelopt",
         trtllm_support="native mixed NVFP4 MLP + FP8 attn",
     ),
 }

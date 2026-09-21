@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -66,11 +67,26 @@ def _num_bits(obj: dict[str, Any] | None) -> Any:
     return _cfg_body(obj).get("num_bits")
 
 
-def test_describe_w4a8_group_size_32() -> None:
+def test_describe_w4a8_is_sglang_mixed() -> None:
     summary = describe_cfg("nvfp4_w4a8")
+    assert summary["supported"] is True
+    assert summary["group_size"] == 16
+    assert summary["mlp_group_size"] == 16
+    assert summary["qformat"] == "mixed_nvfp4_fp8"
+    assert summary["attn_weight_format"] == "fp8"
+    assert "MIXED_PRECISION" in summary["sglang"]
+    assert "w4a8_nvfp4_fp8" in summary["notes"]
+
+
+def test_describe_trtllm_w4a8_group_size_32() -> None:
+    summary = describe_cfg("w4a8_nvfp4_fp8")
     assert summary["supported"] is True
     assert summary["group_size"] == 32
     assert summary["qformat"] == "w4a8_nvfp4_fp8"
+    assert "SGLang rejects" in summary["notes"]
+    alias = describe_cfg("nvfp4_w4a8_trtllm")
+    assert alias["scheme"] == "w4a8_nvfp4_fp8"
+    assert alias["group_size"] == 32
 
 
 def test_w4a8_cfg_reenables_lm_head_and_ignores_vision() -> None:
@@ -92,6 +108,51 @@ def test_w4a8_cfg_reenables_lm_head_and_ignores_vision() -> None:
     last = lm_weight[-1]
     assert last.get("enable", True) is True
     assert last.get("cfg")
+    assert _block_size(last) == 16
+
+    attn_w = _last_named(cfg, "self_attn", "weight_quantizer")
+    assert attn_w
+    assert _num_bits(attn_w) == (4, 3) or _block_size(attn_w) != 32
+    mlp_w = _last_named(cfg, "mlp", "weight_quantizer")
+    assert mlp_w
+    assert _num_bits(mlp_w) == (2, 1)
+    assert _block_size(mlp_w) == 16
+
+
+def test_w4a8_local_hessian_uses_block_size_16() -> None:
+    recipe = load_recipe(W4A8)
+    recipe = recipe.model_copy(update={"algorithm": "local_hessian"})
+    plan = QuantPipeline(recipe).resolve()
+    cfg = ModelOptBackend().build_quant_cfg(plan)
+    algo = cfg["algorithm"]
+    assert isinstance(algo, dict)
+    assert algo["method"] == "local_hessian"
+    assert algo["block_size"] == 16
+
+
+def test_rewrite_sglang_export_helper(tmp_path: Path) -> None:
+    from megaquant.backends.modelopt import _rewrite_sglang_export
+
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps(
+            {
+                "weight_map": {
+                    "model.layers.0.mlp.gate_proj.weight": "a.safetensors",
+                    "model.layers.0.self_attn.q_proj.weight": "a.safetensors",
+                    "lm_head.weight": "a.safetensors",
+                }
+            }
+        )
+    )
+    (tmp_path / "hf_quant_config.json").write_text(
+        json.dumps({"quantization": {"quant_algo": "NVFP4"}})
+    )
+    layers = _rewrite_sglang_export(tmp_path, "nvfp4_w4a8")
+    assert layers is not None
+    assert json.loads((tmp_path / "hf_quant_config.json").read_text())["quantization"][
+        "quant_algo"
+    ] == "MIXED_PRECISION"
+    assert _rewrite_sglang_export(tmp_path, "w4a8_nvfp4_fp8") is None
 
 
 def test_describe_w4a4_group_size_16() -> None:

@@ -60,11 +60,27 @@ def catalog() -> dict[str, Any]:
     return loaded
 
 
-def test_nvfp4_w4a8_group_size_32_act_bits_8(catalog: dict[str, Any]) -> None:
+def test_nvfp4_w4a8_is_sglang_mixed_groups(catalog: dict[str, Any]) -> None:
     if "nvfp4_w4a8" not in catalog:
         pytest.skip("nvfp4_w4a8 not in scheme catalog")
     groups = _groups(catalog["nvfp4_w4a8"])
-    assert groups, "nvfp4_w4a8 has no layer groups"
+    assert len(groups) == 2
+    mlp_w, mlp_a = _weight_act(groups[0])
+    attn_w, attn_a = _weight_act(groups[1])
+    assert mlp_w.get("group_size") == 16
+    assert mlp_w.get("format") == "nvfp4"
+    assert mlp_a.get("format") == "nvfp4"
+    assert attn_w.get("format") == "fp8"
+    assert attn_a.get("bits") == 8
+    notes = catalog["nvfp4_w4a8"].notes if hasattr(catalog["nvfp4_w4a8"], "notes") else ""
+    assert "MIXED_PRECISION" in notes or "sglang" in str(notes).lower()
+
+
+def test_w4a8_nvfp4_fp8_group_size_32_act_bits_8(catalog: dict[str, Any]) -> None:
+    if "w4a8_nvfp4_fp8" not in catalog:
+        pytest.skip("w4a8_nvfp4_fp8 not in scheme catalog")
+    groups = _groups(catalog["w4a8_nvfp4_fp8"])
+    assert groups, "w4a8_nvfp4_fp8 has no layer groups"
     weights, activations = _weight_act(groups[0])
     assert weights.get("group_size") == 32
     assert activations.get("bits") == 8

@@ -27,7 +27,7 @@ docker compose build
 docker compose run --rm megaquant plan
 
 # 4) 真正做 Qwen3.8-27B BF16 PTQ
-docker compose --profile gpu run --rm quantize   # 均匀 W4A8
+docker compose --profile gpu run --rm quantize   # SGLang mixed W4A8
 docker compose --profile gpu run --rm w4a4       # 均匀 W4A4
 docker compose --profile gpu run --rm mixed      # 混合；默认 mixed.5090.yaml
 ```
@@ -121,10 +121,12 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 
 - CUDA 12.8 devel（Triton / Local-Hessian NVFP4 扫描需要）
 - PyTorch CUDA 12.8 轮子，`TORCH_CUDA_ARCH_LIST=9.0;10.0;12.0`
-- `nvidia-modelopt[hf]`：均匀 W4A8 = `W4A8_NVFP4_FP8_CFG`（weight block **32**）；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**，权重和激活）；NVIDIA 混合 NVFP4 层也是 group_size **16**（MLP + `lm_head`），注意力为 FP8
+- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）；TensorRT-LLM 均匀 W4A8 = `W4A8_NVFP4_FP8_CFG`（weight block **32**）
 - llm-compressor / compressed-tensors（vLLM 路径）
 - 本仓库 `megaquant` CLI
 
 不包含 27B 权重、校准数据集和导出 checkpoint。
 
-`nvidia/Qwen3.8-27B-NVFP4` 是混合 NVFP4/FP8（group_size 16 + FP8），不是均匀 W4A8，也不是 NVFP4 block 32。
+`nvidia/Qwen3.8-27B-NVFP4` 是混合 NVFP4/FP8（group_size 16 + FP8）。默认
+`nvfp4_w4a8` 对齐这套图给 SGLang 用。`W4A8_NVFP4_FP8` block 32 是
+`w4a8_nvfp4_fp8`，SGLang 不认。

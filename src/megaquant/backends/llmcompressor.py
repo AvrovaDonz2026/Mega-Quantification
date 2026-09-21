@@ -12,17 +12,21 @@ vLLM native support is strongest for:
 - NVFP4A16 (stock ``NVFP4A16``)
 - FP8 W8A8 (stock ``FP8_DYNAMIC``)
 
-**NVFP4 W4A8** (FP4 weights + FP8 activations) is officially a
-ModelOpt / TensorRT-LLM path (``W4A8_NVFP4_FP8`` / ``nvfp4_bs32``). There is
-**no** stock ``NVFP4A8`` preset in compressed-tensors, so this backend emits a
-custom :class:`~compressed_tensors.quantization.quant_scheme.QuantizationScheme`:
+Default **``nvfp4_w4a8``** is the SGLang-serving mixed map (same as
+``nvfp4_mixed``): NVFP4 ``group_size=16`` on MLP + ``lm_head``, FP8 on
+attention. Prefer ``backend=modelopt``; export rewrites
+``quant_algo=MIXED_PRECISION``.
+
+TensorRT-LLM uniform W4A8 is scheme **``w4a8_nvfp4_fp8``**
+(``W4A8_NVFP4_FP8`` / ``nvfp4_bs32``). There is **no** stock ``NVFP4A8``
+preset in compressed-tensors, so that scheme emits a custom
+:class:`~compressed_tensors.quantization.quant_scheme.QuantizationScheme`:
 
 - weights: FP4, ``TENSOR_GROUP``, ``group_size=32``, FP8 E4M3 scales
 - input activations: FP8 E4M3, ``TOKEN``, ``dynamic=True`` (default)
 
-The resulting compressed-tensors checkpoint may not have a fused vLLM kernel
-for FP4 weights with FP8 activations. Prefer ``backend=modelopt`` for W4A8
-production exports.
+SGLang rejects ``quant_algo=W4A8_NVFP4_FP8``. Do not use ``w4a8_nvfp4_fp8``
+when the runtime is SGLang.
 
 oneshot calibration
 -------------------
@@ -471,7 +475,7 @@ class LLMCompressorBackend:
         groups = _resolved_groups(plan) if plan is not None else list(scheme.groups)
         ignore = _ignore_list(plan) if plan is not None else []
         stock = _STOCK_PRESETS.get(name)
-        custom = name in {"nvfp4_w4a8", "nvfp4_mixed"} or (
+        custom = name in {"nvfp4_w4a8", "nvfp4_mixed", "w4a8_nvfp4_fp8"} or (
             stock is not None and not _uniform_stock_ok(name, groups)
         )
         payload: dict[str, Any] = {
@@ -488,7 +492,11 @@ class LLMCompressorBackend:
             "custom_quantization_scheme": custom,
             "first_class_w4a8": "modelopt",
         }
-        if name == "nvfp4_w4a8":
+        if name in {"nvfp4_w4a8", "nvfp4_mixed"}:
+            payload["sglang"] = "MIXED_PRECISION + quantized_layers (modelopt_mixed)"
+            payload["mlp_group_size"] = 16
+            payload["attn_weight_format"] = "fp8"
+        if name == "w4a8_nvfp4_fp8":
             payload["quantization_args"] = {
                 "weights": {
                     "num_bits": 4,
@@ -534,7 +542,7 @@ class LLMCompressorBackend:
         if observer is not None:
             modifier_kwargs["weight_observer"] = observer
 
-        if scheme_name in {"nvfp4_w4a8", "nvfp4_mixed"} or len(groups) > 1:
+        if scheme_name in {"nvfp4_w4a8", "nvfp4_mixed", "w4a8_nvfp4_fp8"} or len(groups) > 1:
             config_groups: dict[str, Any] = {}
             for group in groups:
                 name = str(group.get("name") or f"group_{len(config_groups)}")

@@ -1,6 +1,9 @@
 # Same as qwen3.8-27b-nvfp4-w4a8.yaml but with a *public* calibration set.
 # Nemotron-Post-Training-Dataset-v2 is gated and needs HF_TOKEN.
 # Use this on GPU cloud pods / CI when you only have anonymous Hub access.
+#
+# Scheme nvfp4_w4a8 is the SGLang mixed map (NVFP4 gs16 MLP + FP8 attn),
+# not W4A8_NVFP4_FP8 block 32.
 
 name: qwen3.8-27b-nvfp4-w4a8-public-calib
 backend: modelopt
