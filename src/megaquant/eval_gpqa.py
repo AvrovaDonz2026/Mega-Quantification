@@ -941,6 +941,26 @@ def score_items(
     }
 
 
+def load_gpqa_journal(path: Path) -> dict[str, ItemResult]:
+    """Replay a JSONL journal so a restarted eval does not wipe finished items."""
+    rows: dict[str, ItemResult] = {}
+    if not path.is_file():
+        return rows
+    fields = ItemResult.__dataclass_fields__
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        payload = json.loads(line)
+        kwargs = {key: payload[key] for key in fields if key in payload}
+        try:
+            row = ItemResult(**kwargs)
+        except TypeError:
+            continue
+        rows[row.item_id] = row
+    return rows
+
+
 def run_gpqa(
     recipe: EvalRecipe,
     *,
@@ -986,9 +1006,19 @@ def run_gpqa(
     out_dir = Path(recipe.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     journal_path = out_dir / "gpqa_diamond.jsonl"
+    prior = load_gpqa_journal(journal_path)
     rows: list[ItemResult] = []
-    with journal_path.open("w", encoding="utf-8") as journal:
+    mode = "a" if prior else "w"
+    with journal_path.open(mode, encoding="utf-8") as journal:
+        if prior:
+            print(
+                f"[gpqa] resume {len(prior)} rows from {journal_path}",
+                flush=True,
+            )
         for item in items:
+            if item.item_id in prior:
+                rows.append(prior[item.item_id])
+                continue
             prompt = format_gpqa_prompt(item)
             gen = generate_untruncated(
                 prompt,

@@ -23,6 +23,7 @@ from megaquant.eval_gpqa import (
     extract_choice,
     format_gpqa_prompt,
     load_eval_recipe,
+    load_gpqa_journal,
     remaining_new_tokens,
     run_gpqa,
     score_items,
@@ -195,6 +196,62 @@ def test_continue_on_length_appends_full_text(tmp_path: Path) -> None:
     assert calls[0] == remaining_new_tokens(
         100 + CHAT_TEMPLATE_TOKEN_RESERVE, recipe.generation.max_model_len, 0
     )
+
+
+def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    done = GPQAItem(
+        item_id="done",
+        question="Q1?",
+        choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+        gold="A",
+    )
+    pending = GPQAItem(
+        item_id="pending",
+        question="Q2?",
+        choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+        gold="B",
+    )
+    first = run_gpqa(
+        recipe,
+        items=[done],
+        complete=lambda **_k: GenerationResult(
+            text="Answer: A",
+            finish_reason="stop",
+            prompt_tokens=8,
+            completion_tokens=4,
+        ),
+        count_prompt_tokens=lambda _t: 8,
+    )
+    assert first["scores"]["headline"] == "1/1"
+    prior = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")
+    assert "done" in prior
+
+    calls: list[str] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["messages"][0]["content"])
+        return GenerationResult(
+            text="Answer: B",
+            finish_reason="stop",
+            prompt_tokens=8,
+            completion_tokens=4,
+        )
+
+    summary = run_gpqa(
+        recipe,
+        items=[done, pending],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 8,
+    )
+    assert calls  # pending only
+    assert all("Q1?" not in text for text in calls)
+    assert summary["scores"]["headline"] == "2/2"
+    assert summary["scores"]["n"] == 2
+    lines = [ln for ln in (tmp_path / "gpqa_diamond.jsonl").read_text().splitlines() if ln]
+    assert len(lines) == 2
+    ids = [json.loads(ln)["item_id"] for ln in lines]
+    assert ids == ["done", "pending"]
 
 
 def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
