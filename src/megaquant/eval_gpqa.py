@@ -237,9 +237,10 @@ def auto_kv_offload_gib(
 ) -> int:
     """Host RAM reserved for KV that does not fit in GPU HBM.
 
-    ``explicit_gb > 0`` wins. Otherwise ``MemTotal − max(reserve, 24)``
-    (min 4 GiB). A 58 GiB HiCache on a 64 GiB box OOMs the whole pod
-    once SGLang is resident; 24 GiB stays for workers + OS.
+    ``explicit_gb > 0`` wins. Otherwise half of
+    ``MemTotal − max(reserve, 24)`` (min 4 GiB). Qwen3.5 GDN HiCache
+    also pins a matching Mamba host pool, so ``--hicache-size N`` costs
+    ~2N GiB of pinned RAM. Cookbook 58 GiB is for GB300-class hosts.
     """
     if explicit_gb is not None and float(explicit_gb) > 0:
         return max(1, int(float(explicit_gb)))
@@ -252,9 +253,11 @@ def auto_kv_offload_gib(
     total_kib, _avail = parse_meminfo_kib(text or "")
     reserve = max(int(reserve_gib), HICACHE_MIN_HOST_RESERVE_GIB)
     if total_kib is None:
-        return max(4, 64 - reserve)
-    total_gib = int(total_kib) // 1024 // 1024
-    return max(4, total_gib - reserve)
+        usable = max(4, 64 - reserve)
+    else:
+        total_gib = int(total_kib) // 1024 // 1024
+        usable = max(4, total_gib - reserve)
+    return max(4, usable // 2)
 
 
 def load_eval_recipe(path: str | Path, overrides: dict[str, Any] | None = None) -> EvalRecipe:
