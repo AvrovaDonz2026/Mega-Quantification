@@ -157,7 +157,9 @@ def test_5090_and_public_calib_recipes() -> None:
     assert mixed_pub["calibration"]["batch_size"] == 1
 
 
-def _assert_gpqa_official_cards(data: dict, *, attention_backend: str) -> None:
+def _assert_gpqa_official_cards(
+    data: dict, *, attention_backend: str, kv_offloading_size_gb: float = 12
+) -> None:
     """Lock the Qwen thinking / NVIDIA cookbook knobs shared by both GPQA recipes."""
     assert data["model"] == LOCAL_EXPORT
     assert data["model"] != HUB_BF16
@@ -171,7 +173,7 @@ def _assert_gpqa_official_cards(data: dict, *, attention_backend: str) -> None:
     serve = data["serve"]
     assert serve["engine"] == "sglang"
     assert serve["attention_backend"] == attention_backend
-    assert serve["kv_offloading_size_gb"] == 12
+    assert serve["kv_offloading_size_gb"] == kv_offloading_size_gb
     assert serve["disable_cuda_graph"] is True
 
 
@@ -183,8 +185,11 @@ def test_gpqa_eval_recipe_matches_official_cards() -> None:
 
 def test_gpqa_5090_recipe_matches_official_cards_except_triton() -> None:
     data = _load(GPQA_5090)
-    _assert_gpqa_official_cards(data, attention_backend="triton")
+    _assert_gpqa_official_cards(
+        data, attention_backend="triton", kv_offloading_size_gb=24
+    )
     assert data["name"] == "gpqa-diamond-qwen38-official-5090"
+    assert data.get("concurrency") == 8
     serve = data["serve"]
     # Extra 5090 GEMM/sampling knobs may land in later commits; skip if absent.
     optional = {

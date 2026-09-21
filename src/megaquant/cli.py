@@ -131,6 +131,8 @@ def _eval_recipe_from_args(args: argparse.Namespace):
         overrides["output_dir"] = args.output
     if getattr(args, "limit", None) is not None:
         overrides["limit"] = args.limit
+    if getattr(args, "concurrency", None) is not None:
+        overrides["concurrency"] = args.concurrency
     recipe = load_eval_recipe(args.config, overrides or None)
     engine = getattr(args, "engine", None)
     if engine:
@@ -281,6 +283,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override serve.engine in the eval plan (default sglang)",
     )
     evaluate.add_argument("--limit", type=int, help="Optional item cap (full run omits this)")
+    evaluate.add_argument(
+        "--concurrency",
+        type=int,
+        default=None,
+        help="Parallel GPQA HTTP requests (recipe concurrency; 5090 default 8)",
+    )
     evaluate.add_argument(
         "--dry-run",
         action="store_true",

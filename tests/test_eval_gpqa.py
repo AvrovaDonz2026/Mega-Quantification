@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -91,7 +92,8 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert recipe.serve.fp4_gemm_backend == "marlin"
     assert recipe.serve.force_fp8_marlin is True
     assert recipe.serve.disable_cuda_graph is True
-    assert recipe.serve.kv_offloading_size_gb == 12
+    assert recipe.serve.kv_offloading_size_gb == 24
+    assert recipe.concurrency == 8
     argv = sglang_serve_argv_from_recipe(recipe)
     joined = " ".join(argv)
     assert "--attention-backend triton" in joined
@@ -101,6 +103,7 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert "--linear-attn-backend triton" in joined
     assert "--fp8-gemm-backend triton" in joined
     assert "--fp4-gemm-backend marlin" in joined
+    assert "--hicache-size 24" in joined
     assert sglang_serve_environ(recipe) == {"SGLANG_FORCE_FP8_MARLIN": "1"}
 
 
@@ -252,6 +255,41 @@ def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> 
     assert len(lines) == 2
     ids = [json.loads(ln)["item_id"] for ln in lines]
     assert ids == ["done", "pending"]
+
+
+def test_run_gpqa_concurrency_fans_out(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE, overrides={"output_dir": str(tmp_path), "concurrency": 4}
+    )
+    items = [
+        GPQAItem(
+            item_id=f"p{i}",
+            question=f"Q{i}?",
+            choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+            gold="A",
+        )
+        for i in range(4)
+    ]
+    barrier = threading.Barrier(4, timeout=5)
+
+    def complete(**_kwargs):
+        barrier.wait()
+        return GenerationResult(
+            text="Answer: A",
+            finish_reason="stop",
+            prompt_tokens=8,
+            completion_tokens=4,
+        )
+
+    summary = run_gpqa(
+        recipe,
+        items=items,
+        complete=complete,
+        count_prompt_tokens=lambda _t: 8,
+    )
+    assert summary["scores"]["headline"] == "4/4"
+    lines = [ln for ln in (tmp_path / "gpqa_diamond.jsonl").read_text().splitlines() if ln]
+    assert len(lines) == 4
 
 
 def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:

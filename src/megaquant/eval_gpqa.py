@@ -35,9 +35,11 @@ import hashlib
 import json
 import random
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -188,6 +190,10 @@ class EvalRecipe(StrictModel):
     output_dir: str = "outputs/eval/gpqa_diamond"
     limit: int | None = None
     shuffle_choices: bool = True
+    # HTTP client fan-out. Serve max_running_requests is the hard cap (GDN
+    # mamba slots). Sequential (1) wastes a 5090 that can hold ~8 in-flight
+    # Diamond traces once HiCache is sized for them.
+    concurrency: int = 1
 
 
 @dataclass
@@ -344,6 +350,7 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
             recipe.serve.cpu_reserve_gib,
             explicit_gb=recipe.serve.kv_offloading_size_gb,
         ),
+        "concurrency": recipe.concurrency,
         "kv_offloading_backend": kv_backend,
         # Local export only: missing dir -> null (never Hub-download 27B).
         "sglang_quant": sglang_quant_snapshot(recipe.model),
@@ -1008,48 +1015,70 @@ def run_gpqa(
     journal_path = out_dir / "gpqa_diamond.jsonl"
     prior = load_gpqa_journal(journal_path)
     rows: list[ItemResult] = []
+    lock = threading.Lock()
     mode = "a" if prior else "w"
+    workers = max(1, int(recipe.concurrency or 1))
+
+    def eval_one(item: GPQAItem) -> ItemResult:
+        prompt = format_gpqa_prompt(item)
+        gen = generate_untruncated(
+            prompt,
+            recipe=recipe,
+            prompt_tokens=n_tokens(prompt),
+            complete=complete,
+            model=recipe.model,
+        )
+        predicted = extract_choice(gen.text)
+        return ItemResult(
+            item_id=item.item_id,
+            gold=item.gold,
+            predicted=predicted,
+            correct=predicted == item.gold,
+            truncated=gen.truncated,
+            finish_reason=gen.finish_reason,
+            prompt_tokens=gen.prompt_tokens,
+            completion_tokens=gen.completion_tokens,
+            continued=gen.continued,
+            text=gen.text,
+            choices=item.choices,
+        )
+
+    def write_row(row: ItemResult) -> None:
+        with lock:
+            rows.append(row)
+            journal.write(json.dumps(asdict(row), ensure_ascii=False) + "\n")
+            journal.flush()
+            print(
+                f"[gpqa] {row.item_id} gold={row.gold} pred={row.predicted} "
+                f"ok={int(row.correct)} trunc={int(row.truncated)} "
+                f"tok={row.completion_tokens} cont={row.continued}",
+                flush=True,
+            )
+
     with journal_path.open(mode, encoding="utf-8") as journal:
         if prior:
             print(
                 f"[gpqa] resume {len(prior)} rows from {journal_path}",
                 flush=True,
             )
+        pending: list[GPQAItem] = []
         for item in items:
             if item.item_id in prior:
                 rows.append(prior[item.item_id])
                 continue
-            prompt = format_gpqa_prompt(item)
-            gen = generate_untruncated(
-                prompt,
-                recipe=recipe,
-                prompt_tokens=n_tokens(prompt),
-                complete=complete,
-                model=recipe.model,
-            )
-            predicted = extract_choice(gen.text)
-            row = ItemResult(
-                item_id=item.item_id,
-                gold=item.gold,
-                predicted=predicted,
-                correct=predicted == item.gold,
-                truncated=gen.truncated,
-                finish_reason=gen.finish_reason,
-                prompt_tokens=gen.prompt_tokens,
-                completion_tokens=gen.completion_tokens,
-                continued=gen.continued,
-                text=gen.text,
-                choices=item.choices,
-            )
-            rows.append(row)
-            journal.write(json.dumps(asdict(row), ensure_ascii=False) + "\n")
-            journal.flush()
+            pending.append(item)
+        if workers > 1 and len(pending) > 1:
             print(
-                f"[gpqa] {item.item_id} gold={item.gold} pred={predicted} "
-                f"ok={int(row.correct)} trunc={int(row.truncated)} "
-                f"tok={gen.completion_tokens} cont={gen.continued}",
+                f"[gpqa] concurrency={workers} pending={len(pending)}/{len(items)}",
                 flush=True,
             )
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = [pool.submit(eval_one, item) for item in pending]
+                for fut in as_completed(futs):
+                    write_row(fut.result())
+        else:
+            for item in pending:
+                write_row(eval_one(item))
 
     summary = {
         "plan": plan,
