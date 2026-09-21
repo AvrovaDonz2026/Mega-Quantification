@@ -139,7 +139,7 @@ services:
       [
         "serve",
         "-c",
-        "recipes/eval-gpqa-diamond.yaml",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
         "--model",
         "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
       ]
@@ -153,7 +153,7 @@ services:
       [
         "serve",
         "-c",
-        "recipes/eval-gpqa-diamond.yaml",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
         "--model",
         "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
       ]
@@ -171,7 +171,7 @@ services:
       [
         "eval",
         "-c",
-        "recipes/eval-gpqa-diamond.yaml",
+        "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}",
         "--model",
         "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
       ]

@@ -1,0 +1,63 @@
+# GPQA Diamond on a 5090 / CUDA 12.8 serve image.
+# Same official cards as eval-gpqa-diamond.yaml, but FlashInfer JIT cannot
+# read SM 12.0 until nvcc is 12.9+ ("SM 12.x requires CUDA >= 12.9").
+# Use Triton attention + PyTorch sampling on this box.
+name: gpqa-diamond-qwen38-official-5090
+benchmark: gpqa_diamond
+dataset: Idavidrein/gpqa
+dataset_config: gpqa_diamond
+model: outputs/Qwen3.8-27B-NVFP4-W4A8
+backend: auto
+base_url: null
+shuffle_choices: true
+limit: null
+output_dir: outputs/eval/gpqa_diamond
+
+thinking:
+  enable: true
+  preserve: true
+  reasoning_effort: xhigh
+
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  do_sample: true
+
+generation:
+  max_model_len: 262144
+  max_new_tokens: 0
+  continue_on_length: true
+  seed: 0
+
+serve:
+  engine: sglang
+  host: 0.0.0.0
+  kv_cache_dtype: fp8_e4m3
+  gpu_memory_utilization: 0.85
+  mem_fraction_static: 0.85
+  max_num_seqs: 32
+  max_running_requests: 32
+  max_num_batched_tokens: 32768
+  chunked_prefill_size: 2048
+  reasoning_parser: qwen3
+  enable_chunked_prefill: true
+  enable_auto_tool_choice: true
+  tool_call_parser: qwen3_coder
+  mm_encoder_tp_mode: data
+  quantization: modelopt
+  tensor_parallel_size: null
+  attention_backend: triton
+  mamba_full_memory_ratio: 4.59
+  mamba_radix_cache_strategy: extra_buffer_lazy
+  mamba_ssm_dtype: float32
+  max_mamba_cache_size: null
+  enable_hierarchical_cache: true
+  kv_offloading_backend: native
+  kv_offloading_size_gb: 12
+  swap_space_gb: 0
+  cpu_reserve_gib: 6
+  disable_cuda_graph: true

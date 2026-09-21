@@ -149,6 +149,7 @@ class EvalServe(StrictModel):
     quantization: str | None = "modelopt"
     tensor_parallel_size: int | None = None
     attention_backend: str | None = "flashinfer"
+    sampling_backend: str | None = None
     mamba_full_memory_ratio: float | None = 4.59
     mamba_radix_cache_strategy: str = "extra_buffer_lazy"
     mamba_ssm_dtype: str = "float32"
@@ -462,6 +463,7 @@ def sglang_serve_argv(
     mamba_radix_cache_strategy: str | None = None,
     mamba_ssm_dtype: str | None = None,
     attention_backend: str | None = None,
+    sampling_backend: str | None = None,
     max_mamba_cache_size: int | None = None,
     seed: int | None = None,
     enable_hierarchical_cache: bool = True,
@@ -535,6 +537,8 @@ def sglang_serve_argv(
         backend = NVIDIA_SGLANG_SERVE["attention_backend"]
     if backend:
         argv.extend(["--attention-backend", str(backend)])
+    if sampling_backend:
+        argv.extend(["--sampling-backend", str(sampling_backend)])
     if max_mamba_cache_size is not None and int(max_mamba_cache_size) > 0:
         argv.extend(["--max-mamba-cache-size", str(int(max_mamba_cache_size))])
     offload = (kv_offloading_backend or "native").strip().lower()
@@ -577,6 +581,7 @@ def sglang_serve_argv_from_recipe(
         mamba_radix_cache_strategy=serve.mamba_radix_cache_strategy,
         mamba_ssm_dtype=serve.mamba_ssm_dtype,
         attention_backend=serve.attention_backend,
+        sampling_backend=serve.sampling_backend,
         max_mamba_cache_size=serve.max_mamba_cache_size,
         seed=recipe.generation.seed,
         enable_hierarchical_cache=serve.enable_hierarchical_cache,

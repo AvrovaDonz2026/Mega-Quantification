@@ -73,6 +73,16 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert default_eval_base_url(recipe) == "http://127.0.0.1:30000/v1"
 
 
+def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
+    recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.5090.yaml")
+    assert recipe.serve.attention_backend == "triton"
+    assert recipe.serve.disable_cuda_graph is True
+    assert recipe.serve.kv_offloading_size_gb == 12
+    joined = " ".join(sglang_serve_argv_from_recipe(recipe))
+    assert "--attention-backend triton" in joined
+    assert "--attention-backend flashinfer" not in joined
+
+
 def test_remaining_tokens_never_uses_small_default_cap() -> None:
     assert remaining_new_tokens(2000, 262144, 0) == 260144
     assert remaining_new_tokens(2000, 262144, None) == 260144
