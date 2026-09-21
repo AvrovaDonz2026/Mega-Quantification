@@ -227,6 +227,9 @@ def remaining_new_tokens(
     return max(1, min(room, int(cap)))
 
 
+HICACHE_MIN_HOST_RESERVE_GIB = 24
+
+
 def auto_kv_offload_gib(
     reserve_gib: int = 6,
     meminfo: str | None = None,
@@ -234,8 +237,9 @@ def auto_kv_offload_gib(
 ) -> int:
     """Host RAM reserved for KV that does not fit in GPU HBM.
 
-    ``explicit_gb > 0`` wins. Otherwise ``MemTotal − reserve`` (min 4 GiB).
-    A 64 GiB box with reserve 6 → 58 GiB CPU KV buffer.
+    ``explicit_gb > 0`` wins. Otherwise ``MemTotal − max(reserve, 24)``
+    (min 4 GiB). A 58 GiB HiCache on a 64 GiB box OOMs the whole pod
+    once SGLang is resident; 24 GiB stays for workers + OS.
     """
     if explicit_gb is not None and float(explicit_gb) > 0:
         return max(1, int(float(explicit_gb)))
@@ -246,7 +250,7 @@ def auto_kv_offload_gib(
         except OSError:
             text = ""
     total_kib, _avail = parse_meminfo_kib(text or "")
-    reserve = max(1, int(reserve_gib))
+    reserve = max(int(reserve_gib), HICACHE_MIN_HOST_RESERVE_GIB)
     if total_kib is None:
         return max(4, 64 - reserve)
     total_gib = int(total_kib) // 1024 // 1024

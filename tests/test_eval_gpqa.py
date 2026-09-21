@@ -59,7 +59,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert serve["mamba_radix_cache_strategy"] == "extra_buffer_lazy"
     assert serve["enable_hierarchical_cache"] is True
     assert serve["kv_offloading_backend"] == "native"
-    assert serve["kv_offloading_size_gb"] == 0
+    assert serve["kv_offloading_size_gb"] == 32
     assert serve["swap_space_gb"] == 0
     assert serve["cpu_reserve_gib"] == 6
     assert serve["disable_cuda_graph"] is True
@@ -68,7 +68,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert plan["base_url"] is None
     assert "remaining context" in plan["max_new_tokens_policy"]
     assert plan["kv_offloading_backend"] == "hicache"
-    assert plan["kv_cpu_offload_gib"] >= 4
+    assert plan["kv_cpu_offload_gib"] == 32
     assert default_eval_base_url(recipe) == DEFAULT_EVAL_BASE_URL
     assert default_eval_base_url(recipe) == "http://127.0.0.1:30000/v1"
 
@@ -222,10 +222,12 @@ def test_vllm_argv_matches_nvidia_card_flags() -> None:
 
 def test_auto_kv_offload_uses_memtotal_minus_reserve() -> None:
     meminfo = "MemTotal:       67108864 kB\nMemAvailable:      1234 kB\n"
-    assert auto_kv_offload_gib(6, meminfo=meminfo) == 58
+    # 24 GiB floor: 58 GiB HiCache on a 64 GiB box OOMs the pod.
+    assert auto_kv_offload_gib(6, meminfo=meminfo) == 40
     assert auto_kv_offload_gib(6, meminfo=meminfo, explicit_gb=24) == 24
-    assert auto_kv_offload_gib(8, meminfo=meminfo) == 56
-    assert auto_kv_offload_gib(6, meminfo="", explicit_gb=0) == 58
+    assert auto_kv_offload_gib(8, meminfo=meminfo) == 40
+    assert auto_kv_offload_gib(32, meminfo=meminfo) == 32
+    assert auto_kv_offload_gib(6, meminfo="", explicit_gb=0) == 40
 
 
 def test_vllm_argv_omits_swap_by_default_and_honors_explicit_swap() -> None:

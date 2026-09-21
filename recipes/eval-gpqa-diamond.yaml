@@ -74,7 +74,8 @@ serve:
   max_mamba_cache_size: null
   enable_hierarchical_cache: true
   kv_offloading_backend: native
-  kv_offloading_size_gb: 0
+  # 58 GiB (MemTotal − 6) OOMs a 64 GiB pod once SGLang is resident.
+  kv_offloading_size_gb: 32
   swap_space_gb: 0
   cpu_reserve_gib: 6
   # 32 GB 5090: mixed NVFP4 + Mamba + HiCache OOMs in CUDA-graph capture.
