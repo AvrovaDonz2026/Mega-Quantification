@@ -183,21 +183,21 @@ def cmd_serve(args: argparse.Namespace) -> int:
     print("[serve]", " ".join(argv), flush=True)
     try:
         os.execvp(argv[0], argv)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         if argv[:2] == ["sglang", "serve"]:
             alt = [sys.executable, "-m", "sglang.launch_server", *argv[2:]]
             print("[serve]", " ".join(alt), flush=True)
             try:
                 os.execvp(alt[0], alt)
-            except FileNotFoundError as exc:
+            except FileNotFoundError as inner:
                 raise MegaQuantError(
                     "sglang is not installed. Install a recent SGLang "
                     "(lmsysorg/sglang:dev / `uv pip install --prerelease=allow sglang`) "
                     "then retry."
-                ) from exc
+                ) from inner
         raise MegaQuantError(
             "vllm is not on PATH. Install a Blackwell vLLM build, then retry."
-        )
+        ) from exc
     return 1
 
 

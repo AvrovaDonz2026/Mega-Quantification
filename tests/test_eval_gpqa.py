@@ -10,7 +10,6 @@ from megaquant.eval_gpqa import (
     DEFAULT_EVAL_BASE_URL,
     DEFAULT_MAX_MODEL_LEN,
     NVIDIA_SGLANG_SERVE,
-    NVIDIA_VLLM_SERVE,
     QWEN_THINKING_SAMPLING,
     GenerationResult,
     GPQAItem,

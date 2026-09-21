@@ -30,7 +30,16 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     text = compose_path.read_text()
     data = yaml.safe_load(text)
     services = data["services"]
-    for name in ("megaquant", "quantize", "mixed", "w4a4", "serve-sglang", "serve-vllm", "eval-gpqa", "shell"):
+    for name in (
+        "megaquant",
+        "quantize",
+        "mixed",
+        "w4a4",
+        "serve-sglang",
+        "serve-vllm",
+        "eval-gpqa",
+        "shell",
+    ):
         assert name in services, f"missing compose service {name}"
 
     profiles = services["quantize"].get("profiles") or []
