@@ -49,7 +49,22 @@ if [[ "${1:-}" == "host-check" ]]; then
   exec /opt/megaquant/docker/host-check.sh
 fi
 
-print_gpu_report
+# SGLang FP8 JIT on sm_120 needs host g++/cc1plus on PATH.
+if command -v "${CXX:-g++}" >/dev/null 2>&1; then
+  _cc1plus="$("${CXX:-g++}" -print-prog-name=cc1plus 2>/dev/null || true)"
+  if [[ -n "${_cc1plus}" && "${_cc1plus}" != "cc1plus" && -x "${_cc1plus}" ]]; then
+    export PATH="$(dirname "${_cc1plus}"):${PATH}"
+  fi
+  export CXX="${CXX:-$(command -v "${CXX:-g++}")}"
+  export CUDAHOSTCXX="${CUDAHOSTCXX:-${CXX}}"
+fi
+if command -v "${CC:-gcc}" >/dev/null 2>&1; then
+  export CC="${CC:-$(command -v "${CC:-gcc}")}"
+fi
+
+if [[ "${MEGAQUANT_SKIP_GPU_REPORT:-0}" != "1" ]]; then
+  print_gpu_report
+fi
 
 if [[ -n "${HF_TOKEN:-}" ]]; then
   export HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}"

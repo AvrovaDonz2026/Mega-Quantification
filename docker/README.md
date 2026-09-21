@@ -1,35 +1,42 @@
 # Docker / Compose — RTX 5090+ 量化箱
 
-把 Mega-Quantification 的 CUDA、PyTorch（sm_90 / sm_120）、NVIDIA ModelOpt、llm-compressor 和 CLI 打进一个镜像。权重不进镜像：Hugging Face 缓存和导出目录挂到宿主机，方便在 5090 / 5090 D / Blackwell 工作站之间搬。
+把量化（ModelOpt PTQ）和评测（SGLang + GPQA）打进 **两套 Compose 镜像**，换虚拟机只装驱动 + `install-host.sh`，然后 `compose build` / `image load` 就能得到同一套环境。权重、校准数据和导出 checkpoint **不进镜像**。
 
-如果你的 5090 已经在 **K8s GPU 容器**里（没有 Docker、系统盘只有几十 GB、权重在只读盘），不要硬套 Compose，改用：
+| 镜像 | 用途 |
+|---|---|
+| `megaquant:nvfp4` | `plan` / `quantize` / `mixed` / `w4a4`（nvidia-modelopt） |
+| `megaquant:sglang` | `serve-sglang` / `eval-gpqa` / `fetch-export` / `fetch-gpqa` |
+
+SGLang 与 ModelOpt 不能共用一个 torch，所以不要把它们装进同一个 venv。
+
+如果你的 5090 已经在 **K8s GPU 容器**里（没有 Docker），改用 `bash scripts/gpu-pod.sh`。新虚拟机：
 
 ```bash
-bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]
-```
-
-省略 scheme 时默认 `w4a8`。这些命令会启动对应配方的 plan / PTQ / 上传 / 推理，不表示 W4A4、mixed PTQ 或 OSS 上传已经在 pod 上跑完。
-
-## 在 5090 机器上只要这几步
-
-```bash
-# 0) 驱动 570+ 与 NVIDIA Container Toolkit
+# 0) 驱动 570+ 已装好后
+bash docker/install-host.sh
+# 可选：云厂商加速 DNS 只写在这台宿主机（systemd-resolved + Docker daemon）。
+# 不要把具体 IP 提交进 git / 镜像；换机时再 export 一次。
+# MEGAQUANT_DOCKER_DNS="<ip> <ip>" bash docker/install-host.sh
 bash docker/host-check.sh
 
-# 1) 可选：Hugging Face token
+# 1) 可选 token / OSS
 cp .env.example .env
-# 编辑 .env 填 HF_TOKEN
 
-# 2) 构建（第一次会拉 CUDA / torch，大约 15–25 GB）
-docker compose build
+# 2) 构建两套镜像（或 docker image load -i megaquant-stack.tar）
+make build
 
-# 3) 干跑：不下载 27B，只打印方案
-docker compose run --rm megaquant plan
+# 3) 干跑：不下载 27B
+make plan
 
-# 4) 真正做 Qwen3.8-27B BF16 PTQ
+# 4) PTQ
 docker compose --profile gpu run --rm quantize   # SGLang mixed W4A8
-docker compose --profile gpu run --rm w4a4       # 均匀 W4A4
-docker compose --profile gpu run --rm mixed      # 混合；默认 mixed.5090.yaml
+docker compose --profile gpu run --rm w4a4
+docker compose --profile gpu run --rm mixed
+
+# 5) 评测：先拉起 serve，再 eval（eval 不占 GPU）
+make fetch-gpqa
+docker compose --profile gpu up serve-sglang
+docker compose --profile gpu run --rm eval-gpqa
 ```
 
 `docker compose up` 默认只跑 `plan`，不会误触发 27B 校准。
@@ -67,15 +74,15 @@ bash scripts/gpu-pod.sh publish [w4a8|w4a4|mixed]
 在有网络的机器上：
 
 ```bash
-make image-tar          # 写出 megaquant-nvfp4.tar
+make image-tar          # 写出 megaquant-stack.tar（nvfp4 + sglang）
 ```
 
-拷贝 `megaquant-nvfp4.tar` + 本仓库（至少 `docker-compose.yml`、`recipes/`、`.env`）到目标机器：
+拷贝 `megaquant-stack.tar` + 本仓库（至少 `docker-compose.yml`、`recipes/`、`.env`）到目标机器：
 
 ```bash
-docker image load -i megaquant-nvfp4.tar
+docker image load -i megaquant-stack.tar
 docker compose run --rm megaquant plan
-docker compose --profile gpu run --rm quantize
+docker compose --profile gpu up serve-sglang
 ```
 
 权重建议单独 rsync `./.cache/huggingface` 或把 `Qwen/Qwen3.8-27B` 快照放到 `./models`，避免每台机器重新下 50GB+ BF16。
@@ -110,9 +117,10 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml docker compose --profile gpu run
 docker compose --profile gpu run --rm mixed
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 
-# GPQA：两个终端，先 serve（SGLang HiCache，KV → RAM），再 eval
-docker compose --profile gpu run --rm serve-sglang
-MEGAQUANT_SGLANG_BASE_URL=http://127.0.0.1:30000/v1 docker compose --profile gpu run --rm eval-gpqa
+# GPQA：先 serve（SGLang 服务名 `serve-sglang:30000`），再 eval
+make fetch-gpqa
+docker compose --profile gpu up serve-sglang
+docker compose --profile gpu run --rm eval-gpqa
 # 可选：CLI `--engine vllm`（GB300 旗标，端口 8000），不是默认路径
 
 # 只用第 0 张卡

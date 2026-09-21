@@ -23,5 +23,8 @@ artifacts/
 hf_cache/
 .cache/
 /models/
+/data/
+megaquant-nvfp4.tar
+megaquant-stack.tar
 .env
 .DS_Store

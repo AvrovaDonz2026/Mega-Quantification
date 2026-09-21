@@ -64,7 +64,39 @@ def test_dry_run_writes_sidecars(tmp_path: Path) -> None:
         oss.canonical_scheme("fp16", tmp_path)
 
 
-def test_publish_requires_bucket_and_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_dry_run_prints_public_url(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "oss_fetch", REPO_ROOT / "scripts" / "oss_fetch.py"
+    )
+    assert spec is not None and spec.loader is not None
+    fetch_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fetch_mod)
+    digest = "a" * 64
+    urls = fetch_mod.fetch(
+        scheme="mixed",
+        content_hash=digest,
+        dest=tmp_path,
+        bucket_name="example-bucket",
+        endpoint="https://oss.example.com",
+        dry_run=True,
+    )
+    assert urls == [
+        f"https://example-bucket.oss.example.com/Mega-Quantification/mixed/{digest}/SHA256SUMS.txt"
+    ]
+    with pytest.raises(ValueError, match="64-char"):
+        fetch_mod.fetch(
+            scheme="mixed",
+            content_hash="short",
+            dest=tmp_path,
+            bucket_name="example-bucket",
+            endpoint="https://oss.example.com",
+            dry_run=True,
+        )
+
+
+def test_publish_requires_bucket_and_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     oss = _load()
     (tmp_path / "model.safetensors").write_bytes(b"weights")
     monkeypatch.delenv("OSS_BUCKET", raising=False)

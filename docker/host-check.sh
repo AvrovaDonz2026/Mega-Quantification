@@ -47,6 +47,25 @@ else
   bad "docker compose v2 missing"
 fi
 
+if [[ -f /etc/docker/daemon.json ]]; then
+  python3 - <<'PY' || true
+import json
+from pathlib import Path
+path = Path("/etc/docker/daemon.json")
+try:
+    data = json.loads(path.read_text())
+except Exception:
+    raise SystemExit(0)
+dns = data.get("dns") or []
+if dns:
+    print(f"  [ok] docker daemon DNS: {len(dns)} resolver(s)")
+else:
+    print("  [!] /etc/docker/daemon.json has no dns — optional MEGAQUANT_DOCKER_DNS on install-host.sh")
+PY
+else
+  echo "  [!] no /etc/docker/daemon.json — optional MEGAQUANT_DOCKER_DNS on install-host.sh"
+fi
+
 free_gb="$(df -BG . | awk 'NR==2 {print $4}' | tr -d 'G')"
 if [[ "${free_gb}" =~ ^[0-9]+$ ]] && (( free_gb < 15 )); then
   bad "free disk ${free_gb}G on $(pwd) — need ~15G+ for the venv/export (BF16 weights can live on another mount)"
@@ -57,7 +76,8 @@ else
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "  [!] no Docker — this looks like a GPU cloud pod. Use: bash scripts/gpu-pod.sh plan"
+  echo "  [!] no Docker — on a VM run: bash docker/install-host.sh"
+  echo "  [!] on a nested GPU pod without Docker: bash scripts/gpu-pod.sh plan"
 fi
 
 echo

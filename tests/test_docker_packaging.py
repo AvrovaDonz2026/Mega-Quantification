@@ -59,6 +59,14 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "eval-gpqa-diamond.yaml" in serve_cmd
     assert "MEGAQUANT_SGLANG_BASE_URL" in text
     assert "30000" in text
+    assert "serve-sglang:30000" in text
+    serve_build = services["serve-sglang"].get("build") or {}
+    if isinstance(serve_build, dict):
+        assert serve_build.get("dockerfile") == "Dockerfile.sglang"
+    eval_svc = services["eval-gpqa"]
+    assert eval_svc.get("gpus") in (None, False, [])
+    assert "fetch-export" in services
+    assert "fetch-gpqa" in services
 
     volume_blob = text
     megaquant_vols = services["megaquant"].get("volumes") or []
@@ -128,11 +136,62 @@ def test_ngc_compose_covers_eval_and_serve(repo_root: Path) -> None:
     services = data["services"]
     for name in ("eval-gpqa", "serve-sglang", "serve-vllm", "w4a4", "mixed"):
         assert name in services, name
+    assert services["serve-sglang"]["image"] == "megaquant:sglang"
+    assert services["eval-gpqa"]["image"] == "megaquant:sglang"
+    assert services["quantize"]["image"] == "megaquant:nvfp4-ngc"
 
 
 def test_dockerfile_copies_scripts(repo_root: Path) -> None:
     dockerfile = (repo_root / "Dockerfile").read_text()
     assert "COPY scripts ./scripts" in dockerfile
+
+
+def test_dockerfile_sglang_does_not_copy_weights(repo_root: Path) -> None:
+    dockerfile = (repo_root / "Dockerfile.sglang").read_text()
+    assert "COPY src ./src" in dockerfile
+    assert "requirements-sglang.txt" in dockerfile
+    assert "sglang" in dockerfile.lower()
+    for line in dockerfile.splitlines():
+        if line.strip().startswith("COPY "):
+            lowered = line.lower()
+            assert "safetensors" not in lowered
+            assert "huggingface" not in lowered
+
+
+def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:
+    script = (repo_root / "docker" / "install-host.sh").read_text()
+    readme = (repo_root / "docker" / "README.md").read_text()
+    assert "docker.io" in script
+    assert "nvidia-container-toolkit" in script
+    assert "MEGAQUANT_DOCKER_DNS" in script
+    assert "systemd-resolved" in script
+    assert "gai.conf" in script
+    assert "MEGAQUANT_PREFER_IPV4" in script
+    assert "get.docker.com" not in script
+    assert "100.90.90.90" not in script
+    assert "100.90.90.100" not in script
+    assert "MEGAQUANT_DOCKER_DNS" in readme
+    assert "megaquant-stack.tar" in readme
+    text_globs = (
+        "*.sh",
+        "*.yml",
+        "*.yaml",
+        "*.md",
+        "*.py",
+        "*.txt",
+        "*.example",
+        "Dockerfile*",
+        "Makefile",
+    )
+    hits: list[str] = []
+    for glob in text_globs:
+        for path in repo_root.rglob(glob):
+            if ".git" in path.parts or path == repo_root / "tests" / "test_docker_packaging.py":
+                continue
+            blob = path.read_text(encoding="utf-8", errors="ignore")
+            if "100.90.90.90" in blob or "100.90.90.100" in blob:
+                hits.append(str(path.relative_to(repo_root)))
+    assert hits == []
 
 
 def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:
@@ -142,6 +201,9 @@ def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:
     assert "-c" in script
     assert "eval-gpqa-diamond.yaml" in script
     assert '"serve"' in script
+    assert "CUDAHOSTCXX" in script
+    assert "cc1plus" in script
+    assert "MEGAQUANT_SKIP_GPU_REPORT" in script
 
 
 def test_serve_and_eval_scripts_are_executable_helpers(repo_root: Path) -> None:

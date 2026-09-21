@@ -1,0 +1,6 @@
+# Serve / eval image only. Do not mix this resolver with the ModelOpt PTQ image.
+# SGLang pulls its own torch; pin the engine so `compose build` is repeatable.
+sglang==0.5.20
+pydantic>=2.6.0
+pyyaml>=6.0.0
+huggingface_hub>=0.26.0
