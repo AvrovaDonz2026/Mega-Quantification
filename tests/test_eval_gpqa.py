@@ -198,6 +198,7 @@ def test_sglang_argv_matches_cookbook_and_hicache() -> None:
     assert "--hicache-size 58" in joined
     assert "--port 30000" in joined
     assert "vllm" not in joined
+    assert "--seed" not in argv
 
 
 def test_vllm_argv_matches_nvidia_card_flags() -> None:

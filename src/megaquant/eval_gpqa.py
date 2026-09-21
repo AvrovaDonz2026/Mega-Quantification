@@ -504,8 +504,6 @@ def sglang_serve_argv(
             if max_running_requests is None
             else max_running_requests
         ),
-        "--seed",
-        str(0 if seed is None else seed),
         "--mamba-radix-cache-strategy",
         str(
             mamba_radix_cache_strategy
@@ -531,6 +529,8 @@ def sglang_serve_argv(
     offload = (kv_offloading_backend or "native").strip().lower()
     if enable_hierarchical_cache and offload not in {"none", "off", "false"}:
         argv.extend(["--enable-hierarchical-cache", "--hicache-size", str(kv_ram)])
+    # SGLang 0.5.x `serve` has no --seed; sampling seed stays on the eval client.
+    _ = seed
     return argv
 
 
