@@ -98,6 +98,8 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "publish|rewrite-sglang" in script
     assert "oss_publish.py" in script
     assert "publish|rewrite-sglang|schemes|families" in script
+    assert "CUDAHOSTCXX" in script
+    assert "cc1plus" in script
 
 
 def test_gpu_pod_publish_and_rewrite_sglang_skip_cuda_probe(repo_root: Path) -> None:
@@ -147,6 +149,8 @@ def test_serve_and_eval_scripts_are_executable_helpers(repo_root: Path) -> None:
     eval_sh = (repo_root / "scripts" / "eval_gpqa.sh").read_text()
     assert "megaquant.cli serve" in serve
     assert "KV" in serve or "HiCache" in serve
+    assert "cc1plus" in serve
+    assert "CUDAHOSTCXX" in serve
     assert "megaquant.cli eval" in eval_sh
     assert "eval-gpqa-diamond.yaml" in eval_sh
     wrapper = (repo_root / "scripts" / "serve_vllm.sh").read_text()

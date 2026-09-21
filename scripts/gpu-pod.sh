@@ -43,6 +43,19 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 export CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS:-16}"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+# SGLang FP8 JIT on sm_120 compiles with nvcc's host preprocessor. A missing
+# g++/cc1plus fails as: gcc: fatal error: cannot execute 'cc1plus'.
+if command -v "${CXX:-g++}" >/dev/null 2>&1; then
+  _cc1plus="$("${CXX:-g++}" -print-prog-name=cc1plus 2>/dev/null || true)"
+  if [[ -n "${_cc1plus}" && "${_cc1plus}" != "cc1plus" && -x "${_cc1plus}" ]]; then
+    export PATH="$(dirname "${_cc1plus}"):${PATH}"
+  fi
+  export CXX="${CXX:-$(command -v "${CXX:-g++}")}"
+  export CUDAHOSTCXX="${CUDAHOSTCXX:-${CXX}}"
+fi
+if command -v "${CC:-gcc}" >/dev/null 2>&1; then
+  export CC="${CC:-$(command -v "${CC:-gcc}")}"
+fi
 # GDN fused kernels: without these, transformers prints
 # "Falling back to torch implementation" and 5090 SM% stays ~5%.
 export MEGAQUANT_INSTALL_FLA="${MEGAQUANT_INSTALL_FLA:-1}"

@@ -8,6 +8,15 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+# nvcc host preprocessor needs cc1plus on PATH (SGLang FP8 JIT / sm_120).
+if command -v "${CXX:-g++}" >/dev/null 2>&1; then
+  _cc1plus="$("${CXX:-g++}" -print-prog-name=cc1plus 2>/dev/null || true)"
+  if [[ -n "${_cc1plus}" && "${_cc1plus}" != "cc1plus" && -x "${_cc1plus}" ]]; then
+    export PATH="$(dirname "${_cc1plus}"):${PATH}"
+  fi
+  export CXX="${CXX:-$(command -v "${CXX:-g++}")}"
+  export CUDAHOSTCXX="${CUDAHOSTCXX:-${CXX}}"
+fi
 cd "$ROOT"
 MODEL="${1:-outputs/Qwen3.8-27B-NVFP4-W4A8}"
 shift || true
