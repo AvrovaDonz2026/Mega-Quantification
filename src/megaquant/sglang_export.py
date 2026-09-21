@@ -73,6 +73,105 @@ def is_sglang_mixed_scheme(scheme_name: str | None) -> bool:
     return key in SGLANG_MIXED_ALGOS
 
 
+def _normalize_quant_algo(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _sglang_rejects_quant_algo(quant_algo: str | None) -> bool:
+    """True for TRT-LLM uniform W4A8 tags (``W4A8_NVFP4_FP8`` / W4AFP8-style)."""
+    if not quant_algo:
+        return False
+    key = quant_algo.strip().upper().replace("-", "_")
+    compact = key.replace("_", "")
+    if compact in {"W4A8NVFP4FP8", "W4AFP8"}:
+        return True
+    if "W4AFP8" in compact:
+        return True
+    return "W4A8" in compact and "NVFP4" in compact and "FP8" in compact
+
+
+def _is_nvfp4_or_mixed_algo(quant_algo: str | None) -> bool:
+    if not quant_algo or _sglang_rejects_quant_algo(quant_algo):
+        return False
+    key = quant_algo.strip().upper().replace("-", "_")
+    compact = key.replace("_", "")
+    return compact in {"NVFP4", "NVFP4AWQ", "MIXEDPRECISION", "MIXED"} or compact.startswith(
+        "MIXED"
+    )
+
+
+def _quant_section(payload: dict[str, Any]) -> dict[str, Any]:
+    quant = payload.get("quantization")
+    if isinstance(quant, dict):
+        return quant
+    return payload
+
+
+def inspect_sglang_quant_config(export_dir: str | Path) -> dict[str, Any]:
+    """Read ``hf_quant_config.json`` and report whether SGLang can load it.
+
+    Never downloads weights. Missing / unreadable config does not raise.
+
+    Returns ``quant_algo``, ``has_quantized_layers``, ``sglang_ok``, ``warning``.
+    ``sglang_ok`` is False only for TRT-LLM ``W4A8_NVFP4_FP8`` / W4AFP8-style tags.
+    A bare ``NVFP4`` tag (uniform W4A4) stays ``sglang_ok`` True with a warning
+    that mixed exports should run ``megaquant rewrite-sglang``.
+    """
+    path = Path(export_dir) / "hf_quant_config.json"
+    quant_algo: str | None = None
+    has_layers = False
+    if path.is_file():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            raw = {}
+        payload = raw if isinstance(raw, dict) else {}
+        quant = _quant_section(payload)
+        quant_algo = _normalize_quant_algo(quant.get("quant_algo"))
+        if quant_algo is None:
+            quant_algo = _normalize_quant_algo(payload.get("quant_algo"))
+        layers = quant.get("quantized_layers")
+        has_layers = isinstance(layers, dict) and bool(layers)
+
+    sglang_ok = not _sglang_rejects_quant_algo(quant_algo)
+    warning: str | None = None
+    if not sglang_ok:
+        warning = (
+            f"SGLang rejects quant_algo={quant_algo} (TRT-LLM uniform W4A8 / "
+            "scheme w4a8_nvfp4_fp8). Do not rewrite gs32 weights in place."
+        )
+    elif _is_nvfp4_or_mixed_algo(quant_algo) and not has_layers:
+        warning = (
+            f"{quant_algo} has no quantized_layers; run `megaquant rewrite-sglang` "
+            "if this is mixed nvfp4_w4a8. Uniform NVFP4 W4A4 is OK for SGLang."
+        )
+    return {
+        "quant_algo": quant_algo,
+        "has_quantized_layers": has_layers,
+        "sglang_ok": sglang_ok,
+        "warning": warning,
+    }
+
+
+def sglang_quant_snapshot(model: str | None) -> dict[str, Any] | None:
+    """Inspect an existing local export dir; None if ``model`` is missing / Hub-like."""
+    if not model:
+        return None
+    path = Path(model)
+    try:
+        if not path.is_dir():
+            return None
+    except OSError:
+        return None
+    try:
+        return inspect_sglang_quant_config(path)
+    except (OSError, UnicodeDecodeError, TypeError, ValueError):
+        return None
+
+
 def _module_from_tensor(name: str) -> str | None:
     if any(marker in name for marker in _SCALE_MARKERS):
         return None

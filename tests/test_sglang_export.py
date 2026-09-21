@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 from megaquant.sglang_export import (
+    inspect_sglang_quant_config,
     is_sglang_mixed_scheme,
     quantized_layers_from_weight_map,
     rewrite_sglang_mixed_export,
+    sglang_quant_snapshot,
 )
 
 QWEN38_WEIGHT_MAP = {
@@ -111,3 +113,72 @@ def test_rewrite_sglang_cli(tmp_path: Path) -> None:
     assert code == 0
     hf = json.loads((tmp_path / "hf_quant_config.json").read_text())
     assert hf["quantization"]["quant_algo"] == "MIXED_PRECISION"
+
+
+def _write_hf_quant(tmp_path: Path, quantization: dict) -> None:
+    (tmp_path / "hf_quant_config.json").write_text(
+        json.dumps({"quantization": quantization}),
+        encoding="utf-8",
+    )
+
+
+def test_inspect_mixed_precision_with_layers_is_sglang_ok(tmp_path: Path) -> None:
+    _write_hf_quant(
+        tmp_path,
+        {
+            "quant_algo": "MIXED_PRECISION",
+            "quantized_layers": {
+                "lm_head": {"quant_algo": "NVFP4", "group_size": 16},
+            },
+        },
+    )
+    info = inspect_sglang_quant_config(tmp_path)
+    assert info["quant_algo"] == "MIXED_PRECISION"
+    assert info["has_quantized_layers"] is True
+    assert info["sglang_ok"] is True
+    assert info["warning"] is None
+    assert sglang_quant_snapshot(str(tmp_path)) == info
+
+
+def test_inspect_w4a8_nvfp4_fp8_not_sglang_ok(tmp_path: Path) -> None:
+    _write_hf_quant(tmp_path, {"quant_algo": "W4A8_NVFP4_FP8", "group_size": 32})
+    info = inspect_sglang_quant_config(tmp_path)
+    assert info["quant_algo"] == "W4A8_NVFP4_FP8"
+    assert info["sglang_ok"] is False
+    assert info["has_quantized_layers"] is False
+    w4afp8 = tmp_path / "w4afp8"
+    w4afp8.mkdir()
+    _write_hf_quant(w4afp8, {"quant_algo": "W4AFP8"})
+    assert inspect_sglang_quant_config(w4afp8)["sglang_ok"] is False
+
+
+def test_inspect_nvfp4_without_quantized_layers_warns(tmp_path: Path) -> None:
+    _write_hf_quant(tmp_path, {"quant_algo": "NVFP4", "group_size": 16})
+    info = inspect_sglang_quant_config(tmp_path)
+    assert info["quant_algo"] == "NVFP4"
+    assert info["has_quantized_layers"] is False
+    assert info["sglang_ok"] is True
+    assert info["warning"] is not None
+    assert "rewrite-sglang" in info["warning"]
+    mixed = tmp_path / "mixed"
+    mixed.mkdir()
+    _write_hf_quant(mixed, {"quant_algo": "MIXED_PRECISION"})
+    mixed_info = inspect_sglang_quant_config(mixed)
+    assert mixed_info["sglang_ok"] is True
+    assert mixed_info["warning"] is not None
+    assert "rewrite-sglang" in mixed_info["warning"]
+
+
+def test_inspect_missing_config_does_not_crash(tmp_path: Path) -> None:
+    info = inspect_sglang_quant_config(tmp_path)
+    assert info["quant_algo"] is None
+    assert info["has_quantized_layers"] is False
+    assert info["sglang_ok"] is True
+    assert info["warning"] is None
+    missing = inspect_sglang_quant_config(tmp_path / "does-not-exist")
+    assert missing["sglang_ok"] is True
+    (tmp_path / "hf_quant_config.json").write_text("not-json", encoding="utf-8")
+    broken = inspect_sglang_quant_config(tmp_path)
+    assert broken["sglang_ok"] is True
+    assert sglang_quant_snapshot("/ckpt") is None
+    assert sglang_quant_snapshot("Qwen/Qwen3.8-27B") is None

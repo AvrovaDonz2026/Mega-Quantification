@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -283,6 +284,8 @@ def test_cli_eval_and_serve_dry_run(capsys, monkeypatch: pytest.MonkeyPatch) -> 
     ):
         monkeypatch.delenv(key, raising=False)
 
+    import json
+
     code = main(["eval", "-c", str(RECIPE), "--dry-run"])
     assert code == 0
     eval_out = capsys.readouterr().out
@@ -295,8 +298,6 @@ def test_cli_eval_and_serve_dry_run(capsys, monkeypatch: pytest.MonkeyPatch) -> 
     assert code == 0
     serve_out = capsys.readouterr().out
     payload = serve_out[serve_out.find("{") :]
-    import json
-
     data = json.loads(payload)
     joined = " ".join(data["argv"])
     assert data["argv"][:2] == ["sglang", "serve"]
@@ -308,6 +309,8 @@ def test_cli_eval_and_serve_dry_run(capsys, monkeypatch: pytest.MonkeyPatch) -> 
     assert "--port" in data["argv"]
     assert data["argv"][data["argv"].index("--port") + 1] == "30000"
     assert data["plan"]["base_url"] == "http://127.0.0.1:30000/v1"
+    assert data["plan"]["sglang_quant"] is None
+    assert data["sglang_quant"] is None
 
 
 def test_dry_run_does_not_need_a_model() -> None:
@@ -315,3 +318,57 @@ def test_dry_run_does_not_need_a_model() -> None:
     out = run_gpqa(recipe, dry_run=True)
     assert out["dry_run"] is True
     assert out["plan"]["sampling"]["temperature"] == 1.0
+    assert out["plan"]["sglang_quant"] is None
+
+
+def _write_hf_quant(tmp_path: Path, quantization: dict) -> None:
+    (tmp_path / "hf_quant_config.json").write_text(
+        json.dumps({"quantization": quantization}),
+        encoding="utf-8",
+    )
+
+
+def test_describe_eval_inspects_local_export(tmp_path: Path) -> None:
+    from megaquant.sglang_export import inspect_sglang_quant_config
+
+    _write_hf_quant(
+        tmp_path,
+        {
+            "quant_algo": "MIXED_PRECISION",
+            "quantized_layers": {"lm_head": {"quant_algo": "NVFP4"}},
+        },
+    )
+    recipe = load_eval_recipe(RECIPE, overrides={"model": str(tmp_path)})
+    plan = describe_eval(recipe)
+    assert plan["sglang_quant"] == inspect_sglang_quant_config(tmp_path)
+    assert plan["sglang_quant"]["sglang_ok"] is True
+    assert plan["sglang_quant"]["has_quantized_layers"] is True
+
+    missing = load_eval_recipe(RECIPE, overrides={"model": "/ckpt"})
+    assert describe_eval(missing)["sglang_quant"] is None
+
+
+def test_serve_rejects_trtllm_w4a8_but_dry_run_does_not(
+    tmp_path: Path, capsys
+) -> None:
+    from megaquant.cli import main
+
+    _write_hf_quant(tmp_path, {"quant_algo": "W4A8_NVFP4_FP8", "group_size": 32})
+    code = main(
+        ["serve", "-c", str(RECIPE), "--model", str(tmp_path), "--dry-run"]
+    )
+    assert code == 0
+    serve_out = capsys.readouterr().out
+    data = json.loads(serve_out[serve_out.find("{") :])
+    assert data["sglang_quant"]["sglang_ok"] is False
+    assert data["plan"]["sglang_quant"]["quant_algo"] == "W4A8_NVFP4_FP8"
+    assert data["argv"][:2] == ["sglang", "serve"]
+
+    code = main(["serve", "-c", str(RECIPE), "--model", str(tmp_path)])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "W4A8_NVFP4_FP8" in err
+    assert "not the fix" in err
+    assert "w4a8_nvfp4_fp8" in err
+    assert "rewrite-sglang" in err
+    assert "nvfp4_w4a8" in err

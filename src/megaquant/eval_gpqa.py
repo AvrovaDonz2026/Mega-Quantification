@@ -48,6 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from megaquant.exceptions import EvalError
 from megaquant.runtime import parse_meminfo_kib
+from megaquant.sglang_export import sglang_quant_snapshot
 
 LETTERS = ("A", "B", "C", "D")
 DEFAULT_MAX_MODEL_LEN = 262144
@@ -313,6 +314,8 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
             explicit_gb=recipe.serve.kv_offloading_size_gb,
         ),
         "kv_offloading_backend": kv_backend,
+        # Local export only: missing dir -> null (never Hub-download 27B).
+        "sglang_quant": sglang_quant_snapshot(recipe.model),
     }
 
 

@@ -20,6 +20,7 @@ from megaquant.eval_gpqa import (
 from megaquant.exceptions import MegaQuantError
 from megaquant.pipeline import QuantPipeline
 from megaquant.registry import list_families, list_schemes
+from megaquant.sglang_export import sglang_quant_snapshot
 
 
 def _add_recipe_flags(parser: argparse.ArgumentParser, *, with_dry_run: bool) -> None:
@@ -175,11 +176,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
                     "plan": plan,
                     "engine": recipe.serve.engine,
                     "kv_cpu_offload_gib": plan["kv_cpu_offload_gib"],
+                    "sglang_quant": plan.get("sglang_quant"),
                 },
                 indent=2,
             )
         )
         return 0
+    snapshot = sglang_quant_snapshot(recipe.model)
+    if recipe.serve.engine == "sglang" and snapshot is not None and not snapshot["sglang_ok"]:
+        algo = snapshot.get("quant_algo") or "W4A8_NVFP4_FP8"
+        raise MegaQuantError(
+            f"This checkpoint is TRT-LLM {algo} (scheme w4a8_nvfp4_fp8); "
+            "SGLang rejects that quant_algo. --engine vllm is not the fix. "
+            "Use mixed W4A8 (nvfp4_w4a8 / MIXED_PRECISION), not uniform gs32. "
+            "`megaquant rewrite-sglang` is only for mixed exports with a bare "
+            "NVFP4 tag; do not rewrite uniform W4A8_NVFP4_FP8 weights in place."
+        )
     print("[serve]", " ".join(argv), flush=True)
     try:
         os.execvp(argv[0], argv)
