@@ -1,0 +1,28 @@
+name: qwen3.8-27b-nvfp4-mixed
+backend: modelopt
+scheme: nvfp4_mixed
+algorithm: local_hessian
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  num_samples: 2048
+  max_seq_length: 2048
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-mixed
+  format: hf
+  pack: true

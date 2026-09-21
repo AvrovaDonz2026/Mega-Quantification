@@ -1,0 +1,15 @@
+# Installed *after* the CUDA PyTorch wheel. Do not pin torch here.
+nvidia-modelopt[hf]>=0.48.0
+llmcompressor>=0.8.0
+compressed-tensors>=0.10.0
+transformers>=4.56.0
+datasets>=3.0.0
+accelerate>=1.0.0
+safetensors>=0.5.0
+sentencepiece>=0.2.0
+protobuf>=5.0.0
+einops>=0.8.0
+huggingface_hub>=0.26.0
+pydantic>=2.6.0
+pyyaml>=6.0.0
+tqdm>=4.66.0

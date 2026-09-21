@@ -1,0 +1,78 @@
+name: "${COMPOSE_PROJECT_NAME:-megaquant}"
+
+x-megaquant: &megaquant
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
+      INSTALL_TORCH: ${INSTALL_TORCH:-1}
+      TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
+  image: ${MEGAQUANT_IMAGE:-megaquant:nvfp4}
+  pull_policy: missing
+  stdin_open: true
+  tty: true
+  ipc: host
+  shm_size: 64gb
+  ulimits:
+    memlock: -1
+    stack: 67108864
+  environment:
+    HF_TOKEN: ${HF_TOKEN:-}
+    HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    HF_HOME: /cache/huggingface
+    RECIPE: ${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}
+    CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-}
+    MEGAQUANT_DEVICE_MAP: ${MEGAQUANT_DEVICE_MAP:-auto}
+    MEGAQUANT_LOW_MEMORY: ${MEGAQUANT_LOW_MEMORY:-1}
+    MEGAQUANT_EXTRA_ARGS: ${MEGAQUANT_EXTRA_ARGS:-}
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+  volumes:
+    - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
+    - ${MODELS_DIR:-./models}:/models
+    - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
+    - ./recipes:/opt/megaquant/recipes
+    - ./docs:/opt/megaquant/docs:ro
+  working_dir: /opt/megaquant
+  gpus: all
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  # Default: dry-run the Qwen3.8-27B NVFP4 W4A8 plan. Safe on `compose up`.
+  megaquant:
+    <<: *megaquant
+    command: ["plan", "-c", "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}"]
+
+  # Real PTQ. Opt in explicitly so `compose up` never starts a 27B job.
+  quantize:
+    <<: *megaquant
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}",
+      ]
+
+  mixed:
+    <<: *megaquant
+    profiles: ["gpu"]
+    command:
+      [
+        "quantize",
+        "-c",
+        "recipes/qwen3.8-27b-nvfp4-mixed.yaml",
+      ]
+
+  shell:
+    <<: *megaquant
+    profiles: ["dev"]
+    entrypoint: ["/bin/bash"]
+    command: ["-l"]

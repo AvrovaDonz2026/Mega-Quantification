@@ -1,0 +1,34 @@
+# Optional override: NGC PyTorch base (best sm_120 / RTX 5090 compatibility).
+# Requires: docker login nvcr.io
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ngc.yml build
+#   docker compose run --rm megaquant plan
+
+services:
+  megaquant:
+    build:
+      args:
+        BASE_IMAGE: nvcr.io/nvidia/pytorch:25.08-py3
+        INSTALL_TORCH: "0"
+    image: megaquant:nvfp4-ngc
+
+  quantize:
+    build:
+      args:
+        BASE_IMAGE: nvcr.io/nvidia/pytorch:25.08-py3
+        INSTALL_TORCH: "0"
+    image: megaquant:nvfp4-ngc
+
+  mixed:
+    build:
+      args:
+        BASE_IMAGE: nvcr.io/nvidia/pytorch:25.08-py3
+        INSTALL_TORCH: "0"
+    image: megaquant:nvfp4-ngc
+
+  shell:
+    build:
+      args:
+        BASE_IMAGE: nvcr.io/nvidia/pytorch:25.08-py3
+        INSTALL_TORCH: "0"
+    image: megaquant:nvfp4-ngc
