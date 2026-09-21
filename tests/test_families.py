@@ -100,11 +100,14 @@ def test_qwen35_load_kwargs_no_torch() -> None:
     assert kwargs["device_map"] == "cpu"
     assert "bfloat16" in str(kwargs["torch_dtype"]).lower()
     assert kwargs["language_model_only"] is True
+    assert "visual" in kwargs["pin_to_cpu"]
+    assert "mtp" in kwargs["pin_to_cpu"]
 
 
 def test_qwen35_keeps_vision_when_opted_in() -> None:
     kwargs = Qwen35Family().load_kwargs({"model": {"quantize_vision": True}})
     assert "language_model_only" not in kwargs
+    assert "visual" not in kwargs.get("pin_to_cpu", ())
 
 
 def test_qwen3_not_confused_with_qwen3_5() -> None:

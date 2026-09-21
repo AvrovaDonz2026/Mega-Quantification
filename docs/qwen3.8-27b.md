@@ -29,6 +29,7 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | File | Scheme | Algorithm | Samples | Output |
 |---|---|---|---|---|
 | `recipes/qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8` |
+| `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | 256 × 1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | 2048 | `outputs/Qwen3.8-27B-NVFP4-mixed` |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A4` |
 
@@ -120,6 +121,31 @@ model, scheme, backend, calib, git sha, timestamp).
 27B BF16 ≈ 54 GiB of weights plus activations. Set `model.device_map` (`auto`
 by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
 heavy CPU offload. NVFP4 **inference** still needs Blackwell SM100+.
+
+## Single 5090 + 64 GB RAM
+
+The 27B BF16 does not fit in 32 GB. Mega-Quantification now packs the box
+instead of leaving headroom idle:
+
+| Resource | Packing |
+|---|---|
+| GPU | Weights fill **VRAM − 2 GiB** (`MEGAQUANT_GPU_HEADROOM_GIB`, was 6 GiB). Live 5090 calib was only using ~24.5 / 32 GB. |
+| RAM | Weights that do not fit on GPU stay in **MemTotal − 6 GiB** (~56 GiB on a 64 GB pod). Disk `offload_folder` is spill-only. |
+| CPU | `nproc` threads via `OMP_NUM_THREADS` / `torch.set_num_threads`. Calib tensors are `pin_memory`'d. |
+| Calib | 5090 recipe uses `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
+
+```bash
+# Compshare / k8s GPU pod (already a container):
+bash scripts/gpu-pod.sh plan
+bash scripts/gpu-pod.sh quantize
+```
+
+Install GDN fused kernels for the next run (`kernels` + `flash-linear-attention`);
+without them transformers falls back to a PyTorch Gated DeltaNet and SM% stays
+single-digit. Do not compile `causal-conv1d` while another PTQ is on the GPU.
+
+Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
+`MEGAQUANT_NUM_THREADS`, `MEGAQUANT_BATCH_SIZE`, `MEGAQUANT_GPU_HEADROOM_GIB`.
 
 ## Serve (vLLM / SGLang / TensorRT-LLM)
 

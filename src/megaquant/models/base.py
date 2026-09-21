@@ -142,6 +142,15 @@ class BaseFamily:
     def default_ignore(self, recipe: Any) -> list[str]:
         return glob_to_ignore("*visual*", "*embed_tokens*")
 
+    def cpu_pin_needles(self, recipe: Any) -> tuple[str, ...]:
+        """Submodule name fragments to keep on CPU during ``device_map='auto'``."""
+        pins: list[str] = []
+        if not recipe_flag(recipe, "model", "quantize_vision", default=False):
+            pins.extend(["visual", "vision"])
+        if not recipe_flag(recipe, "model", "quantize_mtp", default=False):
+            pins.append("mtp")
+        return tuple(pins)
+
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
         """``from_pretrained`` kwargs. Never imports torch (string dtypes)."""
         model = recipe_model(recipe)
@@ -154,11 +163,22 @@ class BaseFamily:
         raw_dtype = get_field(model, "dtype", "bfloat16") or "bfloat16"
         dtype_key = str(raw_dtype).lower().replace("torch.", "")
         torch_dtype = _DTYPE_ALIASES.get(dtype_key, str(raw_dtype))
-        return {
+        kwargs: dict[str, Any] = {
             "trust_remote_code": bool(trust),
             "torch_dtype": torch_dtype,
             "device_map": device_map,
         }
+        pins = self.cpu_pin_needles(recipe)
+        if pins:
+            kwargs["pin_to_cpu"] = pins
+        return kwargs
+
+    def plan_notes(self, recipe: Any) -> list[str]:
+        return []
+
+    def prepare_load(self, recipe: Any) -> str | None:
+        """Optional in-process patch before ``from_pretrained``. Returns a log note."""
+        return None
 
     def register(self) -> None:
         register_this_family(self)

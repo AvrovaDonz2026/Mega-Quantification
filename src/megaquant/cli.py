@@ -39,6 +39,12 @@ def _add_recipe_flags(parser: argparse.ArgumentParser, *, with_dry_run: bool) ->
         dest="max_seq_length",
         help="Override calibration.max_seq_length",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        dest="batch_size",
+        help="Override calibration.batch_size (larger batches amortize CPU↔GPU offload)",
+    )
     parser.add_argument("--algorithm", help="Override algorithm")
     parser.add_argument("--scheme", help="Override scheme catalog key")
 
@@ -112,6 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from megaquant.runtime import configure_host_parallelism
+
+    configure_host_parallelism()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):

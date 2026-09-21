@@ -5,27 +5,94 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Callable, Iterable, Mapping
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 
-def _first_param_device(model: Any) -> Any | None:
-    """Best-effort device for ``model`` parameters (skips meta tensors)."""
+def _is_accelerator_placement(value: Any) -> bool:
+    if isinstance(value, int):
+        return True
+    text = str(value).strip().lower()
+    if not text or text in {"cpu", "disk", "meta"} or text.startswith("disk"):
+        return False
+    return text.isdigit() or any(tag in text for tag in ("cuda", "xpu", "npu", "mps", "hpu"))
+
+
+def _placement_to_device(value: Any) -> Any:
+    try:
+        import torch
+    except ImportError:
+        return value
+    if isinstance(value, int):
+        return torch.device(f"cuda:{value}" if torch.cuda.is_available() else "cpu")
+    text = str(value).strip()
+    if text.isdigit():
+        return _placement_to_device(int(text))
+    try:
+        return torch.device(text)
+    except (RuntimeError, TypeError, ValueError):
+        return value
+
+
+def _first_non_meta_param_device(model: Any, *, prefer_accelerator: bool) -> Any | None:
     try:
         parameters = model.parameters()
     except Exception:
         return None
+    fallback = None
     try:
         for param in parameters:
             device = getattr(param, "device", None)
             if device is None:
                 continue
-            if getattr(device, "type", None) == "meta":
+            kind = getattr(device, "type", None)
+            if kind == "meta":
                 continue
-            return device
+            if prefer_accelerator and kind not in {None, "cpu", "meta"}:
+                return device
+            if fallback is None:
+                fallback = device
+                if not prefer_accelerator:
+                    return device
     except (StopIteration, TypeError, RuntimeError):
-        return None
-    return None
+        return fallback
+    return fallback
+
+
+def preferred_forward_device(model: Any) -> Any | None:
+    """Device for calibration ``input_ids``.
+
+    ``parameters()`` follows constructor order, so a CPU-pinned ViT would make
+    the first parameter CPU even when the language model is on CUDA. Prefer
+    input embeddings, then ``hf_device_map`` accelerator entries, then CUDA
+    parameters.
+    """
+    get_emb = getattr(model, "get_input_embeddings", None)
+    if callable(get_emb):
+        try:
+            emb = get_emb()
+            device = _first_non_meta_param_device(emb, prefer_accelerator=True)
+            if device is not None and getattr(device, "type", None) not in {None, "cpu"}:
+                return device
+        except Exception:
+            pass
+
+    device_map = getattr(model, "hf_device_map", None)
+    if isinstance(device_map, Mapping):
+        for value in device_map.values():
+            if _is_accelerator_placement(value):
+                return _placement_to_device(value)
+
+    accelerator = _first_non_meta_param_device(model, prefer_accelerator=True)
+    if accelerator is not None:
+        return accelerator
+    return _first_non_meta_param_device(model, prefer_accelerator=False)
+
+
+def _first_param_device(model: Any) -> Any | None:
+    """Best-effort device for ``model`` parameters (skips meta tensors)."""
+    return preferred_forward_device(model)
 
 
 def _move_to_device(obj: Any, device: Any) -> Any:
@@ -35,15 +102,43 @@ def _move_to_device(obj: Any, device: Any) -> Any:
     to_fn = getattr(obj, "to", None)
     if callable(to_fn) and not isinstance(obj, (str, bytes)):
         try:
-            return to_fn(device)
-        except (TypeError, RuntimeError, AttributeError, ValueError):
-            pass
+            return to_fn(device, non_blocking=True)
+        except TypeError:
+            try:
+                return to_fn(device)
+            except (TypeError, RuntimeError, AttributeError, ValueError):
+                pass
+        except (RuntimeError, AttributeError, ValueError):
+            try:
+                return to_fn(device)
+            except (TypeError, RuntimeError, AttributeError, ValueError):
+                pass
     if isinstance(obj, Mapping):
         return {key: _move_to_device(value, device) for key, value in obj.items()}
     if isinstance(obj, tuple):
         return tuple(_move_to_device(value, device) for value in obj)
     if isinstance(obj, list):
         return [_move_to_device(value, device) for value in obj]
+    return obj
+
+
+def _pin_cpu_tensors(obj: Any) -> Any:
+    """Pin host tensors so H2D copies overlap with compute."""
+    pin = getattr(obj, "pin_memory", None)
+    if callable(pin) and not isinstance(obj, (str, bytes)):
+        device = getattr(obj, "device", None)
+        kind = getattr(device, "type", "cpu") if device is not None else "cpu"
+        if kind == "cpu":
+            try:
+                return pin()
+            except Exception:
+                return obj
+    if isinstance(obj, Mapping):
+        return {key: _pin_cpu_tensors(value) for key, value in obj.items()}
+    if isinstance(obj, tuple):
+        return tuple(_pin_cpu_tensors(value) for value in obj)
+    if isinstance(obj, list):
+        return [_pin_cpu_tensors(value) for value in obj]
     return obj
 
 
@@ -100,26 +195,49 @@ def forward_loop_from_iter(calib_iter: Iterable[Any]) -> Callable[[Any], None]:
     can run more than one forward pass.
     """
     batches = _materialize_batches(calib_iter)
+    try:
+        from megaquant.runtime import env_flag
+
+        if env_flag("MEGAQUANT_PIN_MEMORY", default=True):
+            batches = [_pin_cpu_tensors(batch) for batch in batches]
+    except Exception:
+        pass
 
     def forward_loop(model: Any) -> None:
-        device = _first_param_device(model)
+        eval_fn = getattr(model, "eval", None)
+        if callable(eval_fn):
+            eval_fn()
+        config = getattr(model, "config", None)
+        if config is not None and hasattr(config, "use_cache"):
+            try:
+                config.use_cache = False
+            except (TypeError, AttributeError):
+                pass
+        device = preferred_forward_device(model)
+        try:
+            import torch
+
+            ctx = torch.no_grad()
+        except ImportError:
+            ctx = nullcontext()
         total = len(batches) if hasattr(batches, "__len__") else None
         started = time.monotonic()
-        for index, batch in enumerate(batches, start=1):
-            _run_forward(model, _move_to_device(batch, device))
-            if total is None:
-                continue
-            step = max(1, total // 20)
-            if index == 1 or index == total or index % step == 0:
-                elapsed = time.monotonic() - started
-                per = elapsed / index
-                eta = per * (total - index)
-                print(
-                    f"[megaquant] calib {index}/{total}  {elapsed:.1f}s elapsed  "
-                    f"{per:.2f}s/step  eta {eta:.0f}s",
-                    file=sys.stderr,
-                    flush=True,
-                )
+        with ctx:
+            for index, batch in enumerate(batches, start=1):
+                _run_forward(model, _move_to_device(batch, device))
+                if total is None:
+                    continue
+                step = max(1, total // 20)
+                if index == 1 or index == total or index % step == 0:
+                    elapsed = time.monotonic() - started
+                    per = elapsed / index
+                    eta = per * (total - index)
+                    print(
+                        f"[megaquant] calib {index}/{total}  {elapsed:.1f}s elapsed  "
+                        f"{per:.2f}s/step  eta {eta:.0f}s",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
     return forward_loop
 

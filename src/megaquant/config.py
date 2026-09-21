@@ -17,6 +17,7 @@ CLI_OVERRIDE_MAP = {
     "backend": "backend",
     "num_samples": "calibration.num_samples",
     "max_seq_length": "calibration.max_seq_length",
+    "batch_size": "calibration.batch_size",
     "algorithm": "algorithm",
     "scheme": "scheme",
 }

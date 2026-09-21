@@ -47,6 +47,17 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "offload" in text
 
 
+def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
+    script = (repo_root / "scripts" / "gpu-pod.sh").read_text()
+    assert "MEGAQUANT_GPU_HEADROOM_GIB" in script
+    assert "MEGAQUANT_CPU_RESERVE_GIB" in script
+    assert "MEGAQUANT_BATCH_SIZE" in script
+    assert "OMP_NUM_THREADS" in script
+    assert "nproc" in script
+    assert "0:26GiB,cpu:40GiB" not in script
+    assert "batch_size: 4" in script
+
+
 def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:
     script = (repo_root / "docker" / "entrypoint.sh").read_text()
     assert "RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml" in script

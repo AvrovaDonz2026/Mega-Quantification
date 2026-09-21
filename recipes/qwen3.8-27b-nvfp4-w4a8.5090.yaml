@@ -1,11 +1,9 @@
-# Single-32GB-5090 profile: real NVFP4 W4A8 PTQ with cheaper max-calib.
+# Single-32GB-5090 + 64 GB RAM profile: real NVFP4 W4A8 PTQ.
 #
-# 512 × 2048 tokens + the vision tower will CPU-offload so hard that GPU SM
-# sits at ~5%. This recipe keeps max/absmax (still real PTQ) but:
-#   - 256 samples × 1024 tokens (~4× fewer tokens than the default recipe)
-#   - family load_kwargs sets language_model_only when quantize_vision is false
-# Point model.source at a *local* snapshot on fast disk when possible
-# (UPFS /model mmap is the other 5090 bottleneck).
+# Packs VRAM−2GiB of weights, keeps the rest in RAM (MemTotal−6GiB, not disk),
+# uses every CPU thread, and runs max-calib at 256×1024 with batch_size 4 so
+# CPU↔GPU offload is amortized. Skip the vision constructor so auto device_map
+# fills the GPU with the 27B LM. Use a local snapshot, not UPFS /model.
 
 name: qwen3.8-27b-nvfp4-w4a8-5090
 backend: modelopt
@@ -27,7 +25,7 @@ calibration:
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
-  batch_size: 1
+  batch_size: 4
   seed: 42
   with_images: false
 

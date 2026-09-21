@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,9 +26,14 @@ from megaquant.registry import (
 )
 from megaquant.runtime import (
     apply_env_to_recipe,
+    configure_host_parallelism,
     fast_plan_note,
     from_pretrained_env_kwargs,
+    host_pack_plan_note,
+    infer_device_map_with_cpu_pins,
+    is_auto_device_map,
     low_memory_plan_note,
+    pin_keys_to_cpu,
 )
 
 
@@ -70,6 +76,7 @@ def format_plan(plan: ResolvedPlan) -> str:
             "dataset": recipe.calibration.dataset,
             "num_samples": recipe.calibration.num_samples,
             "max_seq_length": recipe.calibration.max_seq_length,
+            "batch_size": recipe.calibration.batch_size,
         },
         "export": {"output_dir": recipe.export.output_dir},
     }
@@ -331,6 +338,14 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             extra = dict(extra_fn(recipe) or {})
             model_cls = extra.pop("model_cls", extra.pop("auto_model_class", model_cls))
             load_kwargs.update(extra)
+        prepare = getattr(family, "prepare_load", None)
+        if callable(prepare):
+            try:
+                note = prepare(recipe)
+            except Exception as exc:
+                note = f"prepare_load failed ({exc}); continuing without the family patch"
+            if note:
+                print(f"[megaquant] {note}", file=sys.stderr, flush=True)
     # Env overrides win over family.load_kwargs (device_map, CPU offload, max_memory).
     load_kwargs.update(from_pretrained_env_kwargs())
     offload = load_kwargs.get("offload_folder")
@@ -343,6 +358,7 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             import transformers
 
             model_cls = getattr(transformers, model_cls)
+        load_kwargs = _apply_device_map_pins(model_cls, recipe.model.source, load_kwargs)
         model = _from_pretrained(model_cls, recipe.model.source, load_kwargs)
     except MegaQuantError:
         raise
@@ -351,9 +367,74 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
     return model, tokenizer
 
 
+def _normalize_pin_needles(raw: Any) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    if isinstance(raw, str):
+        return (raw,) if raw else ()
+    return tuple(str(item) for item in raw if item)
+
+
+def _empty_model_for_device_map(model_cls: Any, source: str, load_kwargs: dict[str, Any]) -> Any:
+    from accelerate import init_empty_weights
+    from transformers import AutoConfig
+
+    trust = load_kwargs.get("trust_remote_code", True)
+    config = AutoConfig.from_pretrained(source, trust_remote_code=trust)
+    if load_kwargs.get("language_model_only") and hasattr(config, "language_model_only"):
+        try:
+            config.language_model_only = True
+        except (TypeError, AttributeError):
+            pass
+    with init_empty_weights():
+        try:
+            return model_cls.from_config(config, trust_remote_code=trust)
+        except TypeError:
+            return model_cls.from_config(config)
+
+
+def _apply_device_map_pins(
+    model_cls: Any, source: str, load_kwargs: dict[str, Any]
+) -> dict[str, Any]:
+    """Spend GPU budget on the LM by pinning vision/MTP off the accelerator."""
+    needles = _normalize_pin_needles(load_kwargs.pop("pin_to_cpu", None))
+    if not needles:
+        return load_kwargs
+    device_map = load_kwargs.get("device_map", "auto")
+    if isinstance(device_map, dict):
+        load_kwargs["device_map"] = pin_keys_to_cpu(device_map, needles)
+        return load_kwargs
+    if not is_auto_device_map(device_map):
+        return load_kwargs
+    try:
+        empty = _empty_model_for_device_map(model_cls, source, load_kwargs)
+        pinned = infer_device_map_with_cpu_pins(
+            empty,
+            max_memory=load_kwargs.get("max_memory"),
+            needles=needles,
+            dtype=load_kwargs.get("dtype") or load_kwargs.get("torch_dtype"),
+        )
+    except Exception as exc:
+        print(
+            f"[megaquant] pinned device_map failed ({exc}); "
+            f"falling back to device_map={device_map!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return load_kwargs
+    if pinned:
+        load_kwargs["device_map"] = pinned
+        print(
+            f"[megaquant] device_map pinned {needles} to cpu ({len(pinned)} entries)",
+            file=sys.stderr,
+            flush=True,
+        )
+    return load_kwargs
+
+
 def _from_pretrained(model_cls: Any, source: str, load_kwargs: dict[str, Any]) -> Any:
     """``from_pretrained`` with a fallback if ``language_model_only`` is unknown."""
-    dropping = ("language_model_only",)
+    dropping = ("language_model_only", "offload_buffers", "offload_state_dict")
     kwargs = dict(load_kwargs)
     while True:
         try:
@@ -427,6 +508,9 @@ class QuantPipeline:
         low_mem_note = low_memory_plan_note()
         if low_mem_note:
             notes.append(low_mem_note)
+        pack_note = host_pack_plan_note()
+        if pack_note:
+            notes.append(pack_note)
         fast_note = fast_plan_note()
         if fast_note:
             notes.append(fast_note)
@@ -463,6 +547,17 @@ class QuantPipeline:
 
         ignore = _unique(_family_ignore(family_name, recipe, notes) + list(recipe.extra_ignore))
         backend_name = _pick_backend(recipe, notes)
+        try:
+            family_obj = _instantiate(get_family(family_name))
+        except FamilyError:
+            family_obj = None
+        if family_obj is not None:
+            extra_notes = getattr(family_obj, "plan_notes", None)
+            if callable(extra_notes):
+                for note in extra_notes(recipe) or []:
+                    text = str(note).strip()
+                    if text and text not in notes:
+                        notes.append(text)
         return ResolvedPlan(
             recipe=recipe,
             backend_name=backend_name,
@@ -481,6 +576,8 @@ class QuantPipeline:
             print(format_plan(plan))
             return plan
 
+        threads = configure_host_parallelism()
+        print(f"[megaquant] host threads={threads}", file=sys.stderr, flush=True)
         backend = _require_backend(plan)
         model, tokenizer = _load_model_and_tokenizer(self.recipe, plan.family_name)
         calib_iter = build_calibration_iter(self.recipe, tokenizer)
