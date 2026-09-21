@@ -20,6 +20,8 @@ except ValueError:
     sys.exit(0)
 if major < 570:
     print("  [!] driver < 570: RTX 5090 / CUDA 12.8 typically need 570+")
+elif major < 580:
+    print("  [!] driver < 580: megaquant:sglang (sglang 0.5.20 / torch cu130) needs 580+; PTQ cu128 is OK on 570")
 PY
 else
   bad "nvidia-smi missing — install NVIDIA driver 570+ (Blackwell / 5090)"

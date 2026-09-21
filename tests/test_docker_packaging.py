@@ -151,6 +151,7 @@ def test_dockerfile_sglang_does_not_copy_weights(repo_root: Path) -> None:
     assert "COPY src ./src" in dockerfile
     assert "requirements-sglang.txt" in dockerfile
     assert "sglang" in dockerfile.lower()
+    assert "cu130" in dockerfile.lower() or "580" in dockerfile
     for line in dockerfile.splitlines():
         if line.strip().startswith("COPY "):
             lowered = line.lower()
@@ -208,6 +209,18 @@ def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:
     assert "CUDAHOSTCXX" in script
     assert "cc1plus" in script
     assert "MEGAQUANT_SKIP_GPU_REPORT" in script
+
+
+def test_sglang_requirements_pin_engine(repo_root: Path) -> None:
+    req = (repo_root / "docker" / "requirements-sglang.txt").read_text()
+    assert "sglang==0.5.20" in req
+    assert "580" in req or "CUDA 13" in req
+
+
+def test_compose_omp_threads_not_empty(repo_root: Path) -> None:
+    text = (repo_root / "docker-compose.yml").read_text()
+    assert "OMP_NUM_THREADS: ${OMP_NUM_THREADS:-16}" in text
+    assert "MKL_NUM_THREADS: ${MKL_NUM_THREADS:-16}" in text
 
 
 def test_serve_and_eval_scripts_are_executable_helpers(repo_root: Path) -> None:

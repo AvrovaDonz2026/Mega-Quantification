@@ -3,6 +3,11 @@
 # SGLang serve + GPQA eval image. Separate from the ModelOpt PTQ image so
 # SGLang can pin its own torch without breaking nvidia-modelopt.
 # Weights are NOT baked in; mount outputs/ and data/.
+#
+# sglang==0.5.20 pulls torch 2.13+cu130. That needs host driver 580+
+# (CUDA 13). Driver 570 / CUDA 12.8 can run megaquant:nvfp4 (cu128) but
+# not this serve image. Do not add `pip install --pre` without pinning a
+# cu128 torch — --pre is how cu130 landed on a 12.8 box.
 
 ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
 FROM ${BASE_IMAGE}
