@@ -33,7 +33,6 @@ __all__ = [
     "Qwen35Family",
     "Qwen3Family",
     "glob_to_ignore",
-    "_register",
 ]
 
 

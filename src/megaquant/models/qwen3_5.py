@@ -1,18 +1,37 @@
-"""Qwen3.5 / 3.6 / 3.8 dense VLMs (Qwen3_5ForConditionalGeneration).
+"""Qwen3.5 / 3.6 / 3.8 hybrid VLMs (Gated DeltaNet + Gated Attention + FFN).
 
-Qwen3.8-27B uses ``model_type: qwen3_5``. Hybrid layout:
+Production target: ``Qwen/Qwen3.8-27B``
 
-    16 × (3 × (Gated DeltaNet → FFN) → 1 × (Gated Attention → FFN))
+- Hugging Face id: ``Qwen/Qwen3.8-27B``
+- ``architectures``: ``Qwen3_5ForConditionalGeneration``
+- ``model_type``: ``qwen3_5`` (``text_config.model_type``: ``qwen3_5_text``)
+- 27B dense VLM, hidden 5120, 64 layers, FFN intermediate 17408
+- Layout: 16 × (3 × (Gated DeltaNet → FFN) → 1 × (Gated Attention → FFN))
+- Vision encoder + MTP present. Native context 262144.
 
-Keep vision, MTP, embeddings, and GDN extras (conv1d / in_proj_a / in_proj_b)
-in BF16 unless the recipe opts in.
+Language-model W4A8 keeps vision, MTP, embeddings, and GDN extras
+(``linear_attn.conv1d`` / ``in_proj_a`` / ``in_proj_b``) in BF16 by default.
+``lm_head`` is **not** ignored (NVIDIA mixed NVFP4 quantizes it).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from megaquant.models.base import BaseFamily, get_field, glob_to_ignore, recipe_model
+from megaquant.models.base import BaseFamily, glob_to_ignore, recipe_flag
+
+__all__ = ["Qwen35Family"]
+
+QWEN35_ALWAYS_IGNORE: tuple[str, ...] = (
+    "*embed_tokens*",
+    "*embed_positions*",
+    "*linear_attn.conv1d*",
+    "*linear_attn.in_proj_a*",
+    "*linear_attn.in_proj_b*",
+)
+
+QWEN35_VISION_IGNORE: tuple[str, ...] = ("*visual*", "*vision*")
+QWEN35_MTP_IGNORE: tuple[str, ...] = ("*mtp*",)
 
 
 class Qwen35Family(BaseFamily):
@@ -21,31 +40,26 @@ class Qwen35Family(BaseFamily):
     architectures = (
         "Qwen3_5ForConditionalGeneration",
         "Qwen3_5ForCausalLM",
+        "Qwen3_5MoeForConditionalGeneration",
+        "Qwen3_5MoeForCausalLM",
     )
 
     def default_ignore(self, recipe: Any) -> list[str]:
-        ignore = glob_to_ignore(
-            "*visual*",
-            "*vision*",
-            "*embed_tokens*",
-            "*embed_positions*",
-            "*linear_attn.conv1d*",
-            "*linear_attn.in_proj_a*",
-            "*linear_attn.in_proj_b*",
-        )
-        model = recipe_model(recipe)
-        if get_field(model, "quantize_vision", False):
-            ignore = [p for p in ignore if "visual" not in p and "vision" not in p]
-        if not get_field(model, "quantize_mtp", False):
-            ignore.append("*mtp*")
-        return ignore
+        patterns: list[str] = list(QWEN35_ALWAYS_IGNORE)
+        if not recipe_flag(recipe, "model", "quantize_vision", default=False):
+            patterns.extend(QWEN35_VISION_IGNORE)
+        if not recipe_flag(recipe, "model", "quantize_mtp", default=False):
+            patterns.extend(QWEN35_MTP_IGNORE)
+        # Intentionally no *mlp* / *lm_head* — mixed NVFP4 targets those GEMMs.
+        return glob_to_ignore(patterns)
 
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
-        model = recipe_model(recipe)
-        dtype = get_field(model, "dtype", "bfloat16")
-        return {
-            "trust_remote_code": get_field(model, "trust_remote_code", True),
-            "device_map": get_field(model, "device_map", "auto"),
-            "torch_dtype": dtype,
-            "model_cls": "AutoModelForImageTextToText",
-        }
+        kwargs = super().load_kwargs(recipe)
+        kwargs["trust_remote_code"] = True
+        kwargs["torch_dtype"] = "bfloat16"
+        # ConditionalGeneration VLM, not AutoModelForCausalLM.
+        kwargs.setdefault("model_cls", "AutoModelForImageTextToText")
+        return kwargs
+
+
+Qwen35Family().register()
