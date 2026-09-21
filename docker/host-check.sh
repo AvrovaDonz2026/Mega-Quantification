@@ -27,6 +27,11 @@ else
   bad "nvidia-smi missing — install NVIDIA driver 570+ (Blackwell / 5090)"
 fi
 
+# Suggestion only (no Docker/Python nvcc probe). FlashInfer SM 12.0 JIT is
+# unblocked when the *serve image* `nvcc --version` is 12.9+ and the host
+# driver is 580+. Default megaquant:sglang is CUDA 12.8.1-devel.
+echo "  [i] FlashInfer SM 12.0 / DeepGEMM JIT: unblocked if serve-image nvcc --version is 12.9+ and host driver is 580+ (optional: SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang; confirm tag on NGC). Default image is CUDA 12.8.1 — use recipes/eval-gpqa-diamond.5090.yaml (triton) until rebuilt."
+
 if command -v docker >/dev/null 2>&1; then
   ok "docker: $(docker --version)"
 else

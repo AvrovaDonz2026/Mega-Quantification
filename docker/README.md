@@ -109,6 +109,26 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml build
 docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquant plan
 ```
 
+## RTX 5090 / CUDA 12.8 serve image
+
+默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
+
+这台 5090 上先用 Triton 注意力（不要改 Compose 里的默认 `EVAL_RECIPE`）：
+
+```bash
+EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang
+```
+
+默认 `EVAL_RECIPE` 仍是 `recipes/eval-gpqa-diamond.yaml`（flashinfer）。
+
+长期、磁盘够了再可选把 serve 镜像重建到 CUDA 12.9+ devel（FlashInfer JIT 才能编 SM 12.0）。候选 pin：`nvidia/cuda:12.9.1-devel-ubuntu24.04`（请在 NGC / Docker Hub 核对；CUDA 13.0 devel 也可以）。新镜像大约 28GB，磁盘紧张时不要现在重建。
+
+```bash
+SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
+```
+
+12.9+ 重建后把 `SGLANG_ENABLE_JIT_DEEPGEMM=1` 写进 `.env`，就可以走默认 flashinfer 配方。不要在 Python 里探测 nvcc。
+
 ## 常用覆盖
 
 ```bash

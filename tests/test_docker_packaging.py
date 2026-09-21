@@ -64,6 +64,10 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     serve_build = services["serve-sglang"].get("build") or {}
     if isinstance(serve_build, dict):
         assert serve_build.get("dockerfile") == "Dockerfile.sglang"
+        serve_args = serve_build.get("args") or {}
+        assert serve_args.get("BASE_IMAGE") == (
+            "${SGLANG_BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}"
+        )
     eval_svc = services["eval-gpqa"]
     assert eval_svc.get("gpus") in (None, False, [])
     eval_deploy = eval_svc.get("deploy") or {}
@@ -246,3 +250,47 @@ def test_serve_and_eval_scripts_are_executable_helpers(repo_root: Path) -> None:
     assert "eval-gpqa-diamond.yaml" in eval_sh
     wrapper = (repo_root / "scripts" / "serve_vllm.sh").read_text()
     assert "serve_sglang.sh" in wrapper
+
+
+def test_sglang_default_base_is_cuda_128_optional_129_rebuild(repo_root: Path) -> None:
+    """Default megaquant:sglang stays CUDA 12.8.1; 12.9 rebuild is documented."""
+    dockerfile = (repo_root / "Dockerfile.sglang").read_text()
+    compose_text = (repo_root / "docker-compose.yml").read_text()
+    readme = (repo_root / "docker" / "README.md").read_text()
+    env_example = (repo_root / ".env.example").read_text()
+    host_check = (repo_root / "docker" / "host-check.sh").read_text()
+    data = yaml.safe_load(compose_text)
+    services = data["services"]
+
+    assert "ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04" in dockerfile
+    assert "${SGLANG_BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}" in compose_text
+    assert "SGLANG_ENABLE_JIT_DEEPGEMM: ${SGLANG_ENABLE_JIT_DEEPGEMM:-0}" in compose_text
+    assert "${EVAL_RECIPE:-recipes/eval-gpqa-diamond.yaml}" in compose_text
+
+    serve_cmd = " ".join(str(x) for x in (services["serve-sglang"].get("command") or []))
+    eval_cmd = " ".join(str(x) for x in (services["eval-gpqa"].get("command") or []))
+    assert "eval-gpqa-diamond.yaml" in serve_cmd
+    assert "eval-gpqa-diamond.5090.yaml" not in serve_cmd
+    assert "eval-gpqa-diamond.5090.yaml" not in eval_cmd
+
+    # Two-image invariant: PTQ vs SGLang.
+    assert "megaquant:nvfp4" in str(services["megaquant"].get("image"))
+    assert "megaquant:sglang" in str(services["serve-sglang"].get("image"))
+    assert (services["serve-sglang"].get("build") or {}).get("dockerfile") == "Dockerfile.sglang"
+    assert (services["quantize"].get("build") or {}).get("dockerfile") in (None, "Dockerfile")
+    ptq_dockerfile = (repo_root / "Dockerfile").read_text()
+    assert "nvidia/cuda:12.8.1-devel-ubuntu24.04" in ptq_dockerfile
+
+    documented = f"{dockerfile}\n{compose_text}\n{readme}\n{env_example}"
+    assert "nvidia/cuda:12.9.1-devel-ubuntu24.04" in documented
+    assert "SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04" in documented
+    assert "12.9" in readme
+    assert "eval-gpqa-diamond.5090.yaml" in readme
+    assert "SGLANG_BASE_IMAGE" in env_example
+    assert "SGLANG_ENABLE_JIT_DEEPGEMM" in env_example
+    assert "12.9" in host_check
+    assert "FlashInfer" in host_check
+    assert "580" in host_check
+    assert "nvcc --version" in host_check
+    # Operator override, not a runtime probe.
+    assert "do not probe nvcc" in dockerfile.lower() or "Do not probe nvcc" in dockerfile

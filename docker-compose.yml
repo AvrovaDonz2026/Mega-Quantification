@@ -83,6 +83,9 @@ x-sglang: &sglang
     context: .
     dockerfile: Dockerfile.sglang
     args:
+      # Default 12.8.1-devel keeps existing 5090 images. Optional SM 12.0 JIT:
+      #   SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
+      # Confirm 12.9.1 (or 13.0-devel) on NGC. ~28G+ free for a new sglang image.
       BASE_IMAGE: ${SGLANG_BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
   image: ${SGLANG_IMAGE:-megaquant:sglang}
   pull_policy: missing
@@ -92,7 +95,9 @@ x-sglang: &sglang
     <<: *common-env
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
-    # sglang 0.5.20 deep_gemm JIT wants nvcc 12.9+; disable on CUDA 12.8 devel.
+    # sglang 0.5.20 deep_gemm.set_pdl asserts nvcc>=12.9. Default 0 on CUDA 12.8
+    # devel. After a 12.9+ SGLANG_BASE_IMAGE rebuild, set this to 1 (or unset
+    # only if you also drop the :-0 default). Do not probe nvcc in Python.
     SGLANG_ENABLE_JIT_DEEPGEMM: ${SGLANG_ENABLE_JIT_DEEPGEMM:-0}
   volumes: *common-volumes
   working_dir: /opt/megaquant

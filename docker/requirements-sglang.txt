@@ -1,6 +1,8 @@
 # Serve / eval image only. Do not mix this resolver with the ModelOpt PTQ image.
 # SGLang 0.5.20 pulls torch==2.13.0 (CUDA 13). Host driver must be 580+.
-# Pin the engine so `compose build` is repeatable.
+# Image nvcc is still 12.8.1 by default; FlashInfer SM 12.0 JIT needs an
+# optional 12.9+ devel rebuild (SGLANG_BASE_IMAGE). Pin the engine so
+# `compose build` is repeatable.
 sglang==0.5.20
 pydantic>=2.6.0
 pyyaml>=6.0.0

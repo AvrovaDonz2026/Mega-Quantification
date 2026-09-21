@@ -4,6 +4,16 @@
 # SGLang can pin its own torch without breaking nvidia-modelopt.
 # Weights are NOT baked in; mount outputs/ and data/.
 #
+# Default BASE_IMAGE stays CUDA 12.8.1-devel so existing 5090 images remain
+# the default. FlashInfer + DeepGEMM JIT cannot target SM 12.0 until nvcc
+# is 12.9+ ("SM 12.x requires CUDA >= 12.9"; deep_gemm.set_pdl asserts).
+# Optional later rebuild (confirm the tag on NGC / Docker Hub; ~28G+ free
+# for a second sglang image — skip on a tight disk):
+#   SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
+# CUDA 13.0 devel is also fine (confirm the exact 13.0-*-devel-ubuntu24.04
+# tag on NGC). After a 12.9+ rebuild, set SGLANG_ENABLE_JIT_DEEPGEMM=1.
+# On 12.8 keep the compose default 0. Do not probe nvcc at runtime.
+#
 # sglang==0.5.20 pulls torch 2.13+cu130. That needs host driver 580+
 # (CUDA 13). Driver 570 / CUDA 12.8 can run megaquant:nvfp4 (cu128) but
 # not this serve image. Do not add `pip install --pre` without pinning a
