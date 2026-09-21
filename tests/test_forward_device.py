@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from megaquant.backends.base import preferred_forward_device
+from megaquant.backends.base import forward_loop_from_iter, preferred_forward_device
 
 
 class _Dev:
@@ -62,3 +62,22 @@ def test_preferred_device_cpu_fallback() -> None:
     assert device is not None
     assert getattr(device, "type", "cpu") == "cpu"
     assert preferred_forward_device(model) is None
+
+
+def test_forward_loop_runs_every_batch_and_prefetches() -> None:
+    seen: list[int] = []
+
+    class _Model:
+        def eval(self) -> None:
+            return None
+
+        def __call__(self, input_ids=None, **kwargs):  # noqa: ANN001
+            seen.append(int(input_ids) if not hasattr(input_ids, "shape") else 1)
+            return None
+
+        def parameters(self):
+            return iter([_Param("cpu")])
+
+    loop = forward_loop_from_iter([{"input_ids": 1}, {"input_ids": 2}, {"input_ids": 3}])
+    loop(_Model())
+    assert seen == [1, 2, 3]

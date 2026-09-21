@@ -4,9 +4,19 @@ End-to-end notes for quantizing **Qwen/Qwen3.8-27B** (BF16) with Mega-Quantifica
 
 中文要点：这是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`）。
 默认量化语言模型线性层；视觉、MTP、embedding、GDN 的 `conv1d` / `in_proj_a` /
-`in_proj_b` 留 BF16。均匀 W4A8 用 `max` + 512 条校准；要对齐 NVIDIA 公开
-`nvidia/Qwen3.8-27B-NVFP4` 则用混合配方 `local_hessian` + 2048 条。NVFP4 推理
-需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做。
+`in_proj_b` 留 BF16。
+
+NVIDIA 公开 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
+是 **混合 NVFP4/FP8**：MLP + `lm_head` 为 **NVFP4 group_size 16**，self-attn +
+linear-attn 为 **FP8**。它 **不是** 均匀 W4A8，也 **不是** NVFP4 block 32。
+模型卡：Local-Hessian、2048 条、`Nemotron-Post-Training-Dataset-v3`、
+`nvidia-modelopt` v0.48.0。
+
+本仓库的均匀 W4A8 仍是 block 32（`W4A8_NVFP4_FP8`）。均匀 W4A4 是
+`NVFP4_DEFAULT_CFG`（权重和激活均为 NVFP4 block 16）。均匀配方用 `max` + 512
+条；对齐 NVIDIA 公开混合权重用 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`
+（`local_hessian` + 2048 + Nemotron v3）。NVFP4 推理需要 Blackwell；校准可以在
+Hopper 上用多卡 / offload 做。
 
 ## Model facts
 
@@ -26,22 +36,27 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 
 ## Recipes
 
-| File | Scheme | Algorithm | Samples | Output |
+| File | Scheme | Algorithm | Calib | Output |
 |---|---|---|---|---|
 | `recipes/qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8` |
-| `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | 256 × 1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
-| `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | 2048 | `outputs/Qwen3.8-27B-NVFP4-mixed` |
+| `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml` | `nvfp4_w4a8` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A4` |
+| `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
+| `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
+| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `local_hessian` | ultrachat 2048 (anonymous Hub) | same |
 
-All three set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
-`model.quantize_vision: false`, `model.quantize_mtp: false`, and
-`calibration.dataset: nvidia/Nemotron-Post-Training-Dataset-v2` (gated; set
-`HF_TOKEN`). Anonymous Hub access: `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml`
-(`HuggingFaceH4/ultrachat_200k`).
+All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
+`model.quantize_vision: false`, and `model.quantize_mtp: false`.
 
-NVIDIA's model card calibrated on **Nemotron-Post-Training-Dataset-v3**. This
-repo follows the architecture default (**v2**). Swap `calibration.dataset` if
-you are reproducing the public mixed checkpoint bit-for-bit.
+Uniform quality recipes (`w4a8.yaml`, `w4a4.yaml`) use
+`nvidia/Nemotron-Post-Training-Dataset-v2` (gated; set `HF_TOKEN`). Mixed
+**quality** (`mixed.yaml`) follows the NVIDIA card and uses
+**`nvidia/Nemotron-Post-Training-Dataset-v3`**. Anonymous Hub access: the
+`*.public-calib.yaml` files and all `*.5090.yaml` files use
+`HuggingFaceH4/ultrachat_200k`.
 
 ## Ignore list (why these stay BF16)
 
@@ -49,25 +64,33 @@ you are reproducing the public mixed checkpoint bit-for-bit.
 
 | Pattern | Why |
 |---|---|
-| `*visual*`, `*vision*` | Vision encoder is not the W4A8 language-model target. NVIDIA mixed PTQ also left it in BF16. Set `model.quantize_vision: true` to include it. |
+| `*visual*`, `*vision*` | Vision encoder is not the language-model PTQ target. NVIDIA mixed PTQ also left it in BF16. Set `model.quantize_vision: true` to include it. |
 | `*embed_tokens*`, `*embed_positions*` | Embedding tables are poor NVFP4 candidates; keep BF16. |
 | `*linear_attn.conv1d*` | Gated DeltaNet depthwise conv — not a standard Linear GEMM; ModelOpt / compressed-tensors NVFP4 paths do not treat it as `q/k/v/o` or `gate/up/down`. |
 | `*linear_attn.in_proj_a*`, `*linear_attn.in_proj_b*` | GDN extras (not `in_proj_qkv` / `in_proj_z` / `out_proj`). Mixed FP8 attention still quantizes the real GDN projections; these two stay BF16. |
 | `*mtp*` | Multi-Token Prediction heads. Off unless `model.quantize_mtp: true`. |
 | **not** `*mlp*` | MLP `gate/up/down_proj` are the main NVFP4 targets. |
-| **not** `*lm_head*` | NVIDIA mixed NVFP4 quantizes `lm_head`. Uniform W4A8 does too. Add it in `extra_ignore` only if you want BF16 logits. |
+| **not** `*lm_head*` | NVIDIA mixed NVFP4 quantizes `lm_head`. Uniform W4A8 / W4A4 do too. Add it in `extra_ignore` only if you want BF16 logits. |
 
 Norms are not `Linear` and stay unquantized automatically.
 
-## Mixed vs uniform W4A8
+## Mixed vs uniform W4A8 vs uniform W4A4
 
-**Uniform `nvfp4_w4a8`** (this repo's default request): every targeted language
-linear gets NVFP4 weights (block size **32**) and FP8 E4M3 activations.
-ModelOpt object: `mtq.W4A8_NVFP4_FP8_CFG` / qformat `w4a8_nvfp4_fp8`.
+These are three different encodings. The public NVIDIA checkpoint is only the
+mixed column.
 
-**Mixed `nvfp4_mixed`**: NVFP4 on `*mlp*` + `*lm_head*`, FP8 on `*self_attn*` +
-the GDN GEMMs (`in_proj_qkv`, `in_proj_z`, `out_proj`). This matches
-`nvidia/Qwen3.8-27B-NVFP4`. Accuracy on NVIDIA's card (vLLM, 262k context):
+| | Uniform W4A8 | Uniform W4A4 | Mixed (NVIDIA public) |
+|---|---|---|---|
+| Scheme | `nvfp4_w4a8` | `nvfp4_w4a4` | `nvfp4_mixed` |
+| ModelOpt | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | custom: `NVFP4_DEFAULT_CFG` on `*mlp*` + `*lm_head*`, FP8 on `*self_attn*` + `*linear_attn*` |
+| NVFP4 group / block | **32** (`nvfp4_bs32`) | **16** | **16** on MLP + `lm_head` (**not** 32) |
+| Weights / activations | NVFP4 weights + FP8 E4M3 activations on every targeted LM linear | NVFP4 weights **and** activations (block 16) on every targeted LM linear | NVFP4 (group_size 16) on MLP + `lm_head`; **FP8** on self-attn + linear-attn |
+| Public HF id | — | — | [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) |
+
+`nvidia/Qwen3.8-27B-NVFP4` is mixed NVFP4/FP8. It is **not** uniform W4A8 and
+**not** NVFP4 block 32.
+
+Accuracy on NVIDIA's card (vLLM, 262k context, mixed checkpoint):
 
 | Benchmark | BF16 | NVFP4 mixed |
 |---|---|---|
@@ -78,21 +101,20 @@ the GDN GEMMs (`in_proj_qkv`, `in_proj_z`, `out_proj`). This matches
 | SciCode | 47.93 | 48.41 |
 | IFBench | 80.07 | 78.93 |
 
-**W4A4** (`nvfp4_w4a4`) uses NVFP4 activations as well, with block size **16**.
-It is only a comparison recipe.
+## Calibration
 
-## Calibration: 512 vs 2048
+| | Uniform W4A8 | Uniform W4A4 | Mixed (NVIDIA quality) | 5090 packed (`*.5090.yaml`) |
+|---|---|---|---|---|
+| Recipe | `qwen3.8-27b-nvfp4-w4a8.yaml` | `qwen3.8-27b-nvfp4-w4a4.yaml` | `qwen3.8-27b-nvfp4-mixed.yaml` | `*.5090.yaml` for `w4a8` / `w4a4` / `mixed` |
+| Algorithm | `max` | `max` | `local_hessian` (`fp8_scale_sweep: true` in ModelOpt) | `max` |
+| Samples | 512 | 512 | 2048 | 256 × 1024, **batch 4** |
+| Dataset | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v3` | `HuggingFaceH4/ultrachat_200k` |
+| Images | `with_images: false` (text-only; vision is ignored) | same | same | same |
 
-| | Uniform W4A8 | Mixed (NVIDIA intent) |
-|---|---|---|
-| Algorithm | `max` (minmax / absmax scales) | `local_hessian` (`fp8_scale_sweep: true` in ModelOpt) |
-| Samples | 512 | 2048 |
-| Seq length | 2048 | 2048 |
-| Images | `with_images: false` (text-only; vision is ignored) | same |
-
-`max` is cheaper and is the W4A8 default. Local-Hessian is the quality knob
-NVIDIA used for mixed NVFP4; it is slower and more memory hungry. You can
-override without editing YAML:
+`max` is cheaper and is the default for uniform W4A8, uniform W4A4, and the
+5090 mixed profile. Local-Hessian is the quality knob NVIDIA used for mixed
+NVFP4; it is slower and more memory hungry. You can override without editing
+YAML:
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
@@ -106,9 +128,12 @@ pip install -e '.[hf,modelopt]'
 
 # No GPU, no 27B download:
 python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
+python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
+python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 
 # PTQ (Hopper or better, multi-GPU / CPU offload for 27B BF16):
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 ```
 
@@ -124,20 +149,46 @@ heavy CPU offload. NVFP4 **inference** still needs Blackwell SM100+.
 
 ## Single 5090 + 64 GB RAM
 
-The 27B BF16 does not fit in 32 GB. Mega-Quantification now packs the box
+The 27B BF16 does not fit in 32 GB. Mega-Quantification packs the box
 instead of leaving headroom idle:
 
 | Resource | Packing |
 |---|---|
-| GPU | Weights fill **VRAM − 2 GiB** (`MEGAQUANT_GPU_HEADROOM_GIB`, was 6 GiB). Live 5090 calib was only using ~24.5 / 32 GB. |
+| GPU | Weights fill **VRAM − 1 GiB** (`MEGAQUANT_GPU_HEADROOM_GIB`). |
 | RAM | Weights that do not fit on GPU stay in **MemTotal − 6 GiB** (~56 GiB on a 64 GB pod). Disk `offload_folder` is spill-only. |
 | CPU | `nproc` threads via `OMP_NUM_THREADS` / `torch.set_num_threads`. Calib tensors are `pin_memory`'d. |
-| Calib | 5090 recipe uses `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
+| PCIe | Idle 5090 reports **gen1 x16**. PTQ runs a pinned H2D/D2H warmup so the link trains to **gen5 x16** (~50 GiB/s DMA). CPU-resident weights are pinned; accelerate copies use `non_blocking=True`; calib prefetches the next batch on a CUDA copy stream. `CUDA_DEVICE_MAX_CONNECTIONS=16`. |
+| Calib | 5090 recipes use `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
+
+Compshare / k8s GPU pod (already a container). Scheme argument selects the
+5090-packed recipe (`w4a8` default):
 
 ```bash
-# Compshare / k8s GPU pod (already a container):
 bash scripts/gpu-pod.sh plan
 bash scripts/gpu-pod.sh quantize
+bash scripts/gpu-pod.sh plan w4a4
+bash scripts/gpu-pod.sh quantize w4a4
+bash scripts/gpu-pod.sh plan mixed
+bash scripts/gpu-pod.sh quantize mixed
+```
+
+Usage is `scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`. These commands
+start a job; they do not imply that W4A4 or mixed PTQ has already finished on
+the pod.
+
+Compose on a machine that has Docker:
+
+```bash
+docker compose --profile gpu run --rm quantize
+docker compose --profile gpu run --rm w4a4
+docker compose --profile gpu run --rm mixed
+```
+
+The `mixed` Compose service uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`
+(max, ultrachat 256×1024, batch 4). NVIDIA quality Local-Hessian:
+
+```bash
+RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
 Install GDN fused kernels for the next run (`kernels` + `flash-linear-attention`);
@@ -173,7 +224,8 @@ vllm serve outputs/Qwen3.8-27B-NVFP4-W4A8 \
     --enable-chunked-prefill
 ```
 
-Docker: `vllm/vllm-openai:nightly`.
+Docker: `vllm/vllm-openai:nightly`. NVIDIA's mixed card omits
+`--quantization modelopt` and serves `nvidia/Qwen3.8-27B-NVFP4` directly.
 
 ### SGLang
 
@@ -222,5 +274,8 @@ vLLM support for that combo is limited.
   (already set) so resolve() skips Hub lookup.
 - Do not pass vanilla `qwen3` as `family` for this checkpoint — GDN extras
   would not be ignored.
-- Block size 16 vs 32: W4A8 is 32; W4A4 is 16. Wrong size will not match
-  ModelOpt `w4a8_nvfp4_fp8`.
+- Block size 16 vs 32: uniform W4A8 is NVFP4 **32** (`W4A8_NVFP4_FP8`).
+  Uniform W4A4 is NVFP4 **16** (`NVFP4_DEFAULT_CFG`, weights and activations).
+  NVIDIA mixed NVFP4 layers (MLP + `lm_head`) are also **group_size 16**, with
+  FP8 on self-attn + linear-attn. Using block 32 / `w4a8_nvfp4_fp8` for mixed
+  will not match `nvidia/Qwen3.8-27B-NVFP4`.

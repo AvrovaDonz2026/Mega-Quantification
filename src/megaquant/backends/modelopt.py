@@ -27,16 +27,20 @@ Our scheme             ModelOpt object                   qformat
 
 ``nvfp4_mixed`` expression
 --------------------------
-Deepcopy ``W4A8_NVFP4_FP8_CFG`` (fallback: ``NVFP4_DEFAULT_CFG``) then append
-later ``quant_cfg`` entries so they override earlier wildcards:
+Deepcopy ``NVFP4_DEFAULT_CFG`` (fallback: ``W4A8_NVFP4_FP8_CFG``) then append
+later ``quant_cfg`` entries so they override earlier wildcards. Always force
+NVIDIA ``nvidia/Qwen3.8-27B-NVFP4`` mixed precision — **never** leave W4A8
+block-size 32 on MLP even if the loaded preset was ``W4A8_NVFP4_FP8_CFG``:
 
 1. FP8 on ``*self_attn*weight_quantizer`` / ``*self_attn*input_quantizer``
 2. FP8 on ``*linear_attn*weight_quantizer`` / ``*linear_attn*input_quantizer``
-3. NVFP4 W4A8 (or the base NVFP4) on ``*mlp*`` weight/input quantizers
-4. Re-enable ``*lm_head*`` with the same NVFP4 W4A8 (or NVFP4) attrs —
+3. NVFP4 block-size **16** (``_NVFP4_BS16``) on ``*mlp*`` weight/input
+4. Re-enable ``*lm_head*`` with the same NVFP4 bs16 weight+input —
    ModelOpt presets disable ``*lm_head*`` by default
 5. Disable vision / mtp / conv1d / in_proj_a / in_proj_b / embed unless the
    recipe opts in via ``quantize_vision`` / ``quantize_mtp``
+
+Hessian ``block_size`` is **16** (matches NVFP4 gs16), not 32.
 
 List-style ``quant_cfg`` (ModelOpt YAML presets) and legacy dict-style
 ``quant_cfg`` (v0.48-era inline dicts) are both mutated after ``deepcopy``.
@@ -116,7 +120,7 @@ _SCHEME_CFG_NAME: dict[str, str] = {
     "nvfp4_w4a4": "NVFP4_DEFAULT_CFG",
     "nvfp4_w4a16": "W4A16_NVFP4_CFG",
     "fp8_w8a8": "FP8_DEFAULT_CFG",
-    "nvfp4_mixed": "W4A8_NVFP4_FP8_CFG+mixed_overrides",
+    "nvfp4_mixed": "NVFP4_DEFAULT_CFG+mixed_overrides",
 }
 
 _PRESET_ATTR: dict[str, tuple[str, ...]] = {
@@ -124,7 +128,7 @@ _PRESET_ATTR: dict[str, tuple[str, ...]] = {
     "nvfp4_w4a4": ("NVFP4_DEFAULT_CFG",),
     "nvfp4_w4a16": ("W4A16_NVFP4_CFG", "NVFP4_MLP_WEIGHT_ONLY_CFG"),
     "fp8_w8a8": ("FP8_DEFAULT_CFG",),
-    "nvfp4_mixed": ("W4A8_NVFP4_FP8_CFG", "NVFP4_DEFAULT_CFG"),
+    "nvfp4_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
 }
 
 # ModelOpt numeric fallbacks (v0.48 tuple form). YAML presets use "e2m1"/"e4m3".
@@ -167,7 +171,7 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         }
 
     group_size: int | None
-    if canonical in {"nvfp4_w4a8", "nvfp4_mixed"}:
+    if canonical == "nvfp4_w4a8":
         group_size = 32
     elif canonical == "fp8_w8a8":
         group_size = None
@@ -226,14 +230,14 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         summary.update(
             {
                 "weight_format": "nvfp4+fp8",
-                "activation_format": "fp8",
+                "activation_format": "nvfp4+fp8",
                 "mlp_weight_format": "nvfp4",
-                "mlp_activation_format": "fp8",
-                "mlp_group_size": 32,
+                "mlp_activation_format": "nvfp4",
+                "mlp_group_size": 16,
                 "attn_weight_format": "fp8",
                 "attn_activation_format": "fp8",
                 "targets": {
-                    "nvfp4_w4a8": list(_MIXED_NVFP4_PATTERNS),
+                    "nvfp4": list(_MIXED_NVFP4_PATTERNS),
                     "fp8": list(_MIXED_ATTN_PATTERNS),
                     "disabled": [
                         "*visual*",
@@ -246,10 +250,13 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
                     ],
                 },
                 "notes": (
-                    "Deepcopy W4A8_NVFP4_FP8_CFG (fallback NVFP4_DEFAULT_CFG). "
-                    "NVFP4 W4A8 (bs32) on *mlp* and *lm_head*; FP8 on *self_attn* "
-                    "and *linear_attn*; later disable vision/mtp/conv1d/in_proj_a/"
-                    "in_proj_b/embed. lm_head is re-enabled after ModelOpt's default disable."
+                    "Deepcopy NVFP4_DEFAULT_CFG (fallback W4A8_NVFP4_FP8_CFG). "
+                    "Always force NVFP4 group_size 16 on *mlp* and *lm_head* "
+                    "(weights+inputs); FP8 on *self_attn* and *linear_attn*. "
+                    "nvidia/Qwen3.8-27B-NVFP4 uses NVFP4 group_size 16 on "
+                    "MLP+lm_head and FP8 on attention. Later disable "
+                    "vision/mtp/conv1d/in_proj_a/in_proj_b/embed. lm_head is "
+                    "re-enabled after ModelOpt's default disable."
                 ),
             }
         )
@@ -432,7 +439,8 @@ def _fallback_for_scheme(canonical: str) -> dict[str, Any]:
         return _fallback_uniform(_NVFP4_BS16, None)
     if canonical == "fp8_w8a8":
         return _fallback_uniform(_FP8_ATTR, _FP8_ATTR)
-    return _fallback_uniform(_NVFP4_BS32, _FP8_ATTR)
+    # nvfp4_mixed (and any unknown canonical): NVFP4 W4A4 bs16, then overlays.
+    return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
 
 
 def _load_base_cfg(mtq: Any, canonical: str) -> tuple[dict[str, Any], str]:
@@ -453,7 +461,8 @@ def _load_base_cfg(mtq: Any, canonical: str) -> tuple[dict[str, Any], str]:
 def _hessian_block_size(canonical: str) -> int:
     # ModelOpt LocalHessianCalibConfig.block_size defaults to 16 (W4A4). W4A8
     # NVFP4 uses nvfp4_bs32 — Hessian blocks must match the quantizer.
-    if canonical in {"nvfp4_w4a8", "nvfp4_mixed"}:
+    # NVIDIA mixed (nvidia/Qwen3.8-27B-NVFP4) is NVFP4 gs16 on MLP+lm_head.
+    if canonical == "nvfp4_w4a8":
         return 32
     return 16
 
@@ -531,23 +540,23 @@ def _reenable_lm_head(
         _enable_pattern(cfg, "*lm_head*input_quantizer", input_attr)
 
 
-def _apply_mixed(cfg: dict[str, Any], used_cfg_name: str) -> None:
-    """Restrict a uniform NVFP4/W4A8 cfg to NVIDIA-style mixed precision."""
-    weight_attr, input_attr = _weight_input_attrs(cfg)
-    if "W4A8" in used_cfg_name or "NVFP4_FP8" in used_cfg_name:
-        mlp_weight = weight_attr
-        mlp_input = input_attr if input_attr is not None else copy.deepcopy(_FP8_ATTR)
-    else:
-        mlp_weight = weight_attr
-        mlp_input = input_attr if input_attr is not None else copy.deepcopy(_NVFP4_BS16)
+def _apply_mixed(cfg: dict[str, Any], used_cfg_name: str = "") -> None:
+    """Force NVIDIA mixed precision: NVFP4 gs16 on MLP+lm_head, FP8 on attn.
 
+    ``used_cfg_name`` is ignored for quantizer attrs. Even if the base preset
+    was ``W4A8_NVFP4_FP8_CFG`` (bs32 weights + FP8 inputs), MLP and lm_head
+    are rewritten to ``_NVFP4_BS16`` so the cfg matches
+    ``nvidia/Qwen3.8-27B-NVFP4``.
+    """
+    del used_cfg_name
+    nvfp4 = copy.deepcopy(_NVFP4_BS16)
     fp8 = copy.deepcopy(_FP8_ATTR)
     for pattern in _MIXED_ATTN_PATTERNS:
         _enable_pattern(cfg, f"{pattern}weight_quantizer", fp8)
         _enable_pattern(cfg, f"{pattern}input_quantizer", fp8)
-    _enable_pattern(cfg, "*mlp*weight_quantizer", mlp_weight)
-    _enable_pattern(cfg, "*mlp*input_quantizer", mlp_input)
-    _reenable_lm_head(cfg, mlp_weight, mlp_input)
+    _enable_pattern(cfg, "*mlp*weight_quantizer", nvfp4)
+    _enable_pattern(cfg, "*mlp*input_quantizer", nvfp4)
+    _reenable_lm_head(cfg, nvfp4, nvfp4)
 
 
 def _precision_to_attr(spec: Any) -> dict[str, Any] | None:

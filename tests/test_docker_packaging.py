@@ -56,6 +56,7 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "nproc" in script
     assert "0:26GiB,cpu:40GiB" not in script
     assert "batch_size: 4" in script
+    assert "CUDA_DEVICE_MAX_CONNECTIONS" in script
 
 
 def test_entrypoint_bare_plan_uses_recipe_default(repo_root: Path) -> None:

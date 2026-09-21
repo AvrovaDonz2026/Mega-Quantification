@@ -144,8 +144,8 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
             layer_group(
                 "mlp_lm_head",
                 targets=MIXED_NVFP4_TARGETS,
-                weights=NVFP4_W4A8_WEIGHTS,
-                activations=NVFP4_W4A8_ACTIVATIONS,
+                weights=NVFP4_W4A4_WEIGHTS,
+                activations=NVFP4_W4A4_ACTIVATIONS,
             ),
             layer_group(
                 "attn_fp8",
@@ -156,11 +156,12 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
         ],
         kv_cache="fp8",
         notes=(
-            "NVIDIA-style mixed recipe: NVFP4 W4A8 (group_size=32, dynamic token "
-            "FP8 acts) on mlp.{gate,up,down}_proj + lm_head; FP8 W8A8 on "
-            "self_attn.{q,k,v,o}_proj and linear_attn {in_proj_qkv, in_proj_z, "
-            "out_proj}. conv1d / in_proj_a / in_proj_b stay on the ignore list. "
-            "Prefer ModelOpt custom quant_cfg for production mixed checkpoints."
+            "NVIDIA-style mixed matching nvidia/Qwen3.8-27B-NVFP4: NVFP4 W4A4 "
+            "(group_size=16, dynamic-local NVFP4 acts) on mlp.{gate,up,down}_proj "
+            "+ lm_head; FP8 W8A8 on self_attn.{q,k,v,o}_proj and linear_attn "
+            "{in_proj_qkv, in_proj_z, out_proj}. conv1d / in_proj_a / in_proj_b "
+            "stay on the ignore list. Prefer ModelOpt custom quant_cfg for "
+            "production mixed checkpoints (recipes keep groups: null)."
         ),
         vllm_support="limited mixed NVFP4/FP8; prefer TensorRT-LLM/ModelOpt",
         trtllm_support="native mixed NVFP4 MLP + FP8 attn",

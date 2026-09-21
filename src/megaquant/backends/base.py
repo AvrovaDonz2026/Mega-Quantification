@@ -220,13 +220,38 @@ def forward_loop_from_iter(calib_iter: Iterable[Any]) -> Callable[[Any], None]:
             ctx = torch.no_grad()
         except ImportError:
             ctx = nullcontext()
-        total = len(batches) if hasattr(batches, "__len__") else None
+        items = list(batches) if not isinstance(batches, list) else batches
+        total = len(items)
         started = time.monotonic()
+        copy_stream = None
+        try:
+            import torch as _torch
+
+            kind = getattr(device, "type", None)
+            if kind == "cuda" or (kind is None and device is not None and "cuda" in str(device)):
+                copy_stream = _torch.cuda.Stream()
+        except Exception:
+            copy_stream = None
+
+        def _prefetch(item: Any) -> Any:
+            if copy_stream is None:
+                return _move_to_device(item, device)
+            import torch as _torch
+
+            with _torch.cuda.stream(copy_stream):
+                return _move_to_device(item, device)
+
         with ctx:
-            for index, batch in enumerate(batches, start=1):
-                _run_forward(model, _move_to_device(batch, device))
-                if total is None:
-                    continue
+            pending = _prefetch(items[0]) if items else None
+            for index, batch in enumerate(items, start=1):
+                if copy_stream is not None:
+                    copy_stream.synchronize()
+                payload = pending if pending is not None else _move_to_device(batch, device)
+                if index < total:
+                    pending = _prefetch(items[index])
+                else:
+                    pending = None
+                _run_forward(model, payload)
                 step = max(1, total // 20)
                 if index == 1 or index == total or index % step == 0:
                     elapsed = time.monotonic() - started

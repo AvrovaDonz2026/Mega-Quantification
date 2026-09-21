@@ -17,6 +17,7 @@ from megaquant.runtime import (
     highest_pin_names,
     parse_max_memory,
     parse_meminfo_kib,
+    parse_pcie_link_csv,
     pin_keys_to_cpu,
 )
 
@@ -33,6 +34,7 @@ _RUNTIME_KEYS = (
     "MEGAQUANT_GPU_HEADROOM_GIB",
     "MEGAQUANT_CPU_RESERVE_GIB",
     "MEGAQUANT_PIN_MEMORY",
+    "CUDA_DEVICE_MAX_CONNECTIONS",
 )
 
 
@@ -225,8 +227,37 @@ def test_configure_host_parallelism_sets_omp(
     monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
     monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
     monkeypatch.delenv("TOKENIZERS_PARALLELISM", raising=False)
+    monkeypatch.delenv("CUDA_DEVICE_MAX_CONNECTIONS", raising=False)
     n = configure_host_parallelism()
     assert n == 12
     assert os.environ["OMP_NUM_THREADS"] == "12"
     assert os.environ["MKL_NUM_THREADS"] == "12"
     assert os.environ["TOKENIZERS_PARALLELISM"] == "true"
+    assert os.environ["CUDA_DEVICE_MAX_CONNECTIONS"] == "16"
+
+
+def test_parse_pcie_link_csv_idle_gen1_and_trained_gen5() -> None:
+    idle = parse_pcie_link_csv("1, 5, 16, 16\n")
+    assert idle == {
+        "gen_current": 1,
+        "gen_max": 5,
+        "width_current": 16,
+        "width_max": 16,
+    }
+    trained = parse_pcie_link_csv("pcie.link.gen.current, pcie.link.gen.max, x\n5, 5, 16, 16")
+    assert trained is not None
+    assert trained["gen_current"] == 5
+    assert trained["width_current"] == 16
+    assert parse_pcie_link_csv("") is None
+    assert parse_pcie_link_csv("not-a-csv") is None
+
+
+def test_plan_notes_include_pcie(
+    clean_runtime_env: None,
+    w4a8_recipe_path,
+) -> None:
+    recipe = load_recipe(w4a8_recipe_path)
+    plan = QuantPipeline(recipe).resolve()
+    blob = " ".join(plan.notes)
+    assert "PCIe" in blob
+    assert "CUDA_DEVICE_MAX_CONNECTIONS" in blob

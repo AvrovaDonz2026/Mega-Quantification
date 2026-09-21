@@ -21,13 +21,16 @@ selected linears, and exports a unified HF checkpoint for TensorRT-LLM / vLLM
 
 | Recipe | Meaning |
 |---|---|
-| `nvfp4_w4a8` | Uniform NVFP4 weights + FP8 activations on language-model linears |
-| `nvfp4_mixed` | NVIDIA-style mixed: NVFP4 MLP + `lm_head`, FP8 self-attn + linear-attn |
-| `nvfp4_w4a4` | Uniform NVFP4 W4A4 (comparison; block size 16) |
+| `nvfp4_w4a8` | Uniform NVFP4 weights (block **32**) + FP8 activations on language-model linears |
+| `nvfp4_w4a4` | Uniform NVFP4 W4A4 (`NVFP4_DEFAULT_CFG`; block **16** weights and activations) |
+| `nvfp4_mixed` | NVIDIA mapping: NVFP4 **group_size 16** on MLP + `lm_head`, FP8 on self-attn + linear-attn |
 
 NVIDIA's public [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
-checkpoint is the **mixed** recipe (Local-Hessian, 2048 samples, ModelOpt 0.48.0).
-The user-requested export is **uniform W4A8**.
+is mixed NVFP4/FP8 (Local-Hessian, 2048 samples,
+`Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0). NVFP4 layers
+use **group_size 16**. It is **not** uniform W4A8 and **not** NVFP4 block 32.
+The user-requested export in this repo is **uniform W4A8** (block 32 /
+`W4A8_NVFP4_FP8`).
 
 ### Qwen3.8-27B W4A8 quickstart
 
@@ -47,7 +50,14 @@ On a machine with enough GPU memory (see Hardware):
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 ```
 
-NVIDIA-matched mixed checkpoint:
+Uniform W4A4 (block 16 weights and activations):
+
+```bash
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
+```
+
+NVIDIA-matched mixed checkpoint (group_size 16 on MLP + `lm_head`, FP8 on
+attention; Local-Hessian + Nemotron v3):
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
@@ -86,8 +96,9 @@ ModelOpt for NVFP4 W4A8, else llm-compressor.
   TensorRT-LLM. Treat ModelOpt export as the production W4A8 path; use
   llm-compressor when you specifically want a compressed-tensors checkpoint.
 
-W4A4 (block size **16**) is a different scheme (`nvfp4_w4a4`). Do not mix
-block sizes.
+Uniform W4A4 (`nvfp4_w4a4`, `NVFP4_DEFAULT_CFG`) uses block size **16** for
+weights and activations. NVIDIA mixed NVFP4 layers also use **group_size 16**;
+do not encode them as W4A8 block 32. Do not mix block sizes.
 
 ### How to add a new model
 
@@ -116,11 +127,23 @@ cp .env.example .env
 docker compose build
 docker compose run --rm megaquant plan
 docker compose --profile gpu run --rm quantize
+docker compose --profile gpu run --rm w4a4
+docker compose --profile gpu run --rm mixed
 ```
 
-`compose up` only dry-runs. Real PTQ is `--profile gpu`. Copy a built image
-with `make image-tar` then `docker image load` on the 5090. Weights stay on
-the host (`./.cache/huggingface`, `./models`, `./outputs`).
+`compose up` only dry-runs. Real PTQ is `--profile gpu`. The `mixed` service
+uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`. NVIDIA quality Local-Hessian:
+
+```bash
+RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+```
+
+On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`.
+Those commands start a job; they do not mean W4A4 or mixed PTQ has already
+finished on the pod.
+
+Copy a built image with `make image-tar` then `docker image load` on the 5090.
+Weights stay on the host (`./.cache/huggingface`, `./models`, `./outputs`).
 
 ### Hardware
 
@@ -141,8 +164,18 @@ the host (`./.cache/huggingface`, `./models`, `./outputs`).
 量化成 **NVFP4 W4A8**（权重量 NVFP4，激活量 FP8），导出统一 HF 权重，供
 TensorRT-LLM / vLLM / SGLang 使用。
 
-NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合** 配方（MLP + `lm_head`
-走 NVFP4，注意力走 FP8）。本仓库同时提供均匀 W4A8 与混合两套 recipe。
+| 配方 | 含义 |
+|---|---|
+| `nvfp4_w4a8` | 均匀：语言模型线性层 NVFP4 权重（block **32**）+ FP8 激活 |
+| `nvfp4_w4a4` | 均匀：`NVFP4_DEFAULT_CFG`，权重和激活均为 NVFP4 block **16** |
+| `nvfp4_mixed` | NVIDIA 映射：MLP + `lm_head` 为 NVFP4 **group_size 16**，self-attn + linear-attn 为 FP8 |
+
+NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合 NVFP4/FP8**：MLP + `lm_head`
+为 **NVFP4 group_size 16**，self-attn + linear-attn 为 **FP8**。它 **不是**
+均匀 W4A8，也 **不是** NVFP4 block 32。模型卡：Local-Hessian、2048 条、
+`Nemotron-Post-Training-Dataset-v3`、`nvidia-modelopt` v0.48.0。本仓库均匀
+W4A8 仍是 block 32（`W4A8_NVFP4_FP8`）；均匀 W4A4 是 `NVFP4_DEFAULT_CFG`
+（权重和激活均为 block 16）。
 
 ### Qwen3.8-27B W4A8 快速开始
 
@@ -159,7 +192,14 @@ GPU 量化：
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 ```
 
-对齐 NVIDIA 公开 checkpoint 的混合配方：
+均匀 W4A4：
+
+```bash
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
+```
+
+对齐 NVIDIA 公开 checkpoint 的混合配方（MLP + `lm_head` 为 NVFP4 group_size
+16，注意力为 FP8；Local-Hessian + Nemotron v3）：
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
@@ -181,7 +221,9 @@ ModelOpt 原生支持 `W4A8_NVFP4_FP8`（NVFP4 **block size 32**）。llm-compre
 没有现成的 `NVFP4A8` preset，只能拼自定义 scheme；vLLM 对「NVFP4 权重 +
 FP8 激活」的 kernel 也不如 TensorRT-LLM。生产 W4A8 请走 ModelOpt。
 
-W4A4 的 block size 是 **16**，和 W4A8 不是同一套。
+W4A4（`NVFP4_DEFAULT_CFG`）的 block size 是 **16**（权重和激活），和均匀 W4A8
+的 32 不是同一套。NVIDIA 混合配方里的 NVFP4 层也是 **group_size 16**，不要写成
+W4A8 block 32。
 
 ### 如何接入新模型
 
@@ -203,7 +245,19 @@ cp .env.example .env
 docker compose build
 docker compose run --rm megaquant plan
 docker compose --profile gpu run --rm quantize
+docker compose --profile gpu run --rm w4a4
+docker compose --profile gpu run --rm mixed
 ```
+
+`mixed` 服务默认 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`。NVIDIA 质量
+Local-Hessian：
+
+```bash
+RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+```
+
+K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize [w4a8|w4a4|mixed]`。
+这只是启动命令，不表示 W4A4 / mixed PTQ 已经在 pod 上跑完。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
 默认 CPU offload；双卡或更大 Blackwell 更合适。

@@ -199,8 +199,8 @@ def _env_int(name: str, default: int) -> int:
 
 
 def gpu_headroom_bytes() -> int:
-    """Activation / allocator slack left on each GPU. Default 2 GiB (was 6)."""
-    return max(1, _env_int("MEGAQUANT_GPU_HEADROOM_GIB", 2)) * 1024**3
+    """Activation / allocator slack left on each GPU. Default 1 GiB (was 2)."""
+    return max(1, _env_int("MEGAQUANT_GPU_HEADROOM_GIB", 1)) * 1024**3
 
 
 def cpu_reserve_bytes() -> int:
@@ -296,6 +296,9 @@ def configure_host_parallelism() -> int:
         os.environ.setdefault(key, str(n))
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "true")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    # Concurrent copy engines + kernels so CPU-offload H2D can overlap compute
+    # on a PCIe 5.0 x16 5090 (idle link otherwise drops to gen1).
+    os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "16")
     try:
         import torch
 
@@ -372,14 +375,194 @@ def fast_plan_note() -> str | None:
     return None
 
 
+def parse_pcie_link_csv(text: str) -> dict[str, int] | None:
+    """Parse ``nvidia-smi --query-gpu=pcie.link.gen.current,...`` csv."""
+    line = (text or "").strip().splitlines()
+    if not line:
+        return None
+    payload = line[-1]
+    if payload.lower().startswith("pcie"):
+        return None
+    parts = [item.strip() for item in payload.split(",")]
+    if len(parts) < 4:
+        return None
+    try:
+        return {
+            "gen_current": int(parts[0]),
+            "gen_max": int(parts[1]),
+            "width_current": int(parts[2]),
+            "width_max": int(parts[3]),
+        }
+    except ValueError:
+        return None
+
+
+def query_pcie_link() -> dict[str, int] | None:
+    """Live GPU PCIe gen/width. Idle 5090s often report gen1 until CUDA warmup."""
+    try:
+        import subprocess
+
+        raw = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=pcie.link.gen.current,pcie.link.gen.max,"
+                "pcie.link.width.current,pcie.link.width.max",
+                "--format=csv,noheader",
+            ],
+            text=True,
+            timeout=8,
+        )
+    except Exception:
+        return None
+    return parse_pcie_link_csv(raw)
+
+
+def pcie_plan_note() -> str | None:
+    info = query_pcie_link()
+    if info is None:
+        return (
+            "PCIe: CUDA warmup trains the link; idle 5090s report gen1 even "
+            "when the slot is gen5 x16 (~50+ GiB/s after warmup)"
+        )
+    return (
+        f"PCIe gen {info['gen_current']}/{info['gen_max']} "
+        f"x{info['width_current']}/{info['width_max']} "
+        "(idle often gen1; warmup before PTQ to lock gen5 x16 DMA)"
+    )
+
+
+def warmup_pcie_link(nbytes: int = 512 * 1024 * 1024, rounds: int = 4) -> str | None:
+    """Create a CUDA context and DMA a pinned buffer so the link trains to gen5.
+
+    Compshare / idle driver power-saving leaves RTX 5090 at PCIe **gen1 x16**
+    (~4 GB/s). After a few GiB of pinned H2D/D2H the same card reports
+    **gen5 x16** and ~50 GiB/s. Run this before ``from_pretrained``.
+    """
+    try:
+        import time
+
+        import torch
+    except ImportError:
+        return None
+    cuda = getattr(torch, "cuda", None)
+    if cuda is None or not cuda.is_available():
+        return None
+    before = query_pcie_link()
+    try:
+        cuda.init()
+        n = max(1, int(nbytes) // 4)
+        host = torch.empty(n, dtype=torch.float32, pin_memory=True)
+        device = torch.empty(n, dtype=torch.float32, device="cuda")
+        stream = cuda.Stream()
+        cuda.synchronize()
+        started = time.perf_counter()
+        with cuda.stream(stream):
+            for _ in range(max(1, rounds)):
+                device.copy_(host, non_blocking=True)
+                host.copy_(device, non_blocking=True)
+        stream.synchronize()
+        elapsed = max(time.perf_counter() - started, 1e-6)
+        gib = max(1, rounds) * 2 * (n * 4) / 1024**3
+        rate = gib / elapsed
+    except Exception as exc:
+        return f"PCIe warmup skipped ({type(exc).__name__}: {exc})"
+    after = query_pcie_link()
+    before_s = (
+        f"gen{before['gen_current']}x{before['width_current']}" if before else "?"
+    )
+    after_s = f"gen{after['gen_current']}x{after['width_current']}" if after else "?"
+    return (
+        f"PCIe warmup {before_s}→{after_s}  {gib:.1f} GiB in {elapsed:.2f}s "
+        f"({rate:.1f} GiB/s pinned DMA)"
+    )
+
+
+def pin_cpu_parameters(model: Any) -> int:
+    """Pin CPU-resident weights so accelerate H2D uses PCIe DMA, not pageable copies."""
+    pinned = 0
+
+    def _pin(tensor: Any) -> Any:
+        nonlocal pinned
+        device = getattr(tensor, "device", None)
+        kind = getattr(device, "type", None)
+        if kind != "cpu":
+            return tensor
+        is_pinned = getattr(tensor, "is_pinned", None)
+        try:
+            if callable(is_pinned) and is_pinned():
+                return tensor
+        except Exception:
+            return tensor
+        pin = getattr(tensor, "pin_memory", None)
+        if not callable(pin):
+            return tensor
+        try:
+            out = pin()
+            pinned += 1
+            return out
+        except Exception:
+            return tensor
+
+    named_params = getattr(model, "named_parameters", None)
+    if callable(named_params):
+        for _name, param in named_params():
+            data = getattr(param, "data", None)
+            if data is None:
+                continue
+            pinned_data = _pin(data)
+            if pinned_data is not data:
+                try:
+                    param.data = pinned_data
+                except Exception:
+                    pass
+    named_buffers = getattr(model, "named_buffers", None)
+    if callable(named_buffers):
+        for name, buf in named_buffers():
+            pinned_buf = _pin(buf)
+            if pinned_buf is not buf:
+                try:
+                    parts = name.split(".")
+                    obj = model
+                    for part in parts[:-1]:
+                        obj = getattr(obj, part)
+                    setattr(obj, parts[-1], pinned_buf)
+                except Exception:
+                    pass
+    return pinned
+
+
+def enable_accelerate_non_blocking() -> str | None:
+    """Make accelerate's CPU→GPU copies async so they can overlap compute."""
+    try:
+        import accelerate.utils.operations as ops
+    except ImportError:
+        try:
+            import accelerate.utils as ops
+        except ImportError:
+            return None
+    orig = getattr(ops, "send_to_device", None)
+    if not callable(orig) or getattr(ops, "_megaquant_non_blocking", False):
+        return "accelerate send_to_device non_blocking" if callable(orig) else None
+
+    def send_to_device(tensor: Any, device: Any, *args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("non_blocking", True)
+        return orig(tensor, device, *args, **kwargs)
+
+    ops.send_to_device = send_to_device  # type: ignore[method-assign]
+    ops._megaquant_non_blocking = True
+    return "accelerate send_to_device non_blocking=True"
+
+
 def host_pack_plan_note() -> str | None:
     n = cpu_thread_count()
-    headroom = max(1, _env_int("MEGAQUANT_GPU_HEADROOM_GIB", 2))
+    headroom = max(1, _env_int("MEGAQUANT_GPU_HEADROOM_GIB", 1))
     reserve = max(1, _env_int("MEGAQUANT_CPU_RESERVE_GIB", 6))
     cpu_budget = _host_cpu_memory_str()
+    conns = os.environ.get("CUDA_DEVICE_MAX_CONNECTIONS", "16")
     return (
         f"host pack: threads={n}, GPU headroom={headroom}GiB, "
-        f"RAM reserve={reserve}GiB, CPU weight budget={cpu_budget}"
+        f"RAM reserve={reserve}GiB, CPU weight budget={cpu_budget}, "
+        f"CUDA_DEVICE_MAX_CONNECTIONS={conns}"
     )
 
 

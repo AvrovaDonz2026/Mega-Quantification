@@ -24,6 +24,11 @@ FP8 W8A8 (stock ``FP8_DYNAMIC``)
     Channel-wise FP8 weights + dynamic per-token FP8 activations, or static
     per-tensor FP8 (``FP8``).
 
+NVIDIA mixed (``nvfp4_mixed``; public ``nvidia/Qwen3.8-27B-NVFP4``)
+    MLP + ``lm_head``: NVFP4 W4A4 ``group_size=16`` (weights and activations).
+    Attention: FP8 on ``self_attn.{q,k,v,o}_proj`` and
+    ``linear_attn.{in_proj_qkv,in_proj_z,out_proj}``. Not W4A8 gs32.
+
 Qwen3.8 module names
 --------------------
 Covered by default targets: ``mlp.{gate,up,down}_proj``,
@@ -46,7 +51,8 @@ DEFAULT_LINEAR_TARGETS: list[str] = [
     "in_proj_qkv|in_proj_z|out_proj).*",
 ]
 
-# NVIDIA mixed recipe: NVFP4 on MLP + lm_head, FP8 on attention.
+# NVIDIA mixed recipe (nvidia/Qwen3.8-27B-NVFP4): NVFP4 group_size 16 on
+# MLP + lm_head, FP8 on attention. Not W4A8 gs32.
 MIXED_NVFP4_TARGETS: list[str] = [
     r"re:.*mlp\.(?:gate_proj|up_proj|down_proj).*",
     r"re:.*lm_head.*",

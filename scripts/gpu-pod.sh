@@ -21,7 +21,7 @@ export MEGAQUANT_LOW_MEMORY="${MEGAQUANT_LOW_MEMORY:-1}"
 export MEGAQUANT_OFFLOAD_DIR="${MEGAQUANT_OFFLOAD_DIR:-$ROOT/offload_folder}"
 # Leave MEGAQUANT_MAX_MEMORY unset so Python packs from real VRAM/RAM
 # (VRAM − 2 GiB, MemTotal − 6 GiB). Override explicitly if you need a cap.
-export MEGAQUANT_GPU_HEADROOM_GIB="${MEGAQUANT_GPU_HEADROOM_GIB:-2}"
+export MEGAQUANT_GPU_HEADROOM_GIB="${MEGAQUANT_GPU_HEADROOM_GIB:-1}"
 export MEGAQUANT_CPU_RESERVE_GIB="${MEGAQUANT_CPU_RESERVE_GIB:-6}"
 export MEGAQUANT_BATCH_SIZE="${MEGAQUANT_BATCH_SIZE:-4}"
 export MEGAQUANT_PIN_MEMORY="${MEGAQUANT_PIN_MEMORY:-1}"
@@ -33,6 +33,8 @@ export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-$NPROC}"
 export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-$NPROC}"
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-true}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+# Idle 5090 reports PCIe gen1; CUDA warmup + extra copy connections train gen5 x16.
+export CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS:-16}"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 # GDN fused kernels: without these, transformers prints
@@ -98,12 +100,22 @@ log() { printf '[gpu-pod] %s\n' "$*"; }
 
 log "python=${PY} threads=${MEGAQUANT_NUM_THREADS} gpu_headroom=${MEGAQUANT_GPU_HEADROOM_GIB}GiB cpu_reserve=${MEGAQUANT_CPU_RESERVE_GIB}GiB batch=${MEGAQUANT_BATCH_SIZE}"
 "${PY}" - <<'PY'
-import torch, sys
+import torch, sys, subprocess
 print("torch", torch.__version__, "cuda", torch.cuda.is_available())
 if not torch.cuda.is_available():
     sys.exit("CUDA not available in this Python")
 print("gpu", torch.cuda.get_device_name(0), "cc", torch.cuda.get_device_capability(0))
 print("arch", torch.cuda.get_arch_list())
+try:
+    raw = subprocess.check_output(
+        ["nvidia-smi",
+         "--query-gpu=pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max",
+         "--format=csv,noheader"],
+        text=True, timeout=8,
+    ).strip()
+    print("pcie_idle", raw, "(gen1 until CUDA warmup; PTQ trains gen5 x16)")
+except Exception as exc:
+    print("pcie query skipped", type(exc).__name__)
 PY
 
 if [[ "${CMD}" == "quantize" && "${MEGAQUANT_INSTALL_FLA}" == "1" ]]; then

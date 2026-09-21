@@ -27,13 +27,17 @@ from megaquant.registry import (
 from megaquant.runtime import (
     apply_env_to_recipe,
     configure_host_parallelism,
+    enable_accelerate_non_blocking,
     fast_plan_note,
     from_pretrained_env_kwargs,
     host_pack_plan_note,
     infer_device_map_with_cpu_pins,
     is_auto_device_map,
     low_memory_plan_note,
+    pcie_plan_note,
+    pin_cpu_parameters,
     pin_keys_to_cpu,
+    warmup_pcie_link,
 )
 
 
@@ -364,6 +368,21 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
         raise
     except Exception as exc:
         raise BackendError(f"Failed to load model '{recipe.model.source}': {exc}") from exc
+    try:
+        n_pinned = pin_cpu_parameters(model)
+    except Exception as exc:
+        n_pinned = 0
+        print(
+            f"[megaquant] pin_cpu_parameters skipped ({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+            flush=True,
+        )
+    if n_pinned:
+        print(
+            f"[megaquant] pinned {n_pinned} CPU tensors for PCIe DMA",
+            file=sys.stderr,
+            flush=True,
+        )
     return model, tokenizer
 
 
@@ -511,6 +530,9 @@ class QuantPipeline:
         pack_note = host_pack_plan_note()
         if pack_note:
             notes.append(pack_note)
+        link_note = pcie_plan_note()
+        if link_note:
+            notes.append(link_note)
         fast_note = fast_plan_note()
         if fast_note:
             notes.append(fast_note)
@@ -578,6 +600,12 @@ class QuantPipeline:
 
         threads = configure_host_parallelism()
         print(f"[megaquant] host threads={threads}", file=sys.stderr, flush=True)
+        accel_note = enable_accelerate_non_blocking()
+        if accel_note:
+            print(f"[megaquant] {accel_note}", file=sys.stderr, flush=True)
+        link_warm = warmup_pcie_link()
+        if link_warm:
+            print(f"[megaquant] {link_warm}", file=sys.stderr, flush=True)
         backend = _require_backend(plan)
         model, tokenizer = _load_model_and_tokenizer(self.recipe, plan.family_name)
         calib_iter = build_calibration_iter(self.recipe, tokenizer)
