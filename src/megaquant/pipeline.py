@@ -158,9 +158,7 @@ def _coerce_groups(raw: object, scheme: str) -> list[LayerGroup]:
             groups.append(item)
             continue
         if not isinstance(item, dict):
-            raise RecipeError(
-                f"Invalid layer group in scheme '{scheme}': {type(item).__name__}"
-            )
+            raise RecipeError(f"Invalid layer group in scheme '{scheme}': {type(item).__name__}")
         try:
             groups.append(LayerGroup.model_validate(_sanitize_group_dict(item)))
         except ValidationError as exc:

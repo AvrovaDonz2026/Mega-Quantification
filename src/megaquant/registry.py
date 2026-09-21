@@ -35,8 +35,14 @@ def _ensure_plugins() -> None:
             module = importlib.import_module(mod)
         except ImportError:
             continue
-        # Re-run registration if a circular import skipped it the first time.
-        for fn_name in ("_register", "_register_catalog", "_try_register", "_try_register_backend"):
+        # Sibling modules may have skipped self-registration during a circular import.
+        for fn_name in (
+            "_register",
+            "_register_catalog",
+            "_self_register",
+            "_try_register",
+            "_try_register_backend",
+        ):
             fn = getattr(module, fn_name, None)
             if callable(fn):
                 try:
@@ -45,13 +51,13 @@ def _ensure_plugins() -> None:
                     continue
 
 
-def register_backend(name: str, backend: Any) -> None:
+def register_backend(name: str, backend: QuantBackend) -> None:
     if not name:
         raise BackendError("Backend name must be a non-empty string")
     _BACKENDS[name] = backend
 
 
-def get_backend(name: str) -> Any:
+def get_backend(name: str) -> QuantBackend:
     _ensure_plugins()
     if name not in _BACKENDS:
         known = ", ".join(list_backends()) or "(none)"
@@ -64,13 +70,13 @@ def list_backends() -> list[str]:
     return sorted(_BACKENDS)
 
 
-def register_family(name: str, family: Any) -> None:
+def register_family(name: str, family: ModelFamily) -> None:
     if not name:
         raise FamilyError("Family name must be a non-empty string")
     _FAMILIES[name] = family
 
 
-def get_family(name: str) -> Any:
+def get_family(name: str) -> ModelFamily:
     _ensure_plugins()
     if name not in _FAMILIES:
         known = ", ".join(list_families()) or "(none)"
@@ -124,3 +130,16 @@ def get_scheme(name: str) -> object:
 def list_schemes() -> list[str]:
     _ensure_plugins()
     return sorted(_SCHEMES)
+
+
+# Imported last so family/backend modules that register on import can call
+# register_* (those packages execute their __init__ as a side effect).
+try:
+    from megaquant.backends.base import QuantBackend
+except ImportError:
+    QuantBackend = object  # type: ignore
+
+try:
+    from megaquant.models.base import ModelFamily
+except ImportError:
+    ModelFamily = object  # type: ignore

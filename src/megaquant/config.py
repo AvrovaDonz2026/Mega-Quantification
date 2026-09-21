@@ -25,8 +25,7 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PrecisionSpec(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+class PrecisionSpec(StrictModel):
     format: Literal["nvfp4", "fp8", "mxfp4", "bf16", "int4"]
     bits: int
     group_size: int | None = None

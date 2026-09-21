@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from megaquant.models.base import glob_to_ignore
+from megaquant.models.base import BaseFamily, get_field, glob_to_ignore, recipe_model
 
 
-class Qwen35Family:
+class Qwen35Family(BaseFamily):
     name = "qwen3_5"
     model_types = ("qwen3_5", "qwen3_5_text", "qwen3_6", "qwen3_8")
     architectures = (
@@ -33,17 +33,19 @@ class Qwen35Family:
             "*linear_attn.in_proj_a*",
             "*linear_attn.in_proj_b*",
         )
-        model = getattr(recipe, "model", None)
-        if getattr(model, "quantize_vision", False):
+        model = recipe_model(recipe)
+        if get_field(model, "quantize_vision", False):
             ignore = [p for p in ignore if "visual" not in p and "vision" not in p]
-        if not getattr(model, "quantize_mtp", False):
+        if not get_field(model, "quantize_mtp", False):
             ignore.append("*mtp*")
         return ignore
 
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
-        model = getattr(recipe, "model", None)
+        model = recipe_model(recipe)
+        dtype = get_field(model, "dtype", "bfloat16")
         return {
-            "trust_remote_code": getattr(model, "trust_remote_code", True),
-            "device_map": getattr(model, "device_map", "auto"),
+            "trust_remote_code": get_field(model, "trust_remote_code", True),
+            "device_map": get_field(model, "device_map", "auto"),
+            "torch_dtype": dtype,
             "model_cls": "AutoModelForImageTextToText",
         }

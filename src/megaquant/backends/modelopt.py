@@ -274,11 +274,11 @@ def _flag(obj: Any, name: str, default: bool = False) -> bool:
 
 
 def _scheme_of(plan: Any, recipe: Any) -> str:
-    return str(_attr(plan, "scheme", None) or _attr(recipe, "scheme", "") or "")
+    return str(_attr(recipe, "scheme", None) or _attr(plan, "scheme", "") or "")
 
 
 def _algorithm_of(plan: Any, recipe: Any) -> str:
-    raw = _attr(plan, "algorithm", None) or _attr(recipe, "algorithm", "max") or "max"
+    raw = _attr(recipe, "algorithm", None) or _attr(plan, "algorithm", None) or "max"
     return str(raw)
 
 
@@ -474,6 +474,16 @@ def _lm_head_ignored(ignore: list[str]) -> bool:
 def _apply_ignores(cfg: dict[str, Any], ignore: list[str]) -> None:
     for pattern in ignore:
         _disable_pattern(cfg, pattern)
+
+
+def _apply_opt_in_enables(cfg: dict[str, Any], recipe: Any) -> None:
+    """Re-enable vision/MTP if the recipe opted in (overrides preset default disables)."""
+    model = _attr(recipe, "model", None)
+    if _flag(model, "quantize_vision", False):
+        for pattern in ("*visual*", "*vision*", "*vision_tower*", "*vision_model*"):
+            _append_entry(cfg, {"quantizer_name": pattern, "enable": True})
+    if _flag(model, "quantize_mtp", False):
+        _append_entry(cfg, {"quantizer_name": "*mtp*", "enable": True})
 
 
 def _reenable_lm_head(
@@ -683,6 +693,7 @@ class ModelOptBackend:
 
         ignore = _collect_ignore(plan, recipe)
         _apply_ignores(cfg, ignore)
+        _apply_opt_in_enables(cfg, recipe)
 
         if canonical != "nvfp4_mixed" and not _lm_head_ignored(ignore):
             weight_attr, input_attr = _weight_input_attrs(cfg)
