@@ -6,6 +6,12 @@ Generic post-training quantization (PTQ) pipeline. First production target:
 The pipeline is model-agnostic. A recipe YAML plus a model-family adapter should
 be enough to quantize any Hugging Face causal / VLM checkpoint.
 
+中文要点：默认 `nvfp4_w4a8` 对齐 NVIDIA 混合**层图**（MLP + `lm_head` NVFP4
+gs16，注意力 FP8，导出 `MIXED_PRECISION`）。5090 生产 PTQ 是
+`mixed.5090.yaml`：ModelOpt 0.46.1、算法 **`max`**、ultrachat 256×1024。
+NVIDIA 公开权重才是 Local-Hessian + Nemotron v3 2048（modelopt 0.48.0）。
+5090 GPQA 24 路 / HiCache 64 GiB / bf16 GDN；journal 跑完前不要报 198 分。
+
 ## Goal
 
 - Default W4A8 (`nvfp4_w4a8`): NVIDIA mixed map so **SGLang can serve it**.
@@ -22,6 +28,17 @@ Default `nvfp4_w4a8` matches that map. Card: Local-Hessian, 2048 samples,
 
 This repo ships four Qwen3.8-27B schemes. Uniform W4A4 is `NVFP4_DEFAULT_CFG`
 block 16. Default W4A8 and mixed share the NVIDIA gs16/FP8 map.
+
+**5090 production PTQ is `max`, not Hessian.** Compose `mixed` and
+`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` use ModelOpt **0.46.1** (PyPI;
+0.48 is not published there), algorithm **`max`** (amax / RTN),
+`HuggingFaceH4/ultrachat_200k` 256×1024 batch 4. Same mixed encoding as
+`nvfp4_w4a8`; the W4A8 export dir is that checkpoint. Quality Local-Hessian
+is `recipes/qwen3.8-27b-nvfp4-mixed.yaml` and needs a larger GPU.
+
+5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): 24-way, HiCache 64 GiB
+(split by GPU KV vs GDN pool), bf16 mamba 96 slots, Triton + Marlin. Do not
+quote a partial GPQA journal as `correct/198`.
 
 | Recipe | Meaning |
 |---|---|
@@ -164,6 +181,9 @@ Default ignore for `qwen3_5` (language-model W4A8):
 - Native context 262,144; MTP present; vision encoder present
 - NVIDIA mixed NVFP4 (`nvidia/Qwen3.8-27B-NVFP4`): Local-Hessian, 2048 samples,
   `Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0
+- 5090 production mixed: ModelOpt 0.46.1, algorithm `max`, ultrachat 256×1024
+  batch 4 (`qwen3.8-27b-nvfp4-mixed.5090.yaml`). Same layer map; weaker
+  calibrator. 32 GB cannot hold Hessian 2048.
 - Mixed encoding: NVFP4 **group_size 16** on MLP + `lm_head`; FP8 on self-attn +
   linear-attn. Default `nvfp4_w4a8` matches this for SGLang. Not
   `W4A8_NVFP4_FP8` / NVFP4 block 32.
@@ -191,7 +211,15 @@ weight map.
 
 Quantize: `mtq.quantize(model, quant_cfg, forward_loop)`.
 
-Local Hessian:
+Algorithm mapping (`_apply_algorithm`):
+
+| Recipe `algorithm` | ModelOpt `cfg["algorithm"]` | Used on |
+|---|---|---|
+| `max` (default) | `"max"` — amax / RTN, no Hessian | 5090 production mixed / W4A8 / W4A4 |
+| `local_hessian` | `{method: local_hessian, fp8_scale_sweep: True, block_size: 16}` (32 for `w4a8_nvfp4_fp8`) | NVIDIA quality `mixed.yaml` |
+| `mse` | `{method: mse}` | optional |
+
+Local Hessian (quality recipe only):
 
 ```python
 cfg["algorithm"] = {"method": "local_hessian", "fp8_scale_sweep": True}
@@ -235,8 +263,10 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
 - Image: `Dockerfile` (CUDA 12.8 devel + PyTorch cu128 + ModelOpt + llm-compressor + megaquant)
 - Orchestration: `docker-compose.yml` — `megaquant` service dry-runs; `quantize`,
   `w4a4`, and `mixed` are behind `--profile gpu`. `mixed` defaults to
-  `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`; NVIDIA quality Local-Hessian is
-  `RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`.
+  `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` (**production**: `max` +
+  ultrachat 256); NVIDIA quality Local-Hessian is
+  `RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`. 5090 GPQA is
+  `recipes/eval-gpqa-diamond.5090.yaml` (24-way, HiCache 64 GiB, bf16 GDN).
 - GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`
   (starts a job; does not mean W4A4 / mixed PTQ or OSS upload has already finished).
   `serve`/`eval` default to SGLang (`:30000`, HiCache KV → RAM).

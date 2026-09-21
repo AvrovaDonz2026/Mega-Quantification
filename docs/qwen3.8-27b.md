@@ -2,24 +2,64 @@
 
 End-to-end notes for quantizing **Qwen/Qwen3.8-27B** (BF16) with Mega-Quantification.
 
-中文要点：这是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`）。
+## 中文要点
+
+这是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`）。
 默认量化语言模型线性层；视觉、MTP、embedding、GDN 的 `conv1d` / `in_proj_a` /
 `in_proj_b` 留 BF16。
 
 NVIDIA 公开 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
 是 **混合 NVFP4/FP8**：MLP + `lm_head` 为 **NVFP4 group_size 16**，self-attn +
 linear-attn 为 **FP8**。它 **不是** 均匀 W4A8，也 **不是** NVFP4 block 32。
-模型卡：Local-Hessian、2048 条、`Nemotron-Post-Training-Dataset-v3`、
-`nvidia-modelopt` v0.48.0。
+模型卡：Local-Hessian（`fp8_scale_sweep`）、2048 条 × 2048、
+`Nemotron-Post-Training-Dataset-v3`、`nvidia-modelopt` v0.48.0；GPQA Diamond
+**88.92** BF16 / **88.01** NVFP4（GB300 上 **vLLM**）。Qwen 卡片 thinking 分
+**89.2**。
 
-本仓库默认 W4A8（`nvfp4_w4a8`）对齐这套混合图，导出
+本仓库默认 W4A8（`nvfp4_w4a8`）对齐这套**层图**，导出
 `quant_algo=MIXED_PRECISION` + `quantized_layers`，好让 SGLang 推理。
+**层图相同 ≠ 校准相同。** 32 GB RTX 5090 实际跑的是
+`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`：ModelOpt **0.46.1**（PyPI 上没有
+0.48）、算法 **`max`**（amax / RTN，不是 Hessian）、
+`HuggingFaceH4/ultrachat_200k` **256×1024** batch 4。W4A8 导出目录就是这份
+mixed checkpoint。Local-Hessian 2048 需要更大卡：
+`recipes/qwen3.8-27b-nvfp4-mixed.yaml`。
+
 均匀 W4A4 是 `NVFP4_DEFAULT_CFG`（权重和激活均为 NVFP4 block 16）。
 TensorRT-LLM 均匀 W4A8（`W4A8_NVFP4_FP8`，block 32）见
-`recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml`。均匀配方用 `max` + 512
-条；对齐 NVIDIA 公开混合权重用 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`
-（`local_hessian` + 2048 + Nemotron v3）。NVFP4 推理需要 Blackwell；校准可以在
-Hopper 上用多卡 / offload 做。
+`recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml`。NVFP4 推理需要 Blackwell；校准
+可以在 Hopper 上用多卡 / offload 做。
+
+5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
+（按 GPU KV / GDN 池比例切主机内存），GDN **bf16**、96 个 mamba slot，Triton
++ Marlin。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
+会排队。198 题 journal 跑完前不要报总分；eval 客户端按 `item_id` 续跑，不要
+用 `open("w")` 清空 jsonl。
+
+## What this repo actually quantized (5090)
+
+The 32 GB RTX 5090 PTQ used
+[`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml).
+That is the production checkpoint. Default `nvfp4_w4a8` is the **same mixed
+encoding**; the W4A8 directory is this mixed export, not a second PTQ.
+
+| Knob | 5090 production | NVIDIA public `nvidia/Qwen3.8-27B-NVFP4` |
+|---|---|---|
+| Layer map | NVFP4 gs16 MLP + `lm_head`, FP8 self-attn + linear-attn | Same |
+| PTQ | ModelOpt **`max`** (per-tensor amax / round-to-nearest) | **Local-Hessian**, layerwise, `fp8_scale_sweep: true`, Hessian `block_size` 16 |
+| nvidia-modelopt | **0.46.1** (`docker/requirements-gpu.txt`; 0.48 is not on PyPI) | **0.48.0** |
+| Calib | `HuggingFaceH4/ultrachat_200k`, **256** samples × **1024** tokens, batch **4** | `nvidia/Nemotron-Post-Training-Dataset-v3`, **2048** × **2048**, batch **1** |
+| Recipe | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `qwen3.8-27b-nvfp4-mixed.yaml` (not run on the 5090) |
+| Export | `MIXED_PRECISION` + `quantized_layers` (401 entries on the 5090 run: 193 NVFP4 + 208 FP8) | Same mixed HF layout |
+| Serve / GPQA | SGLang 0.5.20 on 5090, Triton + Marlin, bf16 GDN, `extra_buffer_lazy` | Card: vLLM on GB300, `temp=1.0 top_p=0.95`, `max_new_tokens=65536` |
+
+`max` is not a weaker *format*. It is a weaker *calibrator*: it records
+activation amax and quantizes, with no Local-Hessian reconstruction or
+FP8 scale sweep. A 32 GB 5090 cannot hold Hessian 2048 with 27B BF16
+offload. Quality requant is `mixed.yaml` on Hopper / larger Blackwell.
+
+Do **not** treat an in-flight GPQA journal as a 198-row score. Truncated or
+unparsed answers count as wrong; resume appends by `item_id`.
 
 ## Model facts
 
@@ -49,7 +89,7 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
-| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same; **5090 production PTQ** |
 | `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `local_hessian` | ultrachat 2048 (anonymous Hub) | same |
 
 All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
@@ -117,9 +157,12 @@ Accuracy on NVIDIA's card (vLLM, 262k context, mixed checkpoint):
 | Images | `with_images: false` (text-only; vision is ignored) | same | same | same |
 
 `max` is cheaper and is the default for SGLang W4A8, uniform W4A4, and the
-5090 mixed profile. Local-Hessian is the quality knob NVIDIA used for mixed
-NVFP4; it is slower and more memory hungry. You can override without editing
-YAML:
+5090 mixed profile. It records activation amax and round-to-nearest
+quantizes (RTN). Local-Hessian is the quality knob NVIDIA used for mixed
+NVFP4 (`fp8_scale_sweep: true`, Hessian `block_size` 16); it is slower and
+does not fit a 32 GB 5090 at 2048 samples. The 5090 production run **is**
+`mixed.5090.yaml` (`max` + ultrachat 256), not `mixed.yaml`. You can
+override without editing YAML:
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
@@ -135,11 +178,14 @@ pip install -e '.[hf,modelopt]'
 python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
+python -m megaquant.cli plan -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 
 # PTQ (Hopper or better, multi-GPU / CPU offload for 27B BF16):
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
+# 5090 production (max + ultrachat; not Hessian):
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
 Export is a Hugging Face unified checkpoint
@@ -324,18 +370,26 @@ greedy-decode. Do not cap generation at 512/2048 tokens.
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
-| KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache and leaves ~30 GiB for OS / Docker / eval (`eval-gpqa-diamond.5090.yaml`). |
-| Concurrency | default recipe 1; 5090 recipe **24** (`max_mamba_cache_size: 96` bf16 GDN slots so 24×4; float32 64-slot mamba starved GPU KV) |
-| Attention | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8 Triton (`eval-gpqa-diamond.5090.yaml`) |
+| KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
+| Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
+| Mamba / GDN | 5090: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
+| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8: Triton attn + `fp4-gemm-backend marlin` + `SGLANG_FORCE_FP8_MARLIN` (`eval-gpqa-diamond.5090.yaml`). Do not mix the two recipes. |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
-| Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong) |
+| Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong). Do not quote a partial journal as the score. |
 
-NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4**. The
-Qwen card reports **89.2**. Those numbers are thinking-mode, not greedy.
+NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4** on
+GB300 **vLLM** (`temp=1.0 top_p=0.95`, `max_new_tokens=65536`). The Qwen
+card reports **89.2** (thinking, `top_k=20`). Those numbers are not greedy.
+A 5090 SGLang run of our `max`+ultrachat checkpoint is a different PTQ
+**and** a different eval stack; treat it as a separate measurement.
 
 On a 32 GB 5090 the 262k window does not fit in HBM. **Offload KV into host
 RAM** rather than shrinking `max_new_tokens`. Qwen GPQA traces can run tens
-of thousands of tokens; a short cap is not an official-card eval.
+of thousands of tokens; a short cap is not an official-card eval. Host
+`docker-compose.override.yml` (not in git) that hardcodes `sglang` argv must
+match the recipe (`--hicache-size 64`, `--max-mamba-cache-size 96`,
+`--mamba-ssm-dtype bfloat16`) or the YAML never reaches the server. Journals
+resume by `item_id`; do not truncate `gpqa_diamond.jsonl`.
 
 ```bash
 # Terminal 1 — serve (SGLang HiCache KV → RAM)

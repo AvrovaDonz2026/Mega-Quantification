@@ -1,6 +1,62 @@
+# Docker / Compose — RTX 5090+ quantization box
+
+## English
+
+Pack PTQ (ModelOpt) and eval (SGLang + GPQA) into **two Compose images**. A
+new VM only needs the driver + `install-host.sh`, then `compose build` /
+`image load`. Weights, calib data, and export checkpoints stay on the host.
+
+| Image | Role |
+|---|---|
+| `megaquant:nvfp4` | `plan` / `quantize` / `mixed` / `w4a4` (nvidia-modelopt) |
+| `megaquant:sglang` | `serve-sglang` / `eval-gpqa` / `fetch-export` / `fetch-gpqa` |
+
+SGLang and ModelOpt cannot share a torch, so they are not one venv.
+
+### Production PTQ vs NVIDIA quality (5090)
+
+Compose `mixed` defaults to [`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml).
+That **is** the 32 GB 5090 production run: ModelOpt **0.46.1**, algorithm
+**`max`**, `ultrachat_200k` 256×1024 batch 4, mixed NVFP4 gs16 MLP +
+`lm_head` / FP8 attention, `MIXED_PRECISION` export. Default W4A8 is the
+same encoding — publish one mixed export as both `mixed` and `w4a8`.
+
+NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the **same layer map** with
+**Local-Hessian** + Nemotron v3 2048 on `nvidia-modelopt` **0.48.0**. That
+recipe is `qwen3.8-27b-nvfp4-mixed.yaml`. A 32 GB 5090 cannot hold Hessian
+2048.
+
+```bash
+docker compose --profile gpu run --rm mixed   # 5090 max + ultrachat (production)
+RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+```
+
+5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
+**64 GiB**, bf16 GDN / 96 mamba slots, Triton + Marlin. Host
+`docker-compose.override.yml` (never git) that hardcodes `sglang` argv must
+use the same `--hicache-size 64 --max-mamba-cache-size 96 --mamba-ssm-dtype
+bfloat16`. Do not wipe `gpqa_diamond.jsonl`; the client resumes by
+`item_id`.
+
+---
+
+## 中文
+
 # Docker / Compose — RTX 5090+ 量化箱
 
 把量化（ModelOpt PTQ）和评测（SGLang + GPQA）打进 **两套 Compose 镜像**，换虚拟机只装驱动 + `install-host.sh`，然后 `compose build` / `image load` 就能得到同一套环境。权重、校准数据和导出 checkpoint **不进镜像**。
+
+### 生产 PTQ vs NVIDIA 质量（5090）
+
+Compose `mixed` **默认就是** `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`：这是
+32 GB 5090 上实际跑完的生产 PTQ（ModelOpt **0.46.1**、算法 **`max`**、
+ultrachat 256×1024 batch 4）。NVIDIA 公开 `nvidia/Qwen3.8-27B-NVFP4` 层图相同，
+校准是 Local-Hessian + Nemotron v3 2048（modelopt **0.48.0**），配方
+`qwen3.8-27b-nvfp4-mixed.yaml`，单卡 32 GB 放不下。
+
+5090 GPQA：`eval-gpqa-diamond.5090.yaml`，**24 路** / HiCache **64 GiB** /
+bf16 GDN 96 slot / Triton + Marlin。宿主机 override 写死 argv 时必须同步
+hicache / mamba。不要清空 `gpqa_diamond.jsonl`。
 
 | 镜像 | 用途 |
 |---|---|
@@ -49,8 +105,10 @@ docker compose --profile gpu run --rm eval-gpqa
 `docker compose up` 默认只跑 `plan`，不会误触发 27B 校准。
 
 `mixed` Compose 服务使用 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`
-（`max`，ultrachat 256×1024，batch 4）。NVIDIA 质量 Local-Hessian
-（`local_hessian`，2048，`Nemotron-Post-Training-Dataset-v3`）：
+（`max`，ultrachat 256×1024，batch 4）。**这就是 5090 生产 PTQ**，不是
+占位配方。NVIDIA 公开权重用 Local-Hessian（`local_hessian`，2048，
+`Nemotron-Post-Training-Dataset-v3`，modelopt 0.48.0）；32 GB 5090 放不下
+Hessian 2048：
 
 ```bash
 RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
@@ -60,8 +118,12 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --r
 
 GPQA Diamond 走官方 Qwen thinking 采样，推理用 SGLang（NVIDIA Qwen3.8
 cookbook）。两个终端：先 `serve-sglang` 再 `eval-gpqa`。32 GB 卡上保持
-`context-length 262144`，KV 放不下就 HiCache offload 进主机内存
-（MemTotal − 6 GiB），不要截断生成。Mixed / 默认 W4A8 导出后，若
+`context-length 262144`，KV 放不下就 HiCache offload 进主机内存，不要截断
+生成。5090 配方钉死 **64 GiB** HiCache、**24 路**、bf16 GDN / 96 slot、
+Triton + Marlin。宿主机 `docker-compose.override.yml`（不要进 git）如果写死了
+`sglang` argv，必须同步 `--hicache-size 64` / `--max-mamba-cache-size 96` /
+`--mamba-ssm-dtype bfloat16`。eval journal 按 `item_id` 续跑，不要清空
+`gpqa_diamond.jsonl`。Mixed / 默认 W4A8 导出后，若
 `hf_quant_config.json` 仍是没有 `quantized_layers` 的裸 `NVFP4`，先
 `megaquant rewrite-sglang <export_dir>` 再 serve。均匀 `w4a8_nvfp4_fp8`
 只给 TensorRT-LLM，不要当 SGLang 权重加载。
@@ -117,7 +179,7 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquan
 
 默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
 
-这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
+这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。float32 64-slot mamba 大约占 9.3 GB HBM，GPU KV 只剩不到 1 GB，16 路会排队。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
 
 ```bash
 EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang
@@ -174,12 +236,13 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 
 - CUDA 12.8 devel（Triton / Local-Hessian NVFP4 扫描需要）
 - PyTorch CUDA 12.8 轮子，`TORCH_CUDA_ARCH_LIST=9.0;10.0;12.0`
-- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）；TensorRT-LLM 均匀 W4A8 = `W4A8_NVFP4_FP8_CFG`（weight block **32**）
+- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）；TensorRT-LLM 均匀 W4A8 = `W4A8_NVFP4_FP8_CFG`（weight block **32**）。镜像钉 **0.46.1**（PyPI 没有 0.48）；5090 生产算法是 **`max`**，不是 Local-Hessian。
 - llm-compressor / compressed-tensors（vLLM 路径）
 - 本仓库 `megaquant` CLI
 
 不包含 27B 权重、校准数据集和导出 checkpoint。
 
-`nvidia/Qwen3.8-27B-NVFP4` 是混合 NVFP4/FP8（group_size 16 + FP8）。默认
-`nvfp4_w4a8` 对齐这套图给 SGLang 用。`W4A8_NVFP4_FP8` block 32 是
+`nvidia/Qwen3.8-27B-NVFP4` 是混合 NVFP4/FP8（group_size 16 + FP8），校准是
+Local-Hessian + Nemotron v3。默认 `nvfp4_w4a8` 对齐这套**层图**给 SGLang
+用；5090 生产校准是 `max` + ultrachat 256。`W4A8_NVFP4_FP8` block 32 是
 `w4a8_nvfp4_fp8`，SGLang 不认。

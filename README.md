@@ -34,6 +34,35 @@ use **group_size 16**. Default `nvfp4_w4a8` in this repo matches that map so
 SGLang `modelopt_mixed` can serve the checkpoint. Uniform ModelOpt
 `W4A8_NVFP4_FP8` (block 32) is scheme `w4a8_nvfp4_fp8`.
 
+### What this repo actually quantized (5090)
+
+The live 32 GB RTX 5090 PTQ is **not** NVIDIA's public recipe. It used
+[`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)
+(scheme `nvfp4_mixed`; same encoding as default `nvfp4_w4a8`). The W4A8 export
+directory is that mixed checkpoint, not a second PTQ.
+
+| Knob | 5090 production | NVIDIA public `nvidia/Qwen3.8-27B-NVFP4` |
+|---|---|---|
+| Layer map | NVFP4 gs16 MLP + `lm_head`, FP8 attn | Same |
+| Algorithm | ModelOpt **`max`** (per-tensor amax / RTN) | **Local-Hessian** (`fp8_scale_sweep`, Hessian `block_size` 16) |
+| nvidia-modelopt | **0.46.1** (PyPI; 0.48 is not published there) | **0.48.0** |
+| Calib | `HuggingFaceH4/ultrachat_200k` **256×1024**, batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**, batch 1 |
+| Export | `quant_algo=MIXED_PRECISION` + `quantized_layers` | Same mixed HF layout |
+| GPQA (published) | Do **not** quote a 198-row score until the journal finishes | **88.92** BF16 / **88.01** NVFP4 on GB300 **vLLM** |
+
+`max` is the cheap PTQ path and is what fits a 32 GB card with CPU offload.
+Local-Hessian at 2048 samples does not. Quality requant:
+`recipes/qwen3.8-27b-nvfp4-mixed.yaml` on a larger GPU. Compose `mixed`
+defaults to the 5090 `max` recipe; override with
+`RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`.
+
+5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
+**64 GiB** (SGLang splits that host pool by GPU KV vs GDN size), **bf16**
+GDN with `max_mamba_cache_size: 96`, Triton attention + Marlin NVFP4
+(CUDA 12.8 cannot FlashInfer-JIT SM 12.0). NVIDIA's mixed card used vLLM on
+GB300; their SGLang cookbook uses `extra_buffer` + float32 mamba. Keep the
+default FlashInfer recipe and the 5090 Triton recipe distinct.
+
 ### Qwen3.8-27B W4A8 quickstart
 
 Always dry-run first. Dry-run validates the YAML, resolves the `qwen3_5`
@@ -59,10 +88,13 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 ```
 
 NVIDIA-matched mixed checkpoint (group_size 16 on MLP + `lm_head`, FP8 on
-attention; Local-Hessian + Nemotron v3):
+attention; Local-Hessian + Nemotron v3). A 32 GB 5090 cannot run this;
+use `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` (`max` + ultrachat) instead:
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
+# 5090 production:
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
 End-to-end notes: [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md).
@@ -154,7 +186,9 @@ Two terminals: **serve**, then **eval**. Match the Qwen thinking card on
 sampling; do not greedy-decode or cap generation at 512/2048. Generation
 uses the remaining 262144-token window (`max_new_tokens: 0`) and continues
 on length. On a 32 GB card, SGLang **HiCache-offloads KV into host RAM**
-(MemTotal − 6 GiB) instead of truncating.
+instead of truncating. The 5090 recipe pins **64 GiB** HiCache and
+**24-way** GPQA (`bf16` GDN, 96 mamba slots); a fat float32 mamba cache
+starves GPU KV and also steals the host HiCache pool.
 
 `--dry-run` plans against the local export `outputs/Qwen3.8-27B-NVFP4-W4A8`
 and does **not** download `Qwen/Qwen3.8-27B`. Compose `eval-gpqa` is HTTP-only
@@ -210,6 +244,33 @@ NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合 NVFP4/FP8**：MLP + `lm
 对齐这套图，好让 SGLang `modelopt_mixed` 加载。均匀 `W4A8_NVFP4_FP8`
 （block 32）改叫 `w4a8_nvfp4_fp8`。
 
+### 这台 5090 实际跑的量化
+
+线上 32 GB RTX 5090 的 PTQ **不是** NVIDIA 公开配方。实际用的是
+[`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)
+（`nvfp4_mixed`，与默认 `nvfp4_w4a8` 同一套编码）。W4A8 导出目录就是这份
+mixed checkpoint，没有再跑一遍 PTQ。
+
+| 项 | 5090 生产 | NVIDIA 公开 `nvidia/Qwen3.8-27B-NVFP4` |
+|---|---|---|
+| 层图 | MLP + `lm_head` NVFP4 gs16，注意力 FP8 | 相同 |
+| 算法 | ModelOpt **`max`**（amax / RTN） | **Local-Hessian**（`fp8_scale_sweep`，Hessian `block_size` 16） |
+| nvidia-modelopt | **0.46.1**（PyPI；0.48 未上 PyPI） | **0.48.0** |
+| 校准 | `HuggingFaceH4/ultrachat_200k` **256×1024**，batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**，batch 1 |
+| 导出 | `MIXED_PRECISION` + `quantized_layers` | 同一套 mixed HF 布局 |
+| GPQA（已发表） | 198 题 journal 跑完前 **不要报总分** | GB300 **vLLM**：**88.92** BF16 / **88.01** NVFP4 |
+
+`max` 省显存，单卡 32 GB 只能走这条。Local-Hessian 2048 需要更大卡：
+`recipes/qwen3.8-27b-nvfp4-mixed.yaml`。Compose `mixed` 默认就是 5090 的
+`max` 配方。
+
+5090 GPQA（`recipes/eval-gpqa-diamond.5090.yaml`）：**24 路**，HiCache
+**64 GiB**（按 GPU 上 KV / GDN 池比例切主机内存），GDN **bf16** 且
+`max_mamba_cache_size: 96`，Triton 注意力 + Marlin NVFP4（CUDA 12.8 编不了
+SM 12.0 的 FlashInfer JIT）。NVIDIA 模型卡用 GB300 上的 vLLM；他们的
+SGLang cookbook 是 `extra_buffer` + float32 mamba。默认 FlashInfer 配方和
+5090 Triton 配方不要混用。
+
 ### Qwen3.8-27B W4A8 快速开始
 
 先 dry-run，确认忽略列表、backend、校准条数，**不会**拉取 27B 权重：
@@ -232,10 +293,13 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 ```
 
 对齐 NVIDIA 公开 checkpoint 的混合配方（MLP + `lm_head` 为 NVFP4 group_size
-16，注意力为 FP8；Local-Hessian + Nemotron v3）：
+16，注意力为 FP8；Local-Hessian + Nemotron v3）。32 GB 5090 跑不了 Hessian
+2048，生产用 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（`max` + ultrachat）：
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
+# 5090 生产：
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
 完整手册见 [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md)。
@@ -295,11 +359,12 @@ K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publi
 量化产物评测 GPQA Diamond：两个终端，先 **serve** 再 **eval**。官方
 thinking 采样，推理走 **SGLang** `:30000`（NVIDIA Qwen3.8 cookbook）；
 不要 greedy 或短截断。`max_new_tokens: 0` 用完剩余 262k 窗口，length
-后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU offload**
-（MemTotal − 6 GiB）。`--dry-run` 只看本地导出
-`outputs/Qwen3.8-27B-NVFP4-W4A8`，不会去拉 `Qwen/Qwen3.8-27B`。Compose
-`eval-gpqa` 不挂 GPU；`serve-sglang` 才挂。默认 FlashInfer
-（`eval-gpqa-diamond.yaml`），5090 / CUDA 12.8 用 Triton
+后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU offload**。
+5090 配方钉死 **64 GiB** HiCache、**24 路** GPQA（bf16 GDN、96 个
+mamba slot）；float32 的胖 mamba 会把 GPU KV 和主机 HiCache 一起吃掉。
+`--dry-run` 只看本地导出 `outputs/Qwen3.8-27B-NVFP4-W4A8`，不会去拉
+`Qwen/Qwen3.8-27B`。Compose `eval-gpqa` 不挂 GPU；`serve-sglang` 才挂。
+默认 FlashInfer（`eval-gpqa-diamond.yaml`），5090 / CUDA 12.8 用 Triton
 （`eval-gpqa-diamond.5090.yaml`），两套配方不要混。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
