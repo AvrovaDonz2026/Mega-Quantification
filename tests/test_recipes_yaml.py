@@ -185,9 +185,18 @@ def test_gpqa_5090_recipe_matches_official_cards_except_triton() -> None:
     data = _load(GPQA_5090)
     _assert_gpqa_official_cards(data, attention_backend="triton")
     assert data["name"] == "gpqa-diamond-qwen38-official-5090"
-    # Other agents may still land sampling_backend: pytorch; do not fail if absent.
-    if "sampling_backend" in data["serve"]:
-        assert data["serve"]["sampling_backend"] == "pytorch"
+    serve = data["serve"]
+    # Extra 5090 GEMM/sampling knobs may land in later commits; skip if absent.
+    optional = {
+        "sampling_backend": "pytorch",
+        "linear_attn_backend": "triton",
+        "fp8_gemm_backend": "triton",
+        "fp4_gemm_backend": "marlin",
+        "force_fp8_marlin": True,
+    }
+    for key, value in optional.items():
+        if key in serve:
+            assert serve[key] == value, key
 
 
 def test_gpqa_5090_recipe_stays_distinct_from_default() -> None:

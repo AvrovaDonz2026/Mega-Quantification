@@ -164,14 +164,19 @@ def _assert_eval_serve_dry_run_payload(kind: str, out: str, recipe: str) -> None
         assert data["plan"]["model"] == LOCAL_EXPORT
     if recipe.endswith("5090.yaml"):
         assert backend == "triton"
-        assert "flashinfer" not in json.dumps(data.get("argv") or data.get("serve"))
+        serve_blob = json.dumps(data.get("argv") if kind == "serve" else data.get("serve"))
+        assert "flashinfer" not in serve_blob
+        if kind == "serve" and "--sampling-backend" in data["argv"]:
+            assert data["argv"][data["argv"].index("--sampling-backend") + 1] == "pytorch"
+        if kind == "eval" and data["serve"].get("sampling_backend"):
+            assert data["serve"]["sampling_backend"] == "pytorch"
     else:
         assert backend == "flashinfer"
-        assert "triton" not in (
-            json.dumps(data.get("argv"))
-            if kind == "serve"
-            else json.dumps(data["serve"].get("attention_backend"))
-        )
+        if kind == "serve":
+            assert data["argv"][data["argv"].index("--attention-backend") + 1] == "flashinfer"
+            assert "--sampling-backend" not in data["argv"]
+        else:
+            assert data["serve"]["attention_backend"] == "flashinfer"
 
 
 @pytest.mark.parametrize("recipe", (EVAL_DEFAULT, EVAL_5090))
