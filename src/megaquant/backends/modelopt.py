@@ -753,6 +753,118 @@ def _call_export_hf(export_fn: Any, model: Any, output_dir: Path) -> None:
     export_fn(model, dtype=None, export_dir=path)
 
 
+EXPORT_MIN_FREE_GIB = 8
+
+
+def _is_cuda_oom(exc: BaseException) -> bool:
+    blob = f"{type(exc).__name__} {exc}".lower()
+    compact = blob.replace("_", "").replace(" ", "")
+    return "outofmemory" in compact or "cudaoom" in compact
+
+
+def _cuda_free_bytes() -> int | None:
+    try:
+        import torch
+    except ImportError:
+        return None
+    cuda = getattr(torch, "cuda", None)
+    if cuda is None or not callable(getattr(cuda, "is_available", None)):
+        return None
+    try:
+        if not cuda.is_available():
+            return None
+        free, _total = cuda.mem_get_info()
+        return int(free)
+    except Exception:
+        return None
+
+
+def _clear_partial_export(output_dir: Path) -> None:
+    """Drop incomplete ModelOpt shard parts so a retry does not mix files."""
+    for path in output_dir.glob("__shard_part_*"):
+        try:
+            path.unlink()
+        except OSError:
+            continue
+
+
+def _module_to_cpu(module: Any) -> bool:
+    to_fn = getattr(module, "to", None)
+    if callable(to_fn):
+        try:
+            to_fn("cpu")
+            return True
+        except Exception:
+            pass
+    moved = False
+    params = getattr(module, "parameters", None)
+    if callable(params):
+        for tensor in params(recurse=False):
+            data = getattr(tensor, "data", None)
+            if data is None:
+                continue
+            try:
+                tensor.data = data.detach().to("cpu")
+                moved = True
+            except Exception:
+                continue
+    return moved
+
+
+def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) -> str:
+    """Free GPU workspace so NVFP4 pack (``_cast_fp4``) can allocate ~5 GiB.
+
+    After 5090 PTQ the LM already fills VRAM−1 GiB. Mixed export then OOMs in
+    ``torch.searchsorted``. Offload GPU-resident modules until ``min_free_gib``
+    is free; do not gather the whole 27B onto RAM.
+    """
+    import gc
+
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return "cpu-only"
+    cuda = getattr(torch, "cuda", None)
+    if cuda is None or not callable(getattr(cuda, "is_available", None)):
+        return "cpu-only"
+    try:
+        if not cuda.is_available():
+            return "cpu-only"
+        cuda.synchronize()
+        cuda.empty_cache()
+    except Exception:
+        return "cpu-only"
+    gc.collect()
+    free = _cuda_free_bytes()
+    need = max(1, int(min_free_gib)) * 1024**3
+    if free is None or free >= need:
+        return "cuda"
+    named = getattr(model, "named_modules", None)
+    modules: list[Any] = []
+    if callable(named):
+        try:
+            modules = [mod for _name, mod in named()]
+        except Exception:
+            modules = []
+    if not modules:
+        modules = [model]
+    for module in reversed(modules):
+        free = _cuda_free_bytes()
+        if free is None or free >= need:
+            break
+        _module_to_cpu(module)
+        try:
+            cuda.empty_cache()
+        except Exception:
+            pass
+        gc.collect()
+    free = _cuda_free_bytes()
+    if free is not None and free >= need:
+        return "cuda-freed"
+    return "partial-cpu"
+
+
 def _rewrite_sglang_export(
     output_dir: Path, canonical: str
 ) -> dict[str, dict[str, Any]] | None:
@@ -842,7 +954,15 @@ class ModelOptBackend:
 
         output_dir = _output_dir(recipe)
         output_dir.mkdir(parents=True, exist_ok=True)
-        _call_export_hf(export_hf_checkpoint, model, output_dir)
+        _prepare_export_memory(model)
+        try:
+            _call_export_hf(export_hf_checkpoint, model, output_dir)
+        except Exception as exc:
+            if not _is_cuda_oom(exc):
+                raise
+            _clear_partial_export(output_dir)
+            _prepare_export_memory(model, min_free_gib=max(EXPORT_MIN_FREE_GIB, 12))
+            _call_export_hf(export_hf_checkpoint, model, output_dir)
 
         if tokenizer is not None:
             save = getattr(tokenizer, "save_pretrained", None)

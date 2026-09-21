@@ -9,6 +9,9 @@ from typing import Any
 from megaquant.backends.modelopt import (
     ModelOptBackend,
     _call_export_hf,
+    _clear_partial_export,
+    _is_cuda_oom,
+    _prepare_export_memory,
     _weight_input_attrs,
     describe_cfg,
 )
@@ -242,3 +245,34 @@ def test_export_hf_uses_export_dir_keyword(tmp_path) -> None:
     _call_export_hf(fake_export, object(), tmp_path / "out")
     assert seen["export_dir"] == str(tmp_path / "out")
     assert seen["dtype"] is None
+
+
+def test_prepare_export_memory_is_noop_without_cuda() -> None:
+    class Dummy:
+        def __init__(self) -> None:
+            self.moved_to: str | None = None
+
+        def named_modules(self):
+            yield "self", self
+
+        def to(self, device):  # noqa: ANN001
+            self.moved_to = str(device)
+
+    dummy = Dummy()
+    kind = _prepare_export_memory(dummy)
+    assert kind in {"cpu-only", "cuda", "cuda-freed", "partial-cpu"}
+    if kind == "cpu-only":
+        assert dummy.moved_to is None
+    assert _is_cuda_oom(RuntimeError("CUDA out of memory. Tried to allocate 4.74 GiB"))
+    assert _is_cuda_oom(MemoryError("torch.OutOfMemoryError"))
+    assert not _is_cuda_oom(ValueError("bad export_dir"))
+
+
+def test_clear_partial_export_removes_shard_parts(tmp_path: Path) -> None:
+    leftover = tmp_path / "__shard_part_00000.safetensors"
+    leftover.write_bytes(b"partial")
+    keep = tmp_path / "config.json"
+    keep.write_text("{}", encoding="utf-8")
+    _clear_partial_export(tmp_path)
+    assert not leftover.exists()
+    assert keep.exists()
