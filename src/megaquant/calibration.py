@@ -250,6 +250,15 @@ def _load_hf_dataset(dataset_id: str) -> Any:
             errors.append(f"name={name} (no split): {exc}")
 
     detail = errors[-1] if errors else "unknown error"
+    gated = any("gated" in item.lower() for item in errors)
+    if gated:
+        raise CalibrationError(
+            f"Could not load calibration dataset '{dataset_id}' (gated on the Hub). "
+            "Set HF_TOKEN / HUGGING_FACE_HUB_TOKEN, or switch calibration.dataset to "
+            "HuggingFaceH4/ultrachat_200k "
+            "(recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml) or a local JSONL. "
+            f"Last error: {detail}"
+        )
     raise CalibrationError(f"Could not load calibration dataset '{dataset_id}': {detail}")
 
 

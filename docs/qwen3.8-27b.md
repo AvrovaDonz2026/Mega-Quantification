@@ -34,7 +34,9 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 
 All three set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
 `model.quantize_vision: false`, `model.quantize_mtp: false`, and
-`calibration.dataset: nvidia/Nemotron-Post-Training-Dataset-v2`.
+`calibration.dataset: nvidia/Nemotron-Post-Training-Dataset-v2` (gated; set
+`HF_TOKEN`). Anonymous Hub access: `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml`
+(`HuggingFaceH4/ultrachat_200k`).
 
 NVIDIA's model card calibrated on **Nemotron-Post-Training-Dataset-v3**. This
 repo follows the architecture default (**v2**). Swap `calibration.dataset` if

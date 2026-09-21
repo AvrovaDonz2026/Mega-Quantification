@@ -59,7 +59,8 @@ model:
   quantize_vision: false
   quantize_mtp: false
 calibration:
-  dataset: nvidia/Nemotron-Post-Training-Dataset-v2
+  # Nemotron v2 is gated; ultrachat is public. Override RECIPE + HF_TOKEN for Nemotron.
+  dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 512
   max_seq_length: 2048
   batch_size: 1
