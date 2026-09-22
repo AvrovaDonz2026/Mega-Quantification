@@ -70,7 +70,7 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 
 ### SGLang 推理与 GPQA
 
-推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样对齐 Qwen thinking 卡：`temperature=1.0`，`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。Journal 是 `outputs/eval/gpqa_diamond/gpqa_diamond.jsonl`，按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
+推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样对齐 Qwen thinking 卡：`temperature=1.0`，`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -132,7 +132,7 @@ DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mix
 
 ## SGLang inference and GPQA
 
-Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling is the Qwen thinking card: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. The journal is `outputs/eval/gpqa_diamond/gpqa_diamond.jsonl` and resumes by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
+Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling is the Qwen thinking card: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
 
 | | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
 |---|---|---|---|
@@ -550,8 +550,8 @@ Compose: `make serve-sglang` then `make eval-gpqa`. `eval-gpqa` does not
 attach a GPU; `serve-sglang` does. On CUDA 12.8 / SM 12.0 set
 `EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml`. The client talks to
 `MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`). Journals
-land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
-the full text; stdout is a one-line status). Optional `--engine vllm`
+land in `<model>/gpqa_diamond/` (`gpqa_diamond.jsonl` keeps the full text;
+stdout is a one-line status). Optional `--engine vllm`
 keeps the NVIDIA GB300 vLLM flags on port 8000.
 
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local

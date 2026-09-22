@@ -207,8 +207,8 @@ SGLang on `:30000`. Sampling is the Qwen thinking card
 (`temperature=1.0`, `top_p=0.95`, `top_k=20`, thinking on,
 `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144
 context and `continue_on_length` continues until EOS. The journal is
-`outputs/eval/gpqa_diamond/gpqa_diamond.jsonl` (resume by `item_id`). The
-score is `correct/198` after every Diamond row is in the file.
+`<model>/gpqa_diamond/gpqa_diamond.jsonl` (full text, resume by `item_id`).
+The score is `correct/198` after every Diamond row is in the file.
 
 | Box | Recipe | Serve shape |
 |---|---|---|
@@ -411,7 +411,7 @@ K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publi
 **`megaquant eval`**。推理走 **SGLang** `:30000`，采样是 Qwen thinking 卡
 （`temperature=1.0`，`top_p=0.95`，`top_k=20`，thinking 开，
 `reasoning_effort=xhigh`）。`max_new_tokens: 0` 用完剩余 262144 上下文。
-Journal 是 `outputs/eval/gpqa_diamond/gpqa_diamond.jsonl`，按 `item_id`
+完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，按 `item_id`
 续跑。198 行都在文件里之后，分数才是 `correct/198`。
 
 | 机器 | 配方 | 推理形态 |

@@ -17,7 +17,7 @@ backend: auto
 base_url: null
 shuffle_choices: true
 limit: null
-output_dir: outputs/eval/gpqa_diamond
+# Full traces go in <model>/gpqa_diamond, next to the weights.
 # 256 bf16 mamba slots → 64 in-flight. The 84 GB card keeps those plus
 # the FP8 KV pool on GPU, so HiCache is off.
 concurrency: 64

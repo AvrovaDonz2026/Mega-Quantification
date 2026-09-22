@@ -23,6 +23,7 @@ from megaquant.eval_gpqa import (
     eval_base_url_from_env,
     extract_choice,
     format_gpqa_prompt,
+    gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
     remaining_new_tokens,
@@ -81,6 +82,16 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert plan["kv_cpu_offload_gib"] == 12
     assert default_eval_base_url(recipe) == DEFAULT_EVAL_BASE_URL
     assert default_eval_base_url(recipe) == "http://127.0.0.1:30000/v1"
+
+
+def test_default_traces_sit_inside_the_model_directory() -> None:
+    recipe = load_eval_recipe(RECIPE)
+    assert recipe.output_dir == ""
+    traced = gpqa_trace_dir(recipe.model, recipe.output_dir)
+    assert traced == Path(recipe.model) / "gpqa_diamond"
+    assert describe_eval(recipe)["journal_dir"] == str(traced)
+    custom = gpqa_trace_dir(recipe.model, "/tmp/keep-this")
+    assert custom == Path("/tmp/keep-this")
 
 
 def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:

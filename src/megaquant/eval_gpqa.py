@@ -197,7 +197,8 @@ class EvalRecipe(StrictModel):
     sampling: EvalSampling = Field(default_factory=EvalSampling)
     generation: EvalGeneration = Field(default_factory=EvalGeneration)
     serve: EvalServe = Field(default_factory=EvalServe)
-    output_dir: str = "outputs/eval/gpqa_diamond"
+    # Empty means `<model>/gpqa_diamond` (full traces beside the weights).
+    output_dir: str = ""
     limit: int | None = None
     shuffle_choices: bool = True
     # HTTP client fan-out. Serve max_running_requests is the hard cap (GDN
@@ -324,6 +325,14 @@ def eval_base_url_from_env() -> str | None:
     return None
 
 
+def gpqa_trace_dir(model: str, output_dir: str | None = None) -> Path:
+    """Folder for GPQA traces. The default sits inside the model directory."""
+    raw = (output_dir or "").strip()
+    if not raw:
+        return Path(model) / "gpqa_diamond"
+    return Path(raw)
+
+
 def default_eval_base_url(recipe: EvalRecipe | None = None) -> str:
     """Local OpenAI-compatible URL for the selected serve engine."""
     if recipe is not None and recipe.serve.engine == "vllm":
@@ -361,6 +370,7 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
             explicit_gb=recipe.serve.kv_offloading_size_gb,
         ),
         "concurrency": recipe.concurrency,
+        "journal_dir": str(gpqa_trace_dir(recipe.model, recipe.output_dir)),
         "kv_offloading_backend": kv_backend,
         # Local export only: missing dir -> null (never Hub-download 27B).
         "sglang_quant": sglang_quant_snapshot(recipe.model),
@@ -1043,7 +1053,7 @@ def run_gpqa(
             return int(count_prompt_tokens(text))
         return max(1, len(text) // 4)
 
-    out_dir = Path(recipe.output_dir)
+    out_dir = gpqa_trace_dir(recipe.model, recipe.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     journal_path = out_dir / "gpqa_diamond.jsonl"
     prior = load_gpqa_journal(journal_path)

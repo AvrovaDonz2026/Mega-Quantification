@@ -37,7 +37,8 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --r
 use the same `--hicache-size 64 --max-mamba-cache-size 96 --mamba-ssm-dtype
 bfloat16`. An 80 GB SM120 uses `recipes/eval-gpqa-diamond.6000d.yaml`
 (64-way, KV on GPU, CUDA graph on, SiLU+FP4 fusion off). Do not wipe
-`gpqa_diamond.jsonl`; the client resumes by `item_id`.
+`gpqa_diamond.jsonl`; the client resumes by `item_id`. The jsonl is the
+full trace and is written under the model directory (`<model>/gpqa_diamond/`).
 
 The checkpoint those recipes serve is mixed: MLP + `lm_head` are NVFP4
 group 16 weights **and** NVFP4 activations, attention projections are FP8,
@@ -70,7 +71,8 @@ ultrachat 256×1024 batch 4）。NVIDIA 公开 `nvidia/Qwen3.8-27B-NVFP4` 层图
 bf16 GDN 96 slot / Triton + Marlin / CUDA graph 关。宿主机 override 写死
 argv 时必须同步 hicache / mamba。80 GB SM120 用
 `eval-gpqa-diamond.6000d.yaml`（64 路、KV 在 GPU、CUDA graph 开、关掉
-SiLU+FP4 融合）。不要清空 `gpqa_diamond.jsonl`。
+SiLU+FP4 融合）。不要清空 `gpqa_diamond.jsonl`。完整轨迹写在模型目录
+`<model>/gpqa_diamond/` 里。
 
 这些配方加载的权重是混合格式：MLP + `lm_head` 为 NVFP4 group 16 权重和
 NVFP4 激活，注意力投影为 FP8，KV 为 fp8_e4m3，`hf_quant_config.json` 为
