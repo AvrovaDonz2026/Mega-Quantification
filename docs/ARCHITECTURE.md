@@ -21,7 +21,7 @@ GPQA 用 `eval-gpqa-diamond.6000d.yaml`：64 路、KV 在 GPU、CUDA graph 开�
   NVFP4 (E2M1, group_size **16**) on MLP + `lm_head`; FP8 E4M3 on self-attn +
   linear-attn. Export `quant_algo=MIXED_PRECISION` + `quantized_layers`.
 - Uniform W4A4 (`nvfp4_w4a4`): NVFP4 block **16** weights and activations.
-- No recipe for ModelOpt uniform `W4A8_NVFP4_FP8` (NVFP4 block **32**).
+- No implementation of ModelOpt uniform `W4A8_NVFP4_FP8` (NVFP4 block **32**).
   SGLang rejects that `quant_algo`.
 
 NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` checkpoint is mixed NVFP4/FP8:
@@ -87,7 +87,7 @@ Weights, Hub caches, journals, `.env`, `.oss.env`, and `docker-compose.override.
 class PrecisionSpec(BaseModel):
     format: Literal["nvfp4", "fp8", "mxfp4", "bf16", "int4"]
     bits: int
-    group_size: int | None = None   # W4A4 and SGLang/NVIDIA mixed NVFP4 layers: 16; TRT-LLM W4A8_NVFP4_FP8: 32
+    group_size: int | None = None   # W4A4 and SGLang/NVIDIA mixed NVFP4 layers: 16
     scale_dtype: str = "float8_e4m3fn"
     dynamic: bool = False
     strategy: str | None = None     # tensor | channel | group | tensor_group | token
@@ -204,15 +204,16 @@ Default ignore for `qwen3_5` (language-model W4A8):
 |---|---|---|
 | `nvfp4_w4a8` | mixed overrides + `MIXED_PRECISION` export / `mixed_nvfp4_fp8` | **16** on MLP + `lm_head`; FP8 on attention (SGLang) |
 | `nvfp4_mixed` | same mixed cfg / `mixed_nvfp4_fp8` | **16** on MLP + `lm_head` (NVIDIA public mapping) |
-| `w4a8_nvfp4_fp8` | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` | **32** weights + FP8 activations. Recognized so serve can reject it. No recipe file. |
 | `nvfp4_w4a4` | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | **16** weights and activations, uniform |
 | `nvfp4_w4a16` | `mtq.W4A16_NVFP4_CFG` / `w4a16_nvfp4` | 16, weight-only |
 | `nvfp4_w4a16_mixed` | mixed W4A16 MLP + FP8 attn / `W4A16_NVFP4` on MLP | 16 MLP weights, BF16 MLP activations, FP8 attention. Optional Marlin export, not the Spark fast path |
 | `fp8_w8a8` | `mtq.FP8_DEFAULT_CFG` / `fp8` | n/a (FP8) |
 
-SGLang-serving NVFP4 uses **group_size 16** on MLP + `lm_head`. TensorRT-LLM
-uniform W4A8 uses **block size 32** (`nvfp4_bs32`). Do not describe
-`nvidia/Qwen3.8-27B-NVFP4` as `W4A8_NVFP4_FP8` / block 32.
+SGLang-serving NVFP4 uses **group_size 16** on MLP + `lm_head`. Do not
+describe `nvidia/Qwen3.8-27B-NVFP4` as ModelOpt `W4A8_NVFP4_FP8` (NVFP4
+block 32). SGLang rejects that tag, and this repo does not quantize to it.
+A loaded `W4A8_NVFP4_FP8_CFG` is only a fallback base that mixed quant
+rewrites to group_size 16.
 
 Export: `modelopt.torch.export.export_hf_checkpoint(model, export_dir)` then
 `megaquant.sglang_export.rewrite_sglang_mixed_export` for `nvfp4_w4a8` /
@@ -227,7 +228,7 @@ Algorithm mapping (`_apply_algorithm`):
 | Recipe `algorithm` | ModelOpt `cfg["algorithm"]` | Used on |
 |---|---|---|
 | `max` (default) | `"max"` — amax / RTN, no Hessian | 5090 production mixed / W4A8 / W4A4 |
-| `local_hessian` | `{method: local_hessian, fp8_scale_sweep: True, block_size: 16}` (32 for `w4a8_nvfp4_fp8`) | NVIDIA quality `mixed.yaml` |
+| `local_hessian` | `{method: local_hessian, fp8_scale_sweep: True, block_size: 16}` | NVIDIA quality `mixed.yaml` |
 | `mse` | `{method: mse}` | optional |
 
 Local Hessian (quality recipe only):
@@ -242,14 +243,13 @@ VLM: quantize the language model; keep the vision encoder in BF16 unless
 ## llm-compressor mapping
 
 There is **no** stock `NVFP4A8` preset. Default `nvfp4_w4a8` uses two custom
-groups matching the NVIDIA mixed map. TensorRT-LLM uniform W4A8
-(`w4a8_nvfp4_fp8`) builds a custom `QuantizationScheme`:
+groups matching the NVIDIA mixed map. This backend does not build ModelOpt
+`W4A8_NVFP4_FP8` (NVFP4 block 32 + FP8 activations).
 
-- weights: FP4, `TENSOR_GROUP`, `group_size=32` for TRT-LLM W4A8 (16 for
-  uniform W4A4 and for NVIDIA/SGLang mixed MLP + `lm_head`),
-  `scale_dtype=float8_e4m3fn`
-- activations: FP8 for TRT-LLM W4A8; NVFP4 (group 16) for uniform W4A4;
-  mixed follows the NVIDIA mapping (NVFP4 on MLP + `lm_head`, FP8 on attention)
+- weights: FP4, `TENSOR_GROUP`, `group_size=16` for uniform W4A4 and for
+  NVIDIA/SGLang mixed MLP + `lm_head`, `scale_dtype=float8_e4m3fn`
+- activations: NVFP4 (group 16) for uniform W4A4; mixed follows the NVIDIA
+  mapping (NVFP4 on MLP + `lm_head`, FP8 on attention)
 - ignore: family ignore list + `lm_head` when the recipe says so
 - save: `model.save_pretrained(dir, save_compressed=True)`
 
@@ -284,7 +284,7 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
 - After mixed / default-W4A8 export: `megaquant rewrite-sglang <export_dir>`
   before SGLang serve if `hf_quant_config.json` is bare NVFP4 without
   `quantized_layers`. A `W4A8_NVFP4_FP8` export is not SGLang-loadable, and
-  this repo does not ship a recipe that produces it.
+  this repo does not quantize to that tag.
 - Publish: `python scripts/oss_publish.py <export> --scheme w4a4|mixed|w4a8`
   and/or `bash scripts/gpu-pod.sh publish [scheme]`. Bucket/endpoint from
   `OSS_BUCKET` / `OSS_ENDPOINT` (optional `.oss.env`). Mixed encoding **is**

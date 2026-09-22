@@ -38,7 +38,10 @@ def test_canonical_scheme_from_name_and_alias() -> None:
     oss = _load()
     assert oss.canonical_scheme("nvfp4_w4a4", Path("/tmp")) == "w4a4"
     assert oss.canonical_scheme("mixed", Path("/tmp")) == "mixed"
-    assert oss.canonical_scheme("w4a8_nvfp4_fp8", Path("/tmp")) == "w4a8_nvfp4_fp8"
+    with pytest.raises(ValueError):
+        oss.canonical_scheme("w4a8_nvfp4_fp8", Path("/tmp"))
+    with pytest.raises(ValueError):
+        oss.canonical_scheme("nvfp4_w4a8_trtllm", Path("/tmp"))
     fake = Path("/tmp/Qwen3.8-27B-NVFP4-W4A8")
     assert oss.canonical_scheme(None, fake) == "w4a8"
 

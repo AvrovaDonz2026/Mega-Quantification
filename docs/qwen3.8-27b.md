@@ -26,7 +26,7 @@ mixed checkpoint。Local-Hessian 2048 需要更大卡：
 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。
 
 均匀 W4A4 是 `NVFP4_DEFAULT_CFG`（权重和激活均为 NVFP4 block 16）。
-本仓库不提供 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`（block 32）配方。
+本仓库不实现 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`（NVFP4 block 32）。
 NVFP4 推理需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做。
 
 5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
@@ -334,7 +334,7 @@ megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 Do this **before SGLang serve** when `hf_quant_config.json` is still a
 bare `NVFP4` tag without `quantized_layers` (ModelOpt 0.46 often writes
 that). Do not rewrite a `W4A8_NVFP4_FP8` export and call it SGLang-loadable.
-This repo does not ship a recipe for that tag.
+This repo does not quantize to that tag.
 
 27B BF16 ≈ 54 GiB of weights plus activations. Set `model.device_map` (`auto`
 by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
@@ -567,6 +567,6 @@ CSV with the Hub columns (`Question`, `Correct Answer`,
 - Block size 16 vs 32: default SGLang W4A8 (`nvfp4_w4a8`) is NVFP4
   **group_size 16** on MLP + `lm_head` with FP8 attention
   (`MIXED_PRECISION`). Uniform W4A4 is NVFP4 **16** (`NVFP4_DEFAULT_CFG`).
-  This repo does not ship a recipe for ModelOpt uniform `W4A8_NVFP4_FP8`
+  This repo does not implement ModelOpt uniform `W4A8_NVFP4_FP8`
   (NVFP4 block **32**). SGLang rejects that tag. Using block 32 for mixed
   will not match `nvidia/Qwen3.8-27B-NVFP4`.

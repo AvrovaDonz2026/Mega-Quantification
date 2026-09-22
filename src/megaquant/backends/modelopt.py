@@ -12,7 +12,6 @@ Our scheme             ModelOpt object                   qformat
 ====================== ================================= ===================
 ``nvfp4_w4a8``         mixed (SGLang)                    ``mixed_nvfp4_fp8``
 ``nvfp4_mixed``        mixed (NVIDIA quality)            ``mixed_nvfp4_fp8``
-``w4a8_nvfp4_fp8``     ``mtq.W4A8_NVFP4_FP8_CFG``        ``w4a8_nvfp4_fp8``
 ``nvfp4_w4a4``         ``mtq.NVFP4_DEFAULT_CFG``         ``nvfp4``
 ``nvfp4``              alias of ``nvfp4_w4a4``
 ``nvfp4_w4a16``        ``mtq.W4A16_NVFP4_CFG``           ``w4a16_nvfp4``
@@ -27,8 +26,10 @@ on MLP + ``lm_head``, FP8 on self-attn + linear-attn (same map as
 ``nvidia/Qwen3.8-27B-NVFP4``). Export rewrites ``hf_quant_config.json`` to
 ``quant_algo=MIXED_PRECISION`` plus ``quantized_layers``.
 
-``w4a8_nvfp4_fp8`` is TensorRT-LLM uniform W4A8 (NVFP4 block 32 + FP8
-activations). SGLang rejects that ``quant_algo``.
+SGLang rejects ModelOpt ``quant_algo=W4A8_NVFP4_FP8`` (uniform NVFP4 block 32
++ FP8 activations). This backend does not build that config. A loaded
+``W4A8_NVFP4_FP8_CFG`` is only a fallback base for the mixed schemes below,
+and those paths immediately rewrite MLP + ``lm_head`` to NVFP4 group_size 16.
 
 ``nvfp4_mixed`` expression
 --------------------------
@@ -96,7 +97,6 @@ except ImportError:  # Core exceptions.py may not exist yet.
 
 
 SCHEME_ALIASES: dict[str, str] = {
-    "nvfp4_w4a8_trtllm": "w4a8_nvfp4_fp8",
     "nvfp4": "nvfp4_w4a4",
     "w4a16_nvfp4": "nvfp4_w4a16",
     "w4a16_nvfp4_fp8_attn": "nvfp4_w4a16_mixed",
@@ -107,7 +107,6 @@ CANONICAL_SCHEMES: frozenset[str] = frozenset(
     {
         "nvfp4_w4a8",
         "nvfp4_mixed",
-        "w4a8_nvfp4_fp8",
         "nvfp4_w4a4",
         "nvfp4_w4a16",
         "nvfp4_w4a16_mixed",
@@ -118,7 +117,6 @@ CANONICAL_SCHEMES: frozenset[str] = frozenset(
 _SCHEME_QFORMAT: dict[str, str] = {
     "nvfp4_w4a8": "mixed_nvfp4_fp8",
     "nvfp4_mixed": "mixed_nvfp4_fp8",
-    "w4a8_nvfp4_fp8": "w4a8_nvfp4_fp8",
     "nvfp4_w4a4": "nvfp4",
     "nvfp4_w4a16": "w4a16_nvfp4",
     "nvfp4_w4a16_mixed": "mixed_w4a16_nvfp4",
@@ -128,7 +126,6 @@ _SCHEME_QFORMAT: dict[str, str] = {
 _SCHEME_CFG_NAME: dict[str, str] = {
     "nvfp4_w4a8": "NVFP4_DEFAULT_CFG+mixed_overrides",
     "nvfp4_mixed": "NVFP4_DEFAULT_CFG+mixed_overrides",
-    "w4a8_nvfp4_fp8": "W4A8_NVFP4_FP8_CFG",
     "nvfp4_w4a4": "NVFP4_DEFAULT_CFG",
     "nvfp4_w4a16": "W4A16_NVFP4_CFG",
     "nvfp4_w4a16_mixed": "NVFP4_DEFAULT_CFG+w4a16_mixed_overrides",
@@ -138,7 +135,6 @@ _SCHEME_CFG_NAME: dict[str, str] = {
 _PRESET_ATTR: dict[str, tuple[str, ...]] = {
     "nvfp4_w4a8": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
     "nvfp4_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
-    "w4a8_nvfp4_fp8": ("W4A8_NVFP4_FP8_CFG",),
     "nvfp4_w4a4": ("NVFP4_DEFAULT_CFG",),
     "nvfp4_w4a16": ("W4A16_NVFP4_CFG", "NVFP4_MLP_WEIGHT_ONLY_CFG"),
     "nvfp4_w4a16_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
@@ -189,13 +185,7 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
             "error": f"Unsupported ModelOpt scheme: {scheme_name!r}",
         }
 
-    group_size: int | None
-    if canonical == "w4a8_nvfp4_fp8":
-        group_size = 32
-    elif canonical == "fp8_w8a8":
-        group_size = None
-    else:
-        group_size = 16
+    group_size: int | None = None if canonical == "fp8_w8a8" else 16
 
     summary: dict[str, Any] = {
         "scheme": canonical,
@@ -271,18 +261,8 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
                     "SGLang-serving mixed NVFP4/FP8 (nvidia/Qwen3.8-27B-NVFP4 map): "
                     "NVFP4 group_size 16 on *mlp* and *lm_head*; FP8 on *self_attn* "
                     "and *linear_attn*. Export writes MIXED_PRECISION + "
-                    "quantized_layers. TensorRT-LLM uniform W4A8 is w4a8_nvfp4_fp8."
-                ),
-            }
-        )
-    elif canonical == "w4a8_nvfp4_fp8":
-        summary.update(
-            {
-                "weight_format": "nvfp4",
-                "activation_format": "fp8",
-                "notes": (
-                    "W4A8_NVFP4_FP8_CFG: NVFP4 block-size 32 weights + FP8 E4M3 inputs. "
-                    "SGLang rejects quant_algo=W4A8_NVFP4_FP8; TensorRT-LLM only."
+                    "quantized_layers. SGLang rejects ModelOpt quant_algo "
+                    "W4A8_NVFP4_FP8 (NVFP4 block 32)."
                 ),
             }
         )
@@ -518,8 +498,6 @@ def _fallback_uniform(
 
 
 def _fallback_for_scheme(canonical: str) -> dict[str, Any]:
-    if canonical == "w4a8_nvfp4_fp8":
-        return _fallback_uniform(_NVFP4_BS32, _FP8_ATTR)
     if canonical == "nvfp4_w4a4":
         return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
     if canonical == "nvfp4_w4a16":
@@ -548,11 +526,8 @@ def _load_base_cfg(mtq: Any, canonical: str) -> tuple[dict[str, Any], str]:
     return _fallback_for_scheme(canonical), _SCHEME_CFG_NAME[canonical] + "(constructed)"
 
 
-def _hessian_block_size(canonical: str) -> int:
-    # LocalHessianCalibConfig.block_size must match the NVFP4 quantizer.
-    # TensorRT-LLM uniform W4A8 is nvfp4_bs32. SGLang mixed / W4A4 use gs16.
-    if canonical == "w4a8_nvfp4_fp8":
-        return 32
+def _hessian_block_size(_canonical: str) -> int:
+    # LocalHessianCalibConfig.block_size matches NVFP4 group_size 16.
     return 16
 
 

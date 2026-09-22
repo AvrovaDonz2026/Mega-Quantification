@@ -22,8 +22,6 @@ from megaquant.schemes.nvfp4 import (
     MIXED_NVFP4_TARGETS,
     NVFP4_W4A4_ACTIVATIONS,
     NVFP4_W4A4_WEIGHTS,
-    NVFP4_W4A8_ACTIVATIONS,
-    NVFP4_W4A8_WEIGHTS,
     NVFP4_W4A16_WEIGHTS,
     layer_group,
     uniform_group,
@@ -81,32 +79,10 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
             "on self_attn and linear_attn projections. Export writes "
             "quant_algo=MIXED_PRECISION + quantized_layers so SGLang modelopt_mixed "
             "loads the checkpoint. This is NOT ModelOpt W4A8_NVFP4_FP8 (block 32); "
-            "SGLang rejects that tag. TensorRT-LLM uniform W4A8 is scheme "
-            "w4a8_nvfp4_fp8."
+            "SGLang rejects that tag, and this repo does not quantize to it."
         ),
         vllm_support="SGLang modelopt_mixed + vLLM quantization modelopt",
         trtllm_support="native mixed NVFP4 MLP + FP8 attn",
-    ),
-    "w4a8_nvfp4_fp8": SchemeDef(
-        name="w4a8_nvfp4_fp8",
-        groups=[
-            uniform_group(
-                "language_linears",
-                weights=NVFP4_W4A8_WEIGHTS,
-                activations=NVFP4_W4A8_ACTIVATIONS,
-                targets=DEFAULT_LINEAR_TARGETS,
-            )
-        ],
-        kv_cache="fp8",
-        notes=(
-            "TensorRT-LLM uniform W4A8: NVFP4 weights tensor_group group_size=32 "
-            "plus dynamic per-token FP8 E4M3 activations (ModelOpt "
-            "W4A8_NVFP4_FP8 / nvfp4_bs32). SGLang currently rejects "
-            "quant_algo=W4A8_NVFP4_FP8. Do not use this scheme when the "
-            "runtime is SGLang."
-        ),
-        vllm_support="limited; prefer TensorRT-LLM",
-        trtllm_support="native W4A8_NVFP4_FP8",
     ),
     "nvfp4_w4a4": SchemeDef(
         name="nvfp4_w4a4",

@@ -40,8 +40,6 @@ SCHEME_ALIASES: dict[str, str] = {
     "w4a4": "w4a4",
     "nvfp4_mixed": "mixed",
     "mixed": "mixed",
-    "w4a8_nvfp4_fp8": "w4a8_nvfp4_fp8",
-    "nvfp4_w4a8_trtllm": "w4a8_nvfp4_fp8",
 }
 
 SKIP_NAMES = frozenset({"SHA256SUMS.txt", "oss_manifest.json"})

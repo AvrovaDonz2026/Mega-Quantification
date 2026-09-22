@@ -17,16 +17,9 @@ Default **``nvfp4_w4a8``** is the SGLang-serving mixed map (same as
 attention. Prefer ``backend=modelopt``; export rewrites
 ``quant_algo=MIXED_PRECISION``.
 
-TensorRT-LLM uniform W4A8 is scheme **``w4a8_nvfp4_fp8``**
-(``W4A8_NVFP4_FP8`` / ``nvfp4_bs32``). There is **no** stock ``NVFP4A8``
-preset in compressed-tensors, so that scheme emits a custom
-:class:`~compressed_tensors.quantization.quant_scheme.QuantizationScheme`:
-
-- weights: FP4, ``TENSOR_GROUP``, ``group_size=32``, FP8 E4M3 scales
-- input activations: FP8 E4M3, ``TOKEN``, ``dynamic=True`` (default)
-
-SGLang rejects ``quant_algo=W4A8_NVFP4_FP8``. Do not use ``w4a8_nvfp4_fp8``
-when the runtime is SGLang.
+There is **no** stock ``NVFP4A8`` preset. This backend does not build
+ModelOpt ``W4A8_NVFP4_FP8`` (NVFP4 block 32 + FP8 activations). SGLang
+rejects that tag.
 
 oneshot calibration
 -------------------
@@ -475,7 +468,7 @@ class LLMCompressorBackend:
         groups = _resolved_groups(plan) if plan is not None else list(scheme.groups)
         ignore = _ignore_list(plan) if plan is not None else []
         stock = _STOCK_PRESETS.get(name)
-        custom = name in {"nvfp4_w4a8", "nvfp4_mixed", "w4a8_nvfp4_fp8"} or (
+        custom = name in {"nvfp4_w4a8", "nvfp4_mixed"} or (
             stock is not None and not _uniform_stock_ok(name, groups)
         )
         payload: dict[str, Any] = {
@@ -496,27 +489,6 @@ class LLMCompressorBackend:
             payload["sglang"] = "MIXED_PRECISION + quantized_layers (modelopt_mixed)"
             payload["mlp_group_size"] = 16
             payload["attn_weight_format"] = "fp8"
-        if name == "w4a8_nvfp4_fp8":
-            payload["quantization_args"] = {
-                "weights": {
-                    "num_bits": 4,
-                    "type": "FLOAT",
-                    "strategy": "TENSOR_GROUP",
-                    "symmetric": True,
-                    "dynamic": False,
-                    "group_size": 32,
-                    "scale_dtype": "FP8_E4M3_DATA.dtype",
-                    "zp_dtype": "FP8_E4M3_DATA.dtype",
-                },
-                "input_activations": {
-                    "num_bits": 8,
-                    "type": "FLOAT",
-                    "strategy": "TOKEN",
-                    "symmetric": True,
-                    "dynamic": True,
-                    "observer": None,
-                },
-            }
         return payload
 
     def build_recipe(self, plan: Any) -> Any:
@@ -542,7 +514,7 @@ class LLMCompressorBackend:
         if observer is not None:
             modifier_kwargs["weight_observer"] = observer
 
-        if scheme_name in {"nvfp4_w4a8", "nvfp4_mixed", "w4a8_nvfp4_fp8"} or len(groups) > 1:
+        if scheme_name in {"nvfp4_w4a8", "nvfp4_mixed"} or len(groups) > 1:
             config_groups: dict[str, Any] = {}
             for group in groups:
                 name = str(group.get("name") or f"group_{len(config_groups)}")
@@ -713,47 +685,8 @@ class LLMCompressorBackend:
         QuantizationScheme: Any,
         enums: Mapping[str, Any],
     ) -> Any:
-        """Build a QuantizationScheme, using exact W4A8 args for nvfp4 gs=32."""
-        weights = _as_dict(group.get("weights"))
-        fmt = str(weights.get("format") or "")
-        group_size = weights.get("group_size")
-        if fmt == "nvfp4" and group_size == 32:
-            acts = group.get("activations")
-            if acts is not None and not _is_dynamic_token(acts) and _as_dict(acts):
-                input_activations = self._quant_args_from_spec(acts, QuantizationArgs, enums)
-            else:
-                input_activations = self._nvfp4_w4a8_activation_args(QuantizationArgs, enums)
-            return QuantizationScheme(
-                targets=_group_targets(group),
-                weights=self._nvfp4_w4a8_weight_args(QuantizationArgs, enums),
-                input_activations=input_activations,
-            )
+        """Build a QuantizationScheme from one catalog layer group."""
         return self._scheme_from_group(group, QuantizationArgs, QuantizationScheme, enums)
-
-    @staticmethod
-    def _nvfp4_w4a8_weight_args(QuantizationArgs: Any, enums: Mapping[str, Any]) -> Any:
-        fp8 = enums["FP8_E4M3_DATA"].dtype
-        return QuantizationArgs(
-            num_bits=4,
-            type=enums["QuantizationType"].FLOAT,
-            strategy=enums["QuantizationStrategy"].TENSOR_GROUP,
-            symmetric=True,
-            dynamic=False,
-            group_size=32,
-            scale_dtype=fp8,
-            zp_dtype=fp8,
-        )
-
-    @staticmethod
-    def _nvfp4_w4a8_activation_args(QuantizationArgs: Any, enums: Mapping[str, Any]) -> Any:
-        return QuantizationArgs(
-            num_bits=8,
-            type=enums["QuantizationType"].FLOAT,
-            strategy=enums["QuantizationStrategy"].TOKEN,
-            symmetric=True,
-            dynamic=True,
-            observer=None,
-        )
 
     def _nvfp4_w4a4_scheme(
         self,

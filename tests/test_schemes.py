@@ -76,14 +76,9 @@ def test_nvfp4_w4a8_is_sglang_mixed_groups(catalog: dict[str, Any]) -> None:
     assert "MIXED_PRECISION" in notes or "sglang" in str(notes).lower()
 
 
-def test_w4a8_nvfp4_fp8_group_size_32_act_bits_8(catalog: dict[str, Any]) -> None:
-    if "w4a8_nvfp4_fp8" not in catalog:
-        pytest.skip("w4a8_nvfp4_fp8 not in scheme catalog")
-    groups = _groups(catalog["w4a8_nvfp4_fp8"])
-    assert groups, "w4a8_nvfp4_fp8 has no layer groups"
-    weights, activations = _weight_act(groups[0])
-    assert weights.get("group_size") == 32
-    assert activations.get("bits") == 8
+def test_uniform_w4a8_nvfp4_fp8_is_not_a_scheme(catalog: dict[str, Any]) -> None:
+    assert "w4a8_nvfp4_fp8" not in catalog
+    assert "nvfp4_w4a8_trtllm" not in catalog
 
 
 def test_nvfp4_w4a4_group_size_16(catalog: dict[str, Any]) -> None:

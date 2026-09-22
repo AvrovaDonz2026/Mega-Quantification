@@ -18,12 +18,8 @@ NVIDIA mixed / SGLang W4A8 (``nvfp4_mixed``, default ``nvfp4_w4a8``)
     Attention: FP8 on ``self_attn.{q,k,v,o}_proj`` and
     ``linear_attn.{in_proj_qkv,in_proj_z,out_proj}``. Export metadata is
     ``MIXED_PRECISION`` + ``quantized_layers`` so SGLang ``modelopt_mixed``
-    can load it. Not ModelOpt ``W4A8_NVFP4_FP8`` gs32.
-
-TensorRT-LLM uniform W4A8 (``w4a8_nvfp4_fp8``; **no** stock ``NVFP4A8``)
-    Weights: FP4 ``tensor_group`` **``group_size=32``** (ModelOpt
-    ``w4a8_nvfp4_fp8`` / ``nvfp4_bs32``), FP8 E4M3 scales.
-    Activations: FP8 E4M3. SGLang rejects ``quant_algo=W4A8_NVFP4_FP8``.
+    can load it. Not ModelOpt ``W4A8_NVFP4_FP8`` (NVFP4 block 32 + FP8
+    activations). SGLang rejects that tag; this repo does not build it.
 
 FP8 W8A8 (stock ``FP8_DYNAMIC``)
     Channel-wise FP8 weights + dynamic per-token FP8 activations, or static
@@ -94,38 +90,6 @@ NVFP4_W4A16_WEIGHTS: dict[str, Any] = {
     "scale_dtype": "float8_e4m3fn",
     "dynamic": False,
     "strategy": "tensor_group",
-}
-
-# ModelOpt W4A8_NVFP4_FP8 / nvfp4_bs32 — group_size 32, not the W4A4 size 16.
-NVFP4_W4A8_WEIGHTS: dict[str, Any] = {
-    "format": "nvfp4",
-    "bits": 4,
-    "group_size": 32,
-    "scale_dtype": "float8_e4m3fn",
-    "dynamic": False,
-    "strategy": "tensor_group",
-}
-
-# Default W4A8 activations: dynamic per-token FP8 E4M3.
-NVFP4_W4A8_ACTIVATIONS: dict[str, Any] = {
-    "format": "fp8",
-    "bits": 8,
-    "group_size": None,
-    "scale_dtype": "float8_e4m3fn",
-    "dynamic": True,
-    "strategy": "token",
-    "observer": None,
-}
-
-# Alternative W4A8 activations: static per-tensor FP8 with minmax observer.
-NVFP4_W4A8_ACTIVATIONS_STATIC: dict[str, Any] = {
-    "format": "fp8",
-    "bits": 8,
-    "group_size": None,
-    "scale_dtype": "float8_e4m3fn",
-    "dynamic": False,
-    "strategy": "tensor",
-    "observer": "minmax",
 }
 
 FP8_W8A8_WEIGHTS: dict[str, Any] = {

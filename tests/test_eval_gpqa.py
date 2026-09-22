@@ -559,6 +559,7 @@ def test_serve_rejects_trtllm_w4a8_but_dry_run_does_not(
     err = capsys.readouterr().err
     assert "W4A8_NVFP4_FP8" in err
     assert "not the fix" in err
-    assert "w4a8_nvfp4_fp8" in err
+    assert "block 32" in err
+    assert "w4a8_nvfp4_fp8" not in err
     assert "rewrite-sglang" in err
     assert "nvfp4_w4a8" in err
