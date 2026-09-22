@@ -35,11 +35,19 @@ NVFP4 推理需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做
 （RTX PRO 6000 / 6000D）用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，
 KV 留在 GPU，CUDA graph 开着，并关掉 SiLU+FP4 融合（CUDA 12.8 的 FlashInfer
 JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
-会排队。混合 checkpoint（5090 `max` + ultrachat）的 GPQA Diamond 已完成：
-**178/198**，temperature **1.0**（80 GB SM120，SGLang，64 路，2026-09-22；
-截断 0，解析失败 0）。仓库里的评测 YAML 现在发的是 temperature 0，这个分数
-不是那套配方的重跑。journal 不满 198 行时不要报总分；eval 客户端按 `item_id`
-续跑，不要用 `open("w")` 清空 jsonl。
+会排队。journal 不满 198 行时不要报总分；eval 客户端按 `item_id` 续跑，不要
+用 `open("w")` 清空 jsonl。
+
+已完成的 GPQA Diamond（本仓库混合 checkpoint，5090 `max` + ultrachat）。
+仓库里的评测 YAML 现在发的是 temperature 0，下表不是那套配方的重跑。
+
+| 项 | 值 |
+|---|---|
+| 分数 | **178/198**（89.90%） |
+| 采样 | temperature **1.0**；其余为 Qwen thinking 卡（`top_p=0.95`，`top_k=20`，thinking 开） |
+| 截断 / 解析失败 | 0 / 0 |
+| 推理 | 80 GB SM120，SGLang，64 路，KV 在 GPU |
+| 日期 | 2026-09-22 |
 
 DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 （MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
@@ -181,7 +189,7 @@ encoding**; the W4A8 directory is this mixed export, not a second PTQ.
 | Calib | `HuggingFaceH4/ultrachat_200k`, **256** samples × **1024** tokens, batch **4** | `nvidia/Nemotron-Post-Training-Dataset-v3`, **2048** × **2048**, batch **1** |
 | Recipe | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `qwen3.8-27b-nvfp4-mixed.yaml` (not run on the 5090) |
 | Export | `MIXED_PRECISION` + `quantized_layers` (401 entries on the 5090 run: 193 NVFP4 + 208 FP8) | Same mixed HF layout |
-| Serve / GPQA | SGLang 0.5.20 on 5090, Triton + Marlin, bf16 GDN, `extra_buffer_lazy` | Card: vLLM on GB300, `temp=1.0 top_p=0.95`, `max_new_tokens=65536` |
+| Serve / GPQA | SGLang. Finished score **178/198** at temperature **1.0** on an 80 GB SM120 (64-way). 5090 recipe is 24-way Triton + Marlin | Card: vLLM on GB300, temperature 1.0, `top_p=0.95`, `max_new_tokens=65536`. GPQA Diamond **88.01** NVFP4 |
 
 `max` is not a weaker *format*. It is a weaker *calibrator*: it records
 activation amax and quantizes, with no Local-Hessian reconstruction or
@@ -281,6 +289,18 @@ Accuracy on NVIDIA's card (vLLM, 262k context, mixed checkpoint):
 | MMMU-Pro | 75.14 | 74.86 |
 | SciCode | 47.93 | 48.41 |
 | IFBench | 80.07 | 78.93 |
+
+Measured GPQA Diamond on **this** mixed checkpoint (5090 `max` + ultrachat,
+same map as `nvfp4_w4a8`). Temperature **1.0**. The eval YAML in this tree
+now sends temperature 0, so this row is not a rerun of those recipes.
+
+| | This run |
+|---|---|
+| GPQA Diamond | **178/198** (89.90%) |
+| Sampling | temperature **1.0**; other fields match the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on) |
+| Truncated / unparsed | 0 / 0 |
+| Serve | 80 GB SM120, SGLang, 64-way, KV on GPU |
+| Date | 2026-09-22 |
 
 ## Calibration
 
