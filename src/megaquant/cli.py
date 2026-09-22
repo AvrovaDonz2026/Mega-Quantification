@@ -191,11 +191,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if recipe.serve.engine == "sglang" and snapshot is not None and not snapshot["sglang_ok"]:
         algo = snapshot.get("quant_algo") or "W4A8_NVFP4_FP8"
         raise MegaQuantError(
-            f"This checkpoint is TRT-LLM {algo} (scheme w4a8_nvfp4_fp8); "
+            f"This checkpoint is TRT-LLM {algo}; "
             "SGLang rejects that quant_algo. --engine vllm is not the fix. "
-            "Use mixed W4A8 (nvfp4_w4a8 / MIXED_PRECISION), not uniform gs32. "
-            "`megaquant rewrite-sglang` is only for mixed exports with a bare "
-            "NVFP4 tag; do not rewrite uniform W4A8_NVFP4_FP8 weights in place."
+            "Use mixed W4A8 (nvfp4_w4a8 / MIXED_PRECISION), not uniform NVFP4 "
+            "block 32. `megaquant rewrite-sglang` is only for mixed exports "
+            "with a bare NVFP4 tag; do not rewrite these weights in place."
         )
     print("[serve]", " ".join(argv), flush=True)
     os.environ.update(extra_env)

@@ -78,18 +78,15 @@ def test_describe_w4a8_is_sglang_mixed() -> None:
     assert summary["qformat"] == "mixed_nvfp4_fp8"
     assert summary["attn_weight_format"] == "fp8"
     assert "MIXED_PRECISION" in summary["sglang"]
-    assert "w4a8_nvfp4_fp8" in summary["notes"]
+    assert "W4A8_NVFP4_FP8" in summary["notes"]
+    assert "w4a8_nvfp4_fp8" not in summary["notes"]
 
 
-def test_describe_trtllm_w4a8_group_size_32() -> None:
+def test_describe_trtllm_uniform_w4a8_is_unsupported() -> None:
     summary = describe_cfg("w4a8_nvfp4_fp8")
-    assert summary["supported"] is True
-    assert summary["group_size"] == 32
-    assert summary["qformat"] == "w4a8_nvfp4_fp8"
-    assert "SGLang rejects" in summary["notes"]
+    assert summary["supported"] is False
     alias = describe_cfg("nvfp4_w4a8_trtllm")
-    assert alias["scheme"] == "w4a8_nvfp4_fp8"
-    assert alias["group_size"] == 32
+    assert alias["supported"] is False
 
 
 def test_w4a8_cfg_reenables_lm_head_and_ignores_vision() -> None:
