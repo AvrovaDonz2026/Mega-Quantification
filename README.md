@@ -59,7 +59,7 @@ directory is that mixed checkpoint, not a second PTQ.
 | nvidia-modelopt | **0.46.1** (PyPI; 0.48 is not published there) | **0.48.0** |
 | Calib | `HuggingFaceH4/ultrachat_200k` **256×1024**, batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**, batch 1 |
 | Export | `quant_algo=MIXED_PRECISION` + `quantized_layers` | Same mixed HF layout |
-| GPQA (published) | Do **not** quote a 198-row score until the journal finishes | **88.92** BF16 / **88.01** NVFP4 on GB300 **vLLM** |
+| GPQA Diamond | **178/198** at temperature **1.0** (80 GB SM120, SGLang, 64-way; truncated 0, unparsed 0). Recipes in this tree now send temperature 0 | **88.92** BF16 / **88.01** NVFP4 on GB300 **vLLM**, temperature 1.0 |
 
 `max` is the cheap PTQ path and is what fits a 32 GB card with CPU offload.
 Local-Hessian at 2048 samples does not. Quality requant:
@@ -220,6 +220,9 @@ SGLang on `:30000`. Sampling is the Qwen thinking card
 context and `continue_on_length` continues until EOS. The journal is
 `<model>/gpqa_diamond/gpqa_diamond.jsonl` (full text, resume by `item_id`).
 The score is `correct/198` after every Diamond row is in the file.
+The finished mixed checkpoint (5090 `max` + ultrachat) scored **178/198**
+on the 80 GB recipe shape at temperature **1.0** (2026-09-22; truncated 0,
+unparsed 0). That run is not a rerun of the temperature-0 YAML now in the tree.
 
 | Box | Recipe | Serve shape |
 |---|---|---|
@@ -312,7 +315,7 @@ mixed checkpoint，没有再跑一遍 PTQ。
 | nvidia-modelopt | **0.46.1**（PyPI；0.48 未上 PyPI） | **0.48.0** |
 | 校准 | `HuggingFaceH4/ultrachat_200k` **256×1024**，batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**，batch 1 |
 | 导出 | `MIXED_PRECISION` + `quantized_layers` | 同一套 mixed HF 布局 |
-| GPQA（已发表） | 198 题 journal 跑完前 **不要报总分** | GB300 **vLLM**：**88.92** BF16 / **88.01** NVFP4 |
+| GPQA Diamond | **178/198**，temperature **1.0**（80 GB SM120，SGLang，64 路；截断 0，解析失败 0）。仓库里的评测配方现在发的是 temperature 0 | GB300 **vLLM**，temperature 1.0：**88.92** BF16 / **88.01** NVFP4 |
 
 `max` 省显存，单卡 32 GB 只能走这条。Local-Hessian 2048 需要更大卡：
 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。Compose `mixed` 默认就是 5090 的
@@ -438,6 +441,9 @@ K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publi
 `reasoning_effort=xhigh`）。`max_new_tokens: 0` 用完剩余 262144 上下文。
 完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，按 `item_id`
 续跑。198 行都在文件里之后，分数才是 `correct/198`。
+5090 `max` + ultrachat 的混合权重已经评完：**178/198**，temperature **1.0**
+（80 GB 配方形态，2026-09-22；截断 0，解析失败 0）。这不是仓库里现在
+temperature 0 配方的重跑。
 
 | 机器 | 配方 | 推理形态 |
 |---|---|---|
