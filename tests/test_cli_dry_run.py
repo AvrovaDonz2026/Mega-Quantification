@@ -169,8 +169,11 @@ def _assert_eval_serve_dry_run_payload(kind: str, out: str, recipe: str) -> None
         assert data["plan"]["model"] == LOCAL_EXPORT
     if recipe.endswith("5090.yaml"):
         assert backend == "triton"
-        serve_blob = json.dumps(data.get("argv") if kind == "serve" else data.get("serve"))
-        assert "flashinfer" not in serve_blob
+        if kind == "serve":
+            assert "flashinfer" not in " ".join(data["argv"])
+        else:
+            assert data["serve"]["attention_backend"] == "triton"
+            assert data["serve"].get("flashinfer_available") is not True
         if kind == "serve" and "--sampling-backend" in data["argv"]:
             assert data["argv"][data["argv"].index("--sampling-backend") + 1] == "pytorch"
         if kind == "eval" and data["serve"].get("sampling_backend"):

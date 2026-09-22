@@ -234,6 +234,58 @@ def test_mixed_cfg_fp8_attn_nvfp4_mlp_lm_head() -> None:
     assert _block_size(lm_w) == 16
 
 
+def test_w4a16_mixed_cfg_disables_mlp_activation_quant() -> None:
+    recipe = load_recipe(REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml")
+    plan = QuantPipeline(recipe).resolve()
+    cfg = ModelOptBackend().build_quant_cfg(plan)
+    assert cfg["algorithm"] == "max"
+
+    mlp_w = _last_named(cfg, "mlp", "weight_quantizer")
+    assert _num_bits(mlp_w) == (2, 1)
+    assert _block_size(mlp_w) == 16
+    mlp_in = _last_named(cfg, "mlp", "input_quantizer")
+    assert mlp_in.get("enable") is False
+
+    lm_in = _last_named(cfg, "lm_head", "input_quantizer")
+    assert lm_in.get("enable") is False
+    lm_w = _last_named(cfg, "lm_head", "weight_quantizer")
+    assert lm_w.get("enable", True) is True
+    assert _block_size(lm_w) == 16
+
+    attn_w = _last_named(cfg, "self_attn", "weight_quantizer")
+    assert _num_bits(attn_w) == (4, 3)
+
+    summary = describe_cfg("nvfp4_w4a16_mixed")
+    assert summary["mlp_quant_algo"] == "W4A16_NVFP4"
+    assert summary["mlp_activation_format"] == "bf16"
+    assert "not the DGX Spark fast path" in summary["notes"]
+    assert describe_cfg("w4a16_nvfp4_fp8_attn")["scheme"] == "nvfp4_w4a16_mixed"
+
+
+def test_w4a16_mixed_export_tags_mlp_w4a16(tmp_path: Path) -> None:
+    from megaquant.backends.modelopt import _rewrite_sglang_export
+
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps(
+            {
+                "weight_map": {
+                    "model.layers.0.mlp.gate_proj.weight": "a.safetensors",
+                    "model.layers.0.self_attn.q_proj.weight": "a.safetensors",
+                    "lm_head.weight": "a.safetensors",
+                }
+            }
+        )
+    )
+    (tmp_path / "hf_quant_config.json").write_text(
+        json.dumps({"quantization": {"quant_algo": "NVFP4"}})
+    )
+    layers = _rewrite_sglang_export(tmp_path, "nvfp4_w4a16_mixed")
+    assert layers is not None
+    assert layers["model.layers.0.mlp.gate_proj"]["quant_algo"] == "W4A16_NVFP4"
+    assert layers["model.layers.0.self_attn.q_proj"]["quant_algo"] == "FP8"
+    assert layers["lm_head"]["quant_algo"] == "W4A16_NVFP4"
+
+
 def test_export_hf_uses_export_dir_keyword(tmp_path) -> None:
     seen: dict[str, object] = {}
 

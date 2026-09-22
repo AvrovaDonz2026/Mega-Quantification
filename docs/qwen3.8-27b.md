@@ -32,9 +32,139 @@ TensorRT-LLM 均匀 W4A8（`W4A8_NVFP4_FP8`，block 32）见
 
 5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
 （按 GPU KV / GDN 池比例切主机内存），GDN **bf16**、96 个 mamba slot，Triton
-+ Marlin。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
++ Marlin，CUDA graph 关掉（32 GB 抓 graph 会 OOM）。80 GB 级 SM120
+（RTX PRO 6000 / 6000D）用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，
+KV 留在 GPU，CUDA graph 开着，并关掉 SiLU+FP4 融合（CUDA 12.8 的 FlashInfer
+JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
 会排队。198 题 journal 跑完前不要报总分；eval 客户端按 `item_id` 续跑，不要
 用 `open("w")` 清空 jsonl。
+
+DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
+（MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
+12 tok/s，带宽上限大约 14 tok/s；再快靠这份权重上的投机解码，不靠再量化一次。
+`nvfp4_w4a16_mixed` 只是 32 GB 机器上的可选 Marlin 导出，不是 Spark 快路径。
+
+### 量化格式
+
+生产权重和默认方案 `nvfp4_w4a8` 是同一张混合图。`nvfp4_mixed` 也是这张图。配方名叫 W4A8，是因为它对齐 NVIDIA 的混合产品名；MLP 本身是 NVFP4 权重加 NVFP4 激活。
+
+| 张量 | 权重 | 激活 | `quantized_layers` |
+|---|---|---|---|
+| `mlp.{gate,up,down}_proj` | NVFP4 E2M1，group_size 16，scale 为 FP8 E4M3 | NVFP4，group_size 16 | `quant_algo: NVFP4`, `group_size: 16` |
+| `lm_head` | 同上 | 同上 | 同上 |
+| `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
+| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入 |
+| 推理时 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
+
+`hf_quant_config.json` 顶层 `quant_algo` 为 `MIXED_PRECISION`，并带非空 `quantized_layers`。SGLang 0.5.20 以 `modelopt_mixed` 加载。导出若仍是裸 `NVFP4` 或 `W4A8_NVFP4_FP8`，先 `megaquant rewrite-sglang <export_dir>`。
+
+| 方案 | 与上表的差别 | 导出 | 运行时 |
+|---|---|---|---|
+| `nvfp4_w4a4` | 被选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
+| `w4a8_nvfp4_fp8` | 被选中的 LM 线性层全部是 NVFP4 group 32 权重 + FP8 激活 | `quant_algo: W4A8_NVFP4_FP8` | TensorRT-LLM |
+| `nvfp4_w4a16_mixed` | MLP + `lm_head` 为 NVFP4 group 16 权重、BF16 激活；注意力仍是 FP8 | MLP 条目 `quant_algo: W4A16_NVFP4` | 可选 Marlin 导出 |
+
+5090 生产运行：ModelOpt **0.46.1**，算法 **`max`**，ultrachat **256×1024**，batch 4，配方 `qwen3.8-27b-nvfp4-mixed.5090.yaml`。目录 `outputs/Qwen3.8-27B-NVFP4-W4A8` 就是这份导出。NVIDIA 公开权重是同一层图，校准为 Local-Hessian（`mixed.yaml`，modelopt 0.48.0，Nemotron v3，2048×2048）。
+
+### SGLang 推理与 GPQA
+
+推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样对齐 Qwen thinking 卡：`temperature=1.0`，`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
+
+| | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
+|---|---|---|---|
+| 配方 | `eval-gpqa-diamond.yaml` | `eval-gpqa-diamond.5090.yaml` | `eval-gpqa-diamond.6000d.yaml` |
+| 注意力 | FlashInfer | Triton | Triton |
+| NVFP4 GEMM | FlashInfer（CUDA ≥ 12.9） | Marlin | Marlin |
+| FP8 GEMM | FlashInfer | Triton，`SGLANG_FORCE_FP8_MARLIN=1` | CUTLASS，`SGLANG_FORCE_FP8_MARLIN=1` |
+| CUDA graph | 关 | 关 | 开 |
+| KV | HiCache，主机 12 GiB | HiCache，主机 64 GiB | 只在 GPU |
+| 并发 | 1 | 24（bf16 GDN，96 slot） | 64（bf16 GDN，256 slot） |
+| `mem-fraction-static` | 0.85 | 0.95 | 0.90 |
+| chunked prefill | 2048 | 2048 | 4096 |
+| 额外环境变量 | | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`，`SGLANG_IS_FLASHINFER_AVAILABLE=0`，`SGLANG_ENABLE_JIT_DEEPGEMM=0` |
+| Radix cache | 开 | 开 | 关 |
+
+CUDA 12.8 编不了 SM 12.x 的 FlashInfer JIT。80 GB 配方还关掉 SiLU+FP4 融合，因为即使用 Marlin 做 GEMM，那条融合仍会去 import FlashInfer。
+
+```bash
+# 80 GB SM120，CUDA 12.8
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml \
+  --model outputs/Qwen3.8-27B-NVFP4-W4A8
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml \
+  --base-url http://127.0.0.1:30000/v1
+
+# 32 GB 5090
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml \
+  --model outputs/Qwen3.8-27B-NVFP4-W4A8
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml \
+  --base-url http://127.0.0.1:30000/v1
+```
+
+`megaquant serve` 会先导出配方里的环境变量，再执行 `sglang serve`。`--dry-run` 只打印 argv，不会下载 `Qwen/Qwen3.8-27B`。vLLM 用 `--engine vllm`，留给和 GB300 卡片对照；默认评测路径是 SGLang。
+
+## Quantization format
+
+The production checkpoint, default scheme `nvfp4_w4a8`, and scheme `nvfp4_mixed` are one mixed map. The recipe name says W4A8 because it matches NVIDIA's mixed product name. MLP layers in that map are NVFP4 weights and NVFP4 activations.
+
+| Tensor | Weights | Activations | `quantized_layers` entry |
+|---|---|---|---|
+| `mlp.{gate,up,down}_proj` | NVFP4 E2M1, group_size 16, FP8 E4M3 scales | NVFP4, group_size 16 | `quant_algo: NVFP4`, `group_size: 16` |
+| `lm_head` | same | same | same |
+| `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| `linear_attn.conv1d`, `in_proj_a`, `in_proj_b` | BF16 | BF16 | omitted |
+| vision, MTP, embeddings, norms | BF16 | BF16 | omitted |
+| KV cache at serve time | | fp8_e4m3 | recipe `kv_cache: fp8` |
+
+`hf_quant_config.json` has top-level `quant_algo: MIXED_PRECISION` and a non-empty `quantized_layers` map. SGLang 0.5.20 loads that as `modelopt_mixed`. If an export is still a bare `NVFP4` tag or `W4A8_NVFP4_FP8`, run `megaquant rewrite-sglang <export_dir>` before serve.
+
+| Scheme | How it differs from the table | Export | Runtime |
+|---|---|---|---|
+| `nvfp4_w4a4` | every targeted LM linear is NVFP4 W4A4 group 16, including attention | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
+| `w4a8_nvfp4_fp8` | every targeted LM linear is NVFP4 group 32 weights + FP8 activations | `quant_algo: W4A8_NVFP4_FP8` | TensorRT-LLM |
+| `nvfp4_w4a16_mixed` | MLP + `lm_head` are NVFP4 group 16 weights with BF16 activations; attention stays FP8 | MLP entry `quant_algo: W4A16_NVFP4` | optional Marlin export |
+
+The 5090 production run is ModelOpt **0.46.1**, algorithm **`max`**, ultrachat **256×1024**, batch 4, recipe `qwen3.8-27b-nvfp4-mixed.5090.yaml`. The directory `outputs/Qwen3.8-27B-NVFP4-W4A8` is that export. NVIDIA's public checkpoint uses the same layer map with Local-Hessian (`mixed.yaml`, modelopt 0.48.0, Nemotron v3, 2048×2048).
+
+DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mixed` is the optional Marlin export.
+
+## SGLang inference and GPQA
+
+Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling is the Qwen thinking card: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
+
+| | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
+|---|---|---|---|
+| Recipe | `eval-gpqa-diamond.yaml` | `eval-gpqa-diamond.5090.yaml` | `eval-gpqa-diamond.6000d.yaml` |
+| Attention | FlashInfer | Triton | Triton |
+| NVFP4 GEMM | FlashInfer (CUDA ≥ 12.9) | Marlin | Marlin |
+| FP8 GEMM | FlashInfer | Triton, `SGLANG_FORCE_FP8_MARLIN=1` | CUTLASS, `SGLANG_FORCE_FP8_MARLIN=1` |
+| CUDA graph | off | off | on |
+| KV | HiCache, 12 GiB host | HiCache, 64 GiB host | GPU only |
+| Concurrency | 1 | 24 (bf16 GDN, 96 slots) | 64 (bf16 GDN, 256 slots) |
+| `mem-fraction-static` | 0.85 | 0.95 | 0.90 |
+| chunked prefill | 2048 | 2048 | 4096 |
+| Extra env | | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`, `SGLANG_IS_FLASHINFER_AVAILABLE=0`, `SGLANG_ENABLE_JIT_DEEPGEMM=0` |
+| Radix cache | on | on | off |
+
+CUDA 12.8 cannot JIT FlashInfer for SM 12.x. The 80 GB recipe also disables fused SiLU+FP4 quant, which imports FlashInfer even when the GEMM backend is Marlin.
+
+```bash
+# 80 GB SM120, CUDA 12.8
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml \
+  --model outputs/Qwen3.8-27B-NVFP4-W4A8
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml \
+  --base-url http://127.0.0.1:30000/v1
+
+# 32 GB 5090
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml \
+  --model outputs/Qwen3.8-27B-NVFP4-W4A8
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml \
+  --base-url http://127.0.0.1:30000/v1
+```
+
+`megaquant serve` exports the recipe environment, then execs `sglang serve`. `--dry-run` prints the argv and does not download `Qwen/Qwen3.8-27B`. `--engine vllm` remains available for a GB300-card comparison. The default eval path is SGLang.
 
 ## What this repo actually quantized (5090)
 
@@ -91,6 +221,7 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
 | `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same; **5090 production PTQ** |
 | `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `local_hessian` | ultrachat 2048 (anonymous Hub) | same |
+| `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A16-mixed`; optional Marlin export, not the Spark fast path |
 
 All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
 `model.quantize_vision: false`, and `model.quantize_mtp: false`.
@@ -324,6 +455,8 @@ sglang serve \
   --port 30000
 ```
 
+The block above is the cookbook default (`eval-gpqa-diamond.yaml`). The 32 GB and 80 GB SM120 boxes use `eval-gpqa-diamond.5090.yaml` and `eval-gpqa-diamond.6000d.yaml`. See [SGLang inference and GPQA](#sglang-inference-and-gpqa).
+
 Docker: `lmsysorg/sglang:dev` or `make serve-sglang` (not `make serve-vllm`
 as the primary path). If `hf_quant_config.json` still says
 `quant_algo: W4A8_NVFP4_FP8` or a bare `NVFP4` without `quantized_layers`,
@@ -360,6 +493,8 @@ vLLM support for that combo is limited.
 
 ## GPQA Diamond (official card protocol)
 
+The bit layout and the three SGLang recipes are in [Quantization format](#quantization-format) and [SGLang inference and GPQA](#sglang-inference-and-gpqa). This section keeps the sampling locks and the launch notes.
+
 Evaluate each NVFP4 export with the **same sampling as the Qwen thinking
 card** on a **SGLang** server (NVIDIA Qwen3.8 cookbook flags). Do not
 greedy-decode. Do not cap generation at 512/2048 tokens.
@@ -371,9 +506,9 @@ greedy-decode. Do not cap generation at 512/2048 tokens.
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
-| Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
-| Mamba / GDN | 5090: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
-| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8: Triton attn + `fp4-gemm-backend marlin` + `SGLANG_FORCE_FP8_MARLIN` (`eval-gpqa-diamond.5090.yaml`). Do not mix the two recipes. |
+| Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
+| Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
+| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); CUDA 12.8 SM120: Triton attn + Marlin NVFP4 + `SGLANG_FORCE_FP8_MARLIN`. 32 GB recipe also disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). 80 GB recipe keeps CUDA graph, leaves KV on GPU, uses CUTLASS FP8, and sets `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION` (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong). Do not quote a partial journal as the score. |
 
@@ -407,14 +542,16 @@ python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
 ```
 
 Compose: `make serve-sglang` then `make eval-gpqa`. `eval-gpqa` does not
 attach a GPU; `serve-sglang` does. On CUDA 12.8 / SM 12.0 set
 `EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml`. The client talks to
 `MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`). Journals
-land in `outputs/eval/gpqa_diamond-<scheme>/` (`gpqa_diamond.jsonl` keeps
-the full text; stdout is a one-line status). Optional `--engine vllm`
+land in `<model>/gpqa_diamond/` (`gpqa_diamond.jsonl` keeps the full text;
+stdout is a one-line status). Optional `--engine vllm`
 keeps the NVIDIA GB300 vLLM flags on port 8000.
 
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local

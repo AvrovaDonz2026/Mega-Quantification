@@ -263,8 +263,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         default="recipes/eval-gpqa-diamond.yaml",
         help=(
-            "Eval recipe. Default FlashInfer; on CUDA 12.8 / SM 12.0 use "
-            "recipes/eval-gpqa-diamond.5090.yaml (Triton)."
+            "Eval recipe. Default FlashInfer; CUDA 12.8 / 32 GB SM120 uses "
+            "recipes/eval-gpqa-diamond.5090.yaml; 80 GB SM120 uses "
+            "recipes/eval-gpqa-diamond.6000d.yaml."
         ),
     )
     evaluate.add_argument(
@@ -305,8 +306,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         default="recipes/eval-gpqa-diamond.yaml",
         help=(
-            "Serve recipe. Default FlashInfer; on CUDA 12.8 / SM 12.0 use "
-            "recipes/eval-gpqa-diamond.5090.yaml (Triton)."
+            "Serve recipe. Default FlashInfer; CUDA 12.8 / 32 GB SM120 uses "
+            "recipes/eval-gpqa-diamond.5090.yaml; 80 GB SM120 uses "
+            "recipes/eval-gpqa-diamond.6000d.yaml."
         ),
     )
     serve.add_argument(

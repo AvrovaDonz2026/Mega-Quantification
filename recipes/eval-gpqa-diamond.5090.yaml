@@ -17,7 +17,7 @@ backend: auto
 base_url: null
 shuffle_choices: true
 limit: null
-output_dir: outputs/eval/gpqa_diamond
+# Full traces go in <model>/gpqa_diamond, next to the weights.
 # Serve mamba slots cap in-flight at size/4. 96 bf16 slots → 24-way. float32
 # 64 slots ate 9.3 GB HBM and left 0.88 GB GPU KV, so 16 HTTP workers queued
 # behind 3–4 decode slots. HiCache splits host RAM by GPU pool size, so a

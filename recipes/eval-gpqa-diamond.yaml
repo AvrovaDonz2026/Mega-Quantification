@@ -28,7 +28,8 @@ backend: auto
 base_url: null
 shuffle_choices: true
 limit: null
-output_dir: outputs/eval/gpqa_diamond
+# Full traces (gpqa_diamond.jsonl + summary.json) go in <model>/gpqa_diamond.
+# Leave output_dir empty so --model still lands beside those weights.
 
 thinking:
   enable: true

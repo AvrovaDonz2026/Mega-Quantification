@@ -34,6 +34,18 @@ use **group_size 16**. Default `nvfp4_w4a8` in this repo matches that map so
 SGLang `modelopt_mixed` can serve the checkpoint. Uniform ModelOpt
 `W4A8_NVFP4_FP8` (block 32) is scheme `w4a8_nvfp4_fp8`.
 
+Bits on that default checkpoint (`nvfp4_w4a8` / `nvfp4_mixed`). The recipe
+name says W4A8; the MLP is NVFP4 weights and NVFP4 activations:
+
+| Tensor | Weights | Activations | Export entry |
+|---|---|---|---|
+| `mlp.{gate,up,down}_proj`, `lm_head` | NVFP4 E2M1, group 16 | NVFP4, group 16 | `quant_algo: NVFP4` |
+| `self_attn.{q,k,v,o}_proj`, `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| vision, MTP, embeddings, `linear_attn.conv1d` / `in_proj_a` / `in_proj_b`, norms | BF16 | BF16 | omitted |
+| KV at serve time | | fp8_e4m3 | recipe `kv_cache: fp8` |
+
+Top-level `hf_quant_config.json` is `quant_algo: MIXED_PRECISION` plus `quantized_layers`. Layer-by-layer notes: [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#quantization-format).
+
 ### What this repo actually quantized (5090)
 
 The live 32 GB RTX 5090 PTQ is **not** NVIDIA's public recipe. It used
@@ -58,10 +70,19 @@ defaults to the 5090 `max` recipe; override with
 
 5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
 **64 GiB** (SGLang splits that host pool by GPU KV vs GDN size), **bf16**
-GDN with `max_mamba_cache_size: 96`, Triton attention + Marlin NVFP4
-(CUDA 12.8 cannot FlashInfer-JIT SM 12.0). NVIDIA's mixed card used vLLM on
-GB300; their SGLang cookbook uses `extra_buffer` + float32 mamba. Keep the
-default FlashInfer recipe and the 5090 Triton recipe distinct.
+GDN with `max_mamba_cache_size: 96`, Triton attention + Marlin NVFP4,
+CUDA graph off (CUDA 12.8 cannot FlashInfer-JIT SM 12.0, and 32 GB OOMs
+during graph capture). An 80 GB SM120 uses
+`recipes/eval-gpqa-diamond.6000d.yaml`: **64-way**, KV on GPU, CUDA graph
+on, SiLU+FP4 fusion off. NVIDIA's mixed card used vLLM on GB300; their
+SGLang cookbook uses `extra_buffer` + float32 mamba. Keep the FlashInfer,
+32 GB, and 80 GB recipes distinct.
+
+DGX Spark serves this same mixed W4A4 checkpoint (NVFP4 activations on the
+MLP, FP8 attention, FP8 KV). Plain GB10 decode sits near 12 tok/s under a
+~14 tok/s bandwidth ceiling; the extra speed is speculative decode on that
+checkpoint. `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` is an optional
+Marlin export, not that fast path.
 
 ### Qwen3.8-27B W4A8 quickstart
 
@@ -179,16 +200,26 @@ On a k8s GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|publish|rew
 Those commands start a job; they do not mean W4A4 or mixed PTQ has already
 finished on the pod.
 
-### GPQA Diamond (after an export)
+### GPQA Diamond (SGLang)
 
-Two terminals: **serve**, then **eval**. Match the Qwen thinking card on
-**SGLang** `:30000` (NVIDIA Qwen3.8 cookbook flags). Official thinking
-sampling; do not greedy-decode or cap generation at 512/2048. Generation
-uses the remaining 262144-token window (`max_new_tokens: 0`) and continues
-on length. On a 32 GB card, SGLang **HiCache-offloads KV into host RAM**
-instead of truncating. The 5090 recipe pins **64 GiB** HiCache and
-**24-way** GPQA (`bf16` GDN, 96 mamba slots); a fat float32 mamba cache
-starves GPU KV and also steals the host HiCache pool.
+Two terminals: **`megaquant serve`**, then **`megaquant eval`**. Both use
+SGLang on `:30000`. Sampling is the Qwen thinking card
+(`temperature=1.0`, `top_p=0.95`, `top_k=20`, thinking on,
+`reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144
+context and `continue_on_length` continues until EOS. The journal is
+`<model>/gpqa_diamond/gpqa_diamond.jsonl` (full text, resume by `item_id`).
+The score is `correct/198` after every Diamond row is in the file.
+
+| Box | Recipe | Serve shape |
+|---|---|---|
+| CUDA ≥ 12.9, FlashInfer | `recipes/eval-gpqa-diamond.yaml` | FlashInfer, HiCache 12 GiB, concurrency 1, CUDA graph off |
+| 32 GB SM120 / CUDA 12.8 (5090) | `recipes/eval-gpqa-diamond.5090.yaml` | Triton + Marlin, HiCache 64 GiB, 24-way bf16 GDN, CUDA graph off |
+| 80 GB SM120 / CUDA 12.8 (6000D) | `recipes/eval-gpqa-diamond.6000d.yaml` | Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off |
+
+`megaquant serve` writes the recipe env (`SGLANG_FORCE_FP8_MARLIN`, and on
+the 80 GB recipe `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION`) before it starts
+`sglang serve`. Full flag table:
+[`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#sglang-inference-and-gpqa).
 
 `--dry-run` plans against the local export `outputs/Qwen3.8-27B-NVFP4-W4A8`
 and does **not** download `Qwen/Qwen3.8-27B`. Compose `eval-gpqa` is HTTP-only
@@ -203,6 +234,8 @@ python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
 # Terminal 1
 bash scripts/gpu-pod.sh serve w4a8
 # Terminal 2
@@ -244,6 +277,17 @@ NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合 NVFP4/FP8**：MLP + `lm
 对齐这套图，好让 SGLang `modelopt_mixed` 加载。均匀 `W4A8_NVFP4_FP8`
 （block 32）改叫 `w4a8_nvfp4_fp8`。
 
+默认 checkpoint（`nvfp4_w4a8` / `nvfp4_mixed`）的位宽。配方名叫 W4A8，MLP 是 NVFP4 权重加 NVFP4 激活：
+
+| 张量 | 权重 | 激活 | 导出条目 |
+|---|---|---|---|
+| `mlp.{gate,up,down}_proj`、`lm_head` | NVFP4 E2M1，group 16 | NVFP4，group 16 | `quant_algo: NVFP4` |
+| `self_attn.{q,k,v,o}_proj`、`linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
+| 视觉、MTP、embedding、`linear_attn.conv1d` / `in_proj_a` / `in_proj_b`、norm | BF16 | BF16 | 不写入 |
+| 推理时 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
+
+`hf_quant_config.json` 顶层是 `quant_algo: MIXED_PRECISION`，外加 `quantized_layers`。逐层说明见 [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#量化格式)。
+
 ### 这台 5090 实际跑的量化
 
 线上 32 GB RTX 5090 的 PTQ **不是** NVIDIA 公开配方。实际用的是
@@ -266,10 +310,17 @@ mixed checkpoint，没有再跑一遍 PTQ。
 
 5090 GPQA（`recipes/eval-gpqa-diamond.5090.yaml`）：**24 路**，HiCache
 **64 GiB**（按 GPU 上 KV / GDN 池比例切主机内存），GDN **bf16** 且
-`max_mamba_cache_size: 96`，Triton 注意力 + Marlin NVFP4（CUDA 12.8 编不了
-SM 12.0 的 FlashInfer JIT）。NVIDIA 模型卡用 GB300 上的 vLLM；他们的
-SGLang cookbook 是 `extra_buffer` + float32 mamba。默认 FlashInfer 配方和
-5090 Triton 配方不要混用。
+`max_mamba_cache_size: 96`，Triton 注意力 + Marlin NVFP4，CUDA graph 关闭
+（CUDA 12.8 编不了 SM 12.0 的 FlashInfer JIT，32 GB 抓 graph 会 OOM）。
+80 GB 级 SM120 用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，KV 在
+GPU 上，CUDA graph 开着，SiLU+FP4 融合关掉。NVIDIA 模型卡用 GB300 上的
+vLLM；他们的 SGLang cookbook 是 `extra_buffer` + float32 mamba。FlashInfer、
+32 GB、80 GB 三套配方不要混用。
+
+DGX Spark 推理用的就是这份混合 W4A4 checkpoint（MLP 为 NVFP4 激活，注意力
+FP8，KV FP8）。GB10 普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s；
+再快是这份权重上的投机解码。`qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` 是可选
+Marlin 导出，不是这条快路径。
 
 ### Qwen3.8-27B W4A8 快速开始
 
@@ -356,16 +407,25 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --r
 K8s GPU 容器（没有 Docker）：`bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`。
 这只是启动命令，不表示 W4A4 / mixed PTQ 已经在 pod 上跑完。
 
-量化产物评测 GPQA Diamond：两个终端，先 **serve** 再 **eval**。官方
-thinking 采样，推理走 **SGLang** `:30000`（NVIDIA Qwen3.8 cookbook）；
-不要 greedy 或短截断。`max_new_tokens: 0` 用完剩余 262k 窗口，length
-后再续写。32 GB 显存放不下 262k KV 时走 SGLang **HiCache CPU offload**。
-5090 配方钉死 **64 GiB** HiCache、**24 路** GPQA（bf16 GDN、96 个
-mamba slot）；float32 的胖 mamba 会把 GPU KV 和主机 HiCache 一起吃掉。
+量化产物评测 GPQA Diamond：两个终端，先 **`megaquant serve`** 再
+**`megaquant eval`**。推理走 **SGLang** `:30000`，采样是 Qwen thinking 卡
+（`temperature=1.0`，`top_p=0.95`，`top_k=20`，thinking 开，
+`reasoning_effort=xhigh`）。`max_new_tokens: 0` 用完剩余 262144 上下文。
+完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，按 `item_id`
+续跑。198 行都在文件里之后，分数才是 `correct/198`。
+
+| 机器 | 配方 | 推理形态 |
+|---|---|---|
+| CUDA ≥ 12.9，FlashInfer | `recipes/eval-gpqa-diamond.yaml` | FlashInfer，HiCache 12 GiB，并发 1，CUDA graph 关 |
+| 32 GB SM120 / CUDA 12.8（5090） | `recipes/eval-gpqa-diamond.5090.yaml` | Triton + Marlin，HiCache 64 GiB，24 路 bf16 GDN，CUDA graph 关 |
+| 80 GB SM120 / CUDA 12.8（6000D） | `recipes/eval-gpqa-diamond.6000d.yaml` | Triton + Marlin + CUTLASS，KV 在 GPU，64 路，CUDA graph 开，SiLU+FP4 融合关 |
+
+`megaquant serve` 会先写入配方环境变量（`SGLANG_FORCE_FP8_MARLIN`，80 GB
+配方还有 `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION`），再启动 `sglang serve`。
+完整标志表见
+[`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#sglang-推理与-gpqa)。
 `--dry-run` 只看本地导出 `outputs/Qwen3.8-27B-NVFP4-W4A8`，不会去拉
 `Qwen/Qwen3.8-27B`。Compose `eval-gpqa` 不挂 GPU；`serve-sglang` 才挂。
-默认 FlashInfer（`eval-gpqa-diamond.yaml`），5090 / CUDA 12.8 用 Triton
-（`eval-gpqa-diamond.5090.yaml`），两套配方不要混。
 
 手册：[`docker/README.md`](docker/README.md)。单卡 32 GB 5090 放不下 27B BF16，
 默认 CPU offload；双卡或更大 Blackwell 更合适。
