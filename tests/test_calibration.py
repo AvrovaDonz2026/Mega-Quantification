@@ -16,7 +16,6 @@ from megaquant.calibration import (
 )
 from megaquant.config import recipe_from_mapping
 
-
 NEMOTRON_ROW = {
     "uuid": "x",
     "license": "cc",

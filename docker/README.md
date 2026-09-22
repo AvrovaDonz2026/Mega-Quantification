@@ -152,8 +152,8 @@ Triton + Marlin。宿主机 `docker-compose.override.yml`（不要进 git）如�
 `--mamba-ssm-dtype bfloat16`。eval journal 按 `item_id` 续跑，不要清空
 `gpqa_diamond.jsonl`。Mixed / 默认 W4A8 导出后，若
 `hf_quant_config.json` 仍是没有 `quantized_layers` 的裸 `NVFP4`，先
-`megaquant rewrite-sglang <export_dir>` 再 serve。均匀 `w4a8_nvfp4_fp8`
-只给 TensorRT-LLM，不要当 SGLang 权重加载。
+`megaquant rewrite-sglang <export_dir>` 再 serve。本仓库不提供 SGLang
+拒收的均匀 `W4A8_NVFP4_FP8` 配方。
 
 PTQ 完成后上传（桶和端点用 `OSS_BUCKET` / `OSS_ENDPOINT`，可选
 `.oss.env`）。默认 W4A8 就是 mixed 编码：一份 mixed 导出可按
@@ -263,7 +263,7 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 
 - CUDA 12.8 devel（Triton / Local-Hessian NVFP4 扫描需要）
 - PyTorch CUDA 12.8 轮子，`TORCH_CUDA_ARCH_LIST=9.0;10.0;12.0`
-- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）；TensorRT-LLM 均匀 W4A8 = `W4A8_NVFP4_FP8_CFG`（weight block **32**）。镜像钉 **0.46.1**（PyPI 没有 0.48）；5090 生产算法是 **`max`**，不是 Local-Hessian。
+- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）。镜像钉 **0.46.1**（PyPI 没有 0.48）；5090 生产算法是 **`max`**，不是 Local-Hessian。不提供 SGLang 拒收的均匀 `W4A8_NVFP4_FP8` 配方。
 - llm-compressor / compressed-tensors（vLLM 路径）
 - 本仓库 `megaquant` CLI
 
@@ -271,5 +271,5 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 
 `nvidia/Qwen3.8-27B-NVFP4` 是混合 NVFP4/FP8（group_size 16 + FP8），校准是
 Local-Hessian + Nemotron v3。默认 `nvfp4_w4a8` 对齐这套**层图**给 SGLang
-用；5090 生产校准是 `max` + ultrachat 256。`W4A8_NVFP4_FP8` block 32 是
-`w4a8_nvfp4_fp8`，SGLang 不认。
+用；5090 生产校准是 `max` + ultrachat 256。SGLang 不认均匀
+`W4A8_NVFP4_FP8`（block 32），本仓库不提供对应配方。
