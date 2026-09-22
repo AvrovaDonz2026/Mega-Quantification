@@ -60,29 +60,27 @@ SGLang GPQA uses the mixed checkpoint above. Recipes:
 `eval-gpqa-diamond.6000d.yaml` (80 GB, Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off).
 Sampling is the Qwen thinking card on SGLang `:30000`. Score is `correct/198` after the journal has every row. Flag table: `docs/qwen3.8-27b.md`.
 
-## Package layout (file ownership)
+## Repository layout
 
 ```
-src/megaquant/config.py            # Agent Core — Pydantic recipe schema
-src/megaquant/exceptions.py        # Agent Core
-src/megaquant/registry.py          # Agent Core
-src/megaquant/pipeline.py          # Agent Core
-src/megaquant/cli.py               # Agent Core
-src/megaquant/eval_gpqa.py         # GPQA Diamond (Qwen thinking + SGLang serve + KV CPU offload)
-src/megaquant/sglang_export.py     # MIXED_PRECISION rewrite for SGLang
-src/megaquant/calibration.py       # Agent Core
-src/megaquant/__init__.py          # Agent Core
-src/megaquant/backends/base.py     # Agent ModelOpt — Protocol
-src/megaquant/backends/modelopt.py # Agent ModelOpt
-src/megaquant/backends/__init__.py # Agent ModelOpt
-src/megaquant/backends/llmcompressor.py  # Agent LLMCompressor
-src/megaquant/schemes/             # Agent LLMCompressor
-src/megaquant/models/              # Agent Recipes
-recipes/                           # Agent Recipes
-tests/                             # Agent Recipes
+src/megaquant/          library
+  cli.py                quantize / serve / eval / rewrite-sglang
+  config.py             Pydantic recipe schema
+  pipeline.py           load → calibrate → quantize → export
+  eval_gpqa.py          GPQA Diamond client (Qwen thinking, SGLang, KV offload)
+  sglang_export.py      MIXED_PRECISION rewrite for SGLang
+  calibration.py        calibration batches
+  backends/             ModelOpt and llm-compressor
+  models/               family adapters (qwen3_5, qwen3, llama, generic)
+  schemes/              named quant schemes
+recipes/                quant and GPQA YAML (index: recipes/README.md)
+tests/                  CPU tests; dry-run does not download weights
+docs/                   this file and the Qwen3.8-27B runbook
+docker/                 image helpers; Dockerfiles stay at the repo root
+scripts/                gpu-pod, OSS publish/fetch, serve and eval wrappers
 ```
 
-Do not edit files outside your ownership list. Do not `git commit`.
+Weights, Hub caches, journals, `.env`, `.oss.env`, and `docker-compose.override.yml` stay out of git.
 
 ## Recipe schema (`megaquant.config`)
 

@@ -1,4 +1,7 @@
-.PHONY: host-check install-host build plan quantize mixed w4a4 serve-sglang serve-vllm eval-gpqa fetch-export fetch-gpqa shell image-tar
+.PHONY: host-check install-host build plan quantize mixed w4a4 serve-sglang serve-vllm eval-gpqa fetch-export fetch-gpqa shell image-tar test
+
+test:
+	python -m pytest
 
 host-check:
 	bash docker/host-check.sh

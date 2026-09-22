@@ -105,7 +105,9 @@ def sha256_file(path: Path) -> str:
 
 
 def safetensors_manifest_lines(export_dir: Path) -> list[str]:
-    names = sorted(p.name for p in export_dir.iterdir() if p.suffix == ".safetensors" and p.is_file())
+    names = sorted(
+        p.name for p in export_dir.iterdir() if p.suffix == ".safetensors" and p.is_file()
+    )
     if not names:
         raise FileNotFoundError(f"no .safetensors in {export_dir}")
     lines: list[str] = []

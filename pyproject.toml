@@ -9,7 +9,16 @@ description = "Generic PTQ pipeline for NVFP4 / FP8 / mixed-precision Hugging Fa
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Donz" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
 dependencies = [
   "pydantic>=2.6",
   "pyyaml>=6.0",
@@ -40,6 +49,10 @@ dev = [
   "ruff>=0.9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/AvrovaDonz2026/Mega-Quantification"
+Documentation = "https://github.com/AvrovaDonz2026/Mega-Quantification/blob/main/docs/ARCHITECTURE.md"
+
 [project.scripts]
 megaquant = "megaquant.cli:main"
 
@@ -57,7 +70,11 @@ include = [
   "docker",
   "scripts",
   "Dockerfile",
+  "Dockerfile.sglang",
   "docker-compose.yml",
+  "docker-compose.ngc.yml",
+  "LICENSE",
+  "CONTRIBUTING.md",
   "README.md",
 ]
 

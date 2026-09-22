@@ -26,5 +26,7 @@ hf_cache/
 /data/
 megaquant-nvfp4.tar
 megaquant-stack.tar
-.env
+docker-compose.override.yml
+recipes/*.pod.yaml
+*.log
 .DS_Store

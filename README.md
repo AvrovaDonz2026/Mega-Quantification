@@ -158,6 +158,21 @@ Uniform W4A4 (`nvfp4_w4a4`, `NVFP4_DEFAULT_CFG`) uses block size **16** for
 weights and activations. Default W4A8 NVFP4 layers also use **group_size 16**.
 Do not encode SGLang W4A8 as `W4A8_NVFP4_FP8` block 32.
 
+### Repository layout
+
+```
+src/megaquant/   library (CLI, pipeline, schemes, model families)
+recipes/         quant and GPQA YAML; index in recipes/README.md
+tests/           CPU tests; dry-run does not download weights
+docs/            architecture and the Qwen3.8-27B runbook
+docker/          image helpers; Dockerfiles stay at the repo root
+scripts/         gpu-pod, OSS publish/fetch, serve and eval wrappers
+```
+
+Copy `.env.example` to `.env`. Bucket credentials go in gitignored `.oss.env`.
+Do not commit `docker-compose.override.yml`. Weights and journals live under
+`outputs/`, `.cache/`, `models/`, and `data/`. License: Apache-2.0 (`LICENSE`).
+
 ### How to add a new model
 
 1. **Family adapter** in `src/megaquant/models/<family>.py` implementing
@@ -372,6 +387,21 @@ TensorRT-LLM 均匀 W4A8（block 32）用 `w4a8_nvfp4_fp8`。
 
 均匀 W4A4（`NVFP4_DEFAULT_CFG`）的 block size 是 **16**。默认 W4A8 的 NVFP4
 层也是 **group_size 16**，不要写成 `W4A8_NVFP4_FP8` block 32。
+
+### 仓库目录
+
+```
+src/megaquant/   库（CLI、流水线、量化方案、模型族）
+recipes/         量化与 GPQA 的 YAML，索引在 recipes/README.md
+tests/           CPU 测试；dry-run 不下载权重
+docs/            架构说明和 Qwen3.8-27B 手册
+docker/          镜像辅助脚本；Dockerfile 在仓库根目录
+scripts/         gpu-pod、OSS 发布/拉取、推理和评测包装
+```
+
+`.env.example` 复制成 `.env`。桶凭证放在被 git 忽略的 `.oss.env`。
+不要提交 `docker-compose.override.yml`。权重和 journal 在 `outputs/`、
+`.cache/`、`models/`、`data/`。许可证是 Apache-2.0（`LICENSE`）。
 
 ### 如何接入新模型
 
