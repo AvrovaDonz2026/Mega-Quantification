@@ -17,6 +17,7 @@ Our scheme             ModelOpt object                   qformat
 ``nvfp4``              alias of ``nvfp4_w4a4``
 ``nvfp4_w4a16``        ``mtq.W4A16_NVFP4_CFG``           ``w4a16_nvfp4``
 ``w4a16_nvfp4``        alias of ``nvfp4_w4a16``
+``nvfp4_w4a16_mixed``  mixed W4A16 MLP + FP8 attn   ``mixed_w4a16_nvfp4``
 ``fp8_w8a8``           ``mtq.FP8_DEFAULT_CFG``           ``fp8``
 ``fp8``                alias of ``fp8_w8a8``
 ====================== ================================= ===================
@@ -98,6 +99,7 @@ SCHEME_ALIASES: dict[str, str] = {
     "nvfp4_w4a8_trtllm": "w4a8_nvfp4_fp8",
     "nvfp4": "nvfp4_w4a4",
     "w4a16_nvfp4": "nvfp4_w4a16",
+    "w4a16_nvfp4_fp8_attn": "nvfp4_w4a16_mixed",
     "fp8": "fp8_w8a8",
 }
 
@@ -108,6 +110,7 @@ CANONICAL_SCHEMES: frozenset[str] = frozenset(
         "w4a8_nvfp4_fp8",
         "nvfp4_w4a4",
         "nvfp4_w4a16",
+        "nvfp4_w4a16_mixed",
         "fp8_w8a8",
     }
 )
@@ -118,6 +121,7 @@ _SCHEME_QFORMAT: dict[str, str] = {
     "w4a8_nvfp4_fp8": "w4a8_nvfp4_fp8",
     "nvfp4_w4a4": "nvfp4",
     "nvfp4_w4a16": "w4a16_nvfp4",
+    "nvfp4_w4a16_mixed": "mixed_w4a16_nvfp4",
     "fp8_w8a8": "fp8",
 }
 
@@ -127,6 +131,7 @@ _SCHEME_CFG_NAME: dict[str, str] = {
     "w4a8_nvfp4_fp8": "W4A8_NVFP4_FP8_CFG",
     "nvfp4_w4a4": "NVFP4_DEFAULT_CFG",
     "nvfp4_w4a16": "W4A16_NVFP4_CFG",
+    "nvfp4_w4a16_mixed": "NVFP4_DEFAULT_CFG+w4a16_mixed_overrides",
     "fp8_w8a8": "FP8_DEFAULT_CFG",
 }
 
@@ -136,10 +141,14 @@ _PRESET_ATTR: dict[str, tuple[str, ...]] = {
     "w4a8_nvfp4_fp8": ("W4A8_NVFP4_FP8_CFG",),
     "nvfp4_w4a4": ("NVFP4_DEFAULT_CFG",),
     "nvfp4_w4a16": ("W4A16_NVFP4_CFG", "NVFP4_MLP_WEIGHT_ONLY_CFG"),
+    "nvfp4_w4a16_mixed": ("NVFP4_DEFAULT_CFG", "W4A8_NVFP4_FP8_CFG"),
     "fp8_w8a8": ("FP8_DEFAULT_CFG",),
 }
 
 _SGLANG_MIXED = frozenset({"nvfp4_w4a8", "nvfp4_mixed"})
+# MLP weights are NVFP4 group 16 with BF16 activations (W4A16_NVFP4).
+_SGLANG_W4A16_MIXED = frozenset({"nvfp4_w4a16_mixed"})
+_SGLANG_MIXED_EXPORT = _SGLANG_MIXED | _SGLANG_W4A16_MIXED
 
 # ModelOpt numeric fallbacks (v0.48 tuple form). YAML presets use "e2m1"/"e4m3".
 _NVFP4_BS16: dict[str, Any] = {
@@ -198,7 +207,41 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         "algorithm": algorithm or "max",
         "requires_modelopt": True,
     }
-    if canonical in _SGLANG_MIXED:
+    if canonical in _SGLANG_W4A16_MIXED:
+        summary.update(
+            {
+                "weight_format": "nvfp4+fp8",
+                "activation_format": "bf16+fp8",
+                "mlp_weight_format": "nvfp4",
+                "mlp_activation_format": "bf16",
+                "mlp_group_size": 16,
+                "mlp_quant_algo": "W4A16_NVFP4",
+                "attn_weight_format": "fp8",
+                "attn_activation_format": "fp8",
+                "sglang": "MIXED_PRECISION + quantized_layers (modelopt_mixed)",
+                "targets": {
+                    "nvfp4_w4a16": list(_MIXED_NVFP4_PATTERNS),
+                    "fp8": list(_MIXED_ATTN_PATTERNS),
+                    "disabled": [
+                        "*visual*",
+                        "*vision*",
+                        "*embed*",
+                        "*linear_attn.conv1d*",
+                        "*linear_attn.in_proj_a*",
+                        "*linear_attn.in_proj_b*",
+                        "*mtp*",
+                    ],
+                },
+                "notes": (
+                    "Spark / SM121 decode map: NVFP4 group_size 16 weights and "
+                    "BF16 activations on *mlp* and *lm_head* (quant_algo "
+                    "W4A16_NVFP4); FP8 weights and activations on *self_attn* "
+                    "and *linear_attn*. Not uniform nvfp4_w4a16, and not the "
+                    "GB300 W4A4 mixed map. Export writes MIXED_PRECISION."
+                ),
+            }
+        )
+    elif canonical in _SGLANG_MIXED:
         summary.update(
             {
                 "weight_format": "nvfp4+fp8",
@@ -479,6 +522,8 @@ def _fallback_for_scheme(canonical: str) -> dict[str, Any]:
         return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
     if canonical == "nvfp4_w4a16":
         return _fallback_uniform(_NVFP4_BS16, None)
+    if canonical == "nvfp4_w4a16_mixed":
+        return _fallback_uniform(_NVFP4_BS16, _NVFP4_BS16)
     if canonical == "fp8_w8a8":
         return _fallback_uniform(_FP8_ATTR, _FP8_ATTR)
     # nvfp4_w4a8 / nvfp4_mixed (and any unknown canonical): NVFP4 W4A4
@@ -599,6 +644,22 @@ def _apply_mixed(cfg: dict[str, Any], used_cfg_name: str = "") -> None:
     _enable_pattern(cfg, "*mlp*weight_quantizer", nvfp4)
     _enable_pattern(cfg, "*mlp*input_quantizer", nvfp4)
     _reenable_lm_head(cfg, nvfp4, nvfp4)
+
+
+def _apply_mixed_w4a16(cfg: dict[str, Any]) -> None:
+    """NVFP4 weight-only MLP + lm_head, FP8 attention.
+
+    Activations on the MLP stay BF16 so decode does not pay an FP4 activation
+    quant on the wide GEMMs. SGLang reads those layers as ``W4A16_NVFP4``.
+    """
+    nvfp4 = copy.deepcopy(_NVFP4_BS16)
+    fp8 = copy.deepcopy(_FP8_ATTR)
+    for pattern in _MIXED_ATTN_PATTERNS:
+        _enable_pattern(cfg, f"{pattern}weight_quantizer", fp8)
+        _enable_pattern(cfg, f"{pattern}input_quantizer", fp8)
+    _enable_pattern(cfg, "*mlp*weight_quantizer", nvfp4)
+    _disable_pattern(cfg, "*mlp*input_quantizer")
+    _reenable_lm_head(cfg, nvfp4, None)
 
 
 def _precision_to_attr(spec: Any) -> dict[str, Any] | None:
@@ -869,7 +930,7 @@ def _rewrite_sglang_export(
     output_dir: Path, canonical: str
 ) -> dict[str, dict[str, Any]] | None:
     """Patch ModelOpt HF metadata so SGLang ``modelopt_mixed`` can load it."""
-    if canonical not in _SGLANG_MIXED:
+    if canonical not in _SGLANG_MIXED_EXPORT:
         return None
     try:
         from megaquant.sglang_export import rewrite_sglang_mixed_export
@@ -877,8 +938,9 @@ def _rewrite_sglang_export(
         raise BackendError(
             "megaquant.sglang_export is required to write SGLang MIXED_PRECISION metadata"
         ) from exc
+    mlp_quant_algo = "W4A16_NVFP4" if canonical in _SGLANG_W4A16_MIXED else "NVFP4"
     try:
-        return rewrite_sglang_mixed_export(output_dir)
+        return rewrite_sglang_mixed_export(output_dir, mlp_quant_algo=mlp_quant_algo)
     except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as exc:
         raise BackendError(
             f"SGLang MIXED_PRECISION rewrite failed under {output_dir}: {exc}"
@@ -917,12 +979,14 @@ class ModelOptBackend:
 
         if canonical in _SGLANG_MIXED:
             _apply_mixed(cfg, used_name)
+        elif canonical in _SGLANG_W4A16_MIXED:
+            _apply_mixed_w4a16(cfg)
 
         ignore = _collect_ignore(plan, recipe)
         _apply_ignores(cfg, ignore)
         _apply_opt_in_enables(cfg, recipe)
 
-        if canonical not in _SGLANG_MIXED and not _lm_head_ignored(ignore):
+        if canonical not in _SGLANG_MIXED_EXPORT and not _lm_head_ignored(ignore):
             weight_attr, input_attr = _weight_input_attrs(cfg)
             _reenable_lm_head(cfg, weight_attr, input_attr)
 

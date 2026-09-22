@@ -148,6 +148,16 @@ def test_5090_and_public_calib_recipes() -> None:
     assert w4a4_pub["calibration"]["num_samples"] == 512
     assert w4a4_pub["calibration"]["max_seq_length"] == 2048
     assert w4a4_pub["calibration"]["batch_size"] == 1
+    w4a16 = RECIPES / "qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml"
+    assert w4a16.is_file()
+    w4a16_data = _load(w4a16)
+    _assert_schema(w4a16_data, w4a16)
+    assert w4a16_data["scheme"] == "nvfp4_w4a16_mixed"
+    assert w4a16_data["algorithm"] == "max"
+    assert w4a16_data["calibration"]["num_samples"] == 256
+    assert w4a16_data["calibration"]["max_seq_length"] == 1024
+    assert w4a16_data["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A16-mixed"
+
     mixed_pub = _load(MIXED_PUBLIC)
     assert mixed_pub["scheme"] == "nvfp4_mixed"
     assert mixed_pub["algorithm"] == "max"

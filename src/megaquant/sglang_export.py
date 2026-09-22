@@ -22,9 +22,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-SGLANG_MIXED_ALGOS = frozenset({"nvfp4_w4a8", "nvfp4_mixed"})
+SGLANG_MIXED_ALGOS = frozenset({"nvfp4_w4a8", "nvfp4_mixed", "nvfp4_w4a16_mixed"})
 
 _NVFP4_LAYER = {"quant_algo": "NVFP4", "group_size": 16}
+_W4A16_NVFP4_LAYER = {"quant_algo": "W4A16_NVFP4", "group_size": 16}
 _FP8_LAYER = {"quant_algo": "FP8"}
 
 _SKIP_SUBSTR = (
@@ -191,28 +192,35 @@ def _ends_with_tail(module: str, tail: str) -> bool:
     return module == tail or module.endswith("." + tail)
 
 
-def layer_entry_for_module(module: str) -> dict[str, Any] | None:
+def layer_entry_for_module(
+    module: str, *, mlp_quant_algo: str = "NVFP4"
+) -> dict[str, Any] | None:
     if _skipped(module):
         return None
     if any(_ends_with_tail(module, tail) for tail in _NVFP4_TAILS):
+        if mlp_quant_algo == "W4A16_NVFP4":
+            return dict(_W4A16_NVFP4_LAYER)
         return dict(_NVFP4_LAYER)
     if any(_ends_with_tail(module, tail) for tail in _FP8_TAILS):
         return dict(_FP8_LAYER)
     return None
 
 
-def quantized_layers_from_weight_map(weight_map: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def quantized_layers_from_weight_map(
+    weight_map: dict[str, Any], *, mlp_quant_algo: str = "NVFP4"
+) -> dict[str, dict[str, Any]]:
     layers: dict[str, dict[str, Any]] = {}
+    mlp_layer = dict(_W4A16_NVFP4_LAYER if mlp_quant_algo == "W4A16_NVFP4" else _NVFP4_LAYER)
     for tensor_name in weight_map:
         module = _module_from_tensor(str(tensor_name))
         if module is None:
             continue
-        entry = layer_entry_for_module(module)
+        entry = layer_entry_for_module(module, mlp_quant_algo=mlp_quant_algo)
         if entry is None:
             continue
         layers[module] = entry
         if _ends_with_tail(module, "lm_head") and module != "lm_head":
-            layers.setdefault("lm_head", dict(_NVFP4_LAYER))
+            layers.setdefault("lm_head", dict(mlp_layer))
     return dict(sorted(layers.items()))
 
 
@@ -241,8 +249,9 @@ def build_mixed_quant_section(
     producer: dict[str, Any] | None = None,
     kv_cache_quant_algo: str | None = "FP8",
     exclude_modules: list[str] | None = None,
+    mlp_quant_algo: str = "NVFP4",
 ) -> dict[str, Any]:
-    layers = quantized_layers_from_weight_map(weight_map)
+    layers = quantized_layers_from_weight_map(weight_map, mlp_quant_algo=mlp_quant_algo)
     if not layers:
         raise ValueError(
             "No NVFP4/FP8 layers found in the export weight map; "
@@ -265,7 +274,9 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def rewrite_sglang_mixed_export(export_dir: str | Path) -> dict[str, Any]:
+def rewrite_sglang_mixed_export(
+    export_dir: str | Path, *, mlp_quant_algo: str = "NVFP4"
+) -> dict[str, Any]:
     """Patch ``hf_quant_config.json`` and ``config.json`` for SGLang mixed NVFP4.
 
     Returns the written ``quantized_layers`` map.
@@ -291,6 +302,7 @@ def rewrite_sglang_mixed_export(export_dir: str | Path) -> dict[str, Any]:
         producer=producer,
         kv_cache_quant_algo=kv,
         exclude_modules=list(exclude) if isinstance(exclude, list) else None,
+        mlp_quant_algo=mlp_quant_algo,
     )
     hf_payload = {
         "producer": producer or {"name": "modelopt", "version": "unknown"},

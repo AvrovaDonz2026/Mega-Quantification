@@ -1,0 +1,38 @@
+# 5090 PTQ for DGX Spark decode: weight-only NVFP4 on MLP + lm_head, FP8 attention.
+#
+# SM121 is bandwidth-bound (~273 GB/s). W4A16 keeps MLP activations in BF16 so
+# the wide GEMMs do not pay an FP4 activation quant. SGLang 0.5.20 loads the
+# export as MIXED_PRECISION with per-layer quant_algo W4A16_NVFP4 (Marlin).
+# This is not uniform nvfp4_w4a16 (that NVFP4-quantizes attention too) and not
+# the GB300 W4A4 mixed map already published as W4A8.
+#
+# Algorithm is max at 256x1024, batch 4. A 32 GB card cannot hold Hessian 2048.
+
+name: qwen3.8-27b-nvfp4-w4a16-mixed-5090
+backend: modelopt
+scheme: nvfp4_w4a16_mixed
+algorithm: max
+kv_cache: fp8
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: Qwen/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: false
+  quantize_mtp: false
+
+calibration:
+  dataset: HuggingFaceH4/ultrachat_200k
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 4
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A16-mixed
+  format: hf
+  pack: true
