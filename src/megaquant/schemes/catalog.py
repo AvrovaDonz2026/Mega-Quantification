@@ -163,11 +163,15 @@ SCHEME_CATALOG: dict[str, SchemeDef] = {
         ],
         kv_cache="fp8",
         notes=(
-            "DGX Spark / SM121 decode map: NVFP4 group_size 16 weights with "
-            "BF16 activations on mlp.{gate,up,down}_proj + lm_head "
-            "(SGLang quant_algo W4A16_NVFP4); FP8 W8A8 on self_attn and "
-            "linear_attn. Not uniform nvfp4_w4a16. Export rewrites "
-            "MIXED_PRECISION + quantized_layers."
+            "Optional Marlin export, not the DGX Spark fast path. NVFP4 "
+            "group_size 16 weights with BF16 activations on "
+            "mlp.{gate,up,down}_proj + lm_head (SGLang quant_algo "
+            "W4A16_NVFP4); FP8 W8A8 on self_attn and linear_attn. Published "
+            "Spark tok/s use the mixed W4A4 checkpoint (nvfp4_mixed / "
+            "nvfp4_w4a8): NVFP4 activations on the MLP, FP8 attention, FP8 KV. "
+            "W4A16 reintroduces a BF16 activation read once native FP4 GEMM "
+            "works. Not uniform nvfp4_w4a16. Export rewrites MIXED_PRECISION "
+            "+ quantized_layers."
         ),
         vllm_support="SGLang modelopt_mixed W4A16_NVFP4",
         trtllm_support="mixed W4A16 NVFP4 MLP + FP8 attn",

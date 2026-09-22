@@ -233,11 +233,13 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
                     ],
                 },
                 "notes": (
-                    "Spark / SM121 decode map: NVFP4 group_size 16 weights and "
-                    "BF16 activations on *mlp* and *lm_head* (quant_algo "
-                    "W4A16_NVFP4); FP8 weights and activations on *self_attn* "
-                    "and *linear_attn*. Not uniform nvfp4_w4a16, and not the "
-                    "GB300 W4A4 mixed map. Export writes MIXED_PRECISION."
+                    "Optional Marlin export, not the DGX Spark fast path. "
+                    "NVFP4 group_size 16 weights and BF16 activations on *mlp* "
+                    "and *lm_head* (quant_algo W4A16_NVFP4); FP8 weights and "
+                    "activations on *self_attn* and *linear_attn*. Published "
+                    "Spark tok/s use the mixed W4A4 checkpoint (nvfp4_mixed / "
+                    "nvfp4_w4a8). Not uniform nvfp4_w4a16. Export writes "
+                    "MIXED_PRECISION."
                 ),
             }
         )

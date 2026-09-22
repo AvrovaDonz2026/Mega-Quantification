@@ -32,11 +32,12 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --r
 ```
 
 5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
-**64 GiB**, bf16 GDN / 96 mamba slots, Triton + Marlin. Host
+**64 GiB**, bf16 GDN / 96 mamba slots, Triton + Marlin, CUDA graph off. Host
 `docker-compose.override.yml` (never git) that hardcodes `sglang` argv must
 use the same `--hicache-size 64 --max-mamba-cache-size 96 --mamba-ssm-dtype
-bfloat16`. Do not wipe `gpqa_diamond.jsonl`; the client resumes by
-`item_id`.
+bfloat16`. An 80 GB SM120 uses `recipes/eval-gpqa-diamond.6000d.yaml`
+(64-way, KV on GPU, CUDA graph on, SiLU+FP4 fusion off). Do not wipe
+`gpqa_diamond.jsonl`; the client resumes by `item_id`.
 
 ---
 
@@ -55,8 +56,10 @@ ultrachat 256×1024 batch 4）。NVIDIA 公开 `nvidia/Qwen3.8-27B-NVFP4` 层图
 `qwen3.8-27b-nvfp4-mixed.yaml`，单卡 32 GB 放不下。
 
 5090 GPQA：`eval-gpqa-diamond.5090.yaml`，**24 路** / HiCache **64 GiB** /
-bf16 GDN 96 slot / Triton + Marlin。宿主机 override 写死 argv 时必须同步
-hicache / mamba。不要清空 `gpqa_diamond.jsonl`。
+bf16 GDN 96 slot / Triton + Marlin / CUDA graph 关。宿主机 override 写死
+argv 时必须同步 hicache / mamba。80 GB SM120 用
+`eval-gpqa-diamond.6000d.yaml`（64 路、KV 在 GPU、CUDA graph 开、关掉
+SiLU+FP4 融合）。不要清空 `gpqa_diamond.jsonl`。
 
 | 镜像 | 用途 |
 |---|---|

@@ -32,9 +32,17 @@ TensorRT-LLM 均匀 W4A8（`W4A8_NVFP4_FP8`，block 32）见
 
 5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
 （按 GPU KV / GDN 池比例切主机内存），GDN **bf16**、96 个 mamba slot，Triton
-+ Marlin。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
++ Marlin，CUDA graph 关掉（32 GB 抓 graph 会 OOM）。80 GB 级 SM120
+（RTX PRO 6000 / 6000D）用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，
+KV 留在 GPU，CUDA graph 开着，并关掉 SiLU+FP4 融合（CUDA 12.8 的 FlashInfer
+JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
 会排队。198 题 journal 跑完前不要报总分；eval 客户端按 `item_id` 续跑，不要
 用 `open("w")` 清空 jsonl。
+
+DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
+（MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
+12 tok/s，带宽上限大约 14 tok/s；再快靠这份权重上的投机解码，不靠再量化一次。
+`nvfp4_w4a16_mixed` 只是 32 GB 机器上的可选 Marlin 导出，不是 Spark 快路径。
 
 ## What this repo actually quantized (5090)
 
@@ -91,6 +99,7 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
 | `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same; **5090 production PTQ** |
 | `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `local_hessian` | ultrachat 2048 (anonymous Hub) | same |
+| `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A16-mixed`; optional Marlin export, not the Spark fast path |
 
 All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
 `model.quantize_vision: false`, and `model.quantize_mtp: false`.
@@ -371,9 +380,9 @@ greedy-decode. Do not cap generation at 512/2048 tokens.
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
-| Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
-| Mamba / GDN | 5090: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
-| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); 5090 / CUDA 12.8: Triton attn + `fp4-gemm-backend marlin` + `SGLANG_FORCE_FP8_MARLIN` (`eval-gpqa-diamond.5090.yaml`). Do not mix the two recipes. |
+| Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
+| Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
+| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); CUDA 12.8 SM120: Triton attn + Marlin NVFP4 + `SGLANG_FORCE_FP8_MARLIN`. 32 GB recipe also disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). 80 GB recipe keeps CUDA graph, leaves KV on GPU, uses CUTLASS FP8, and sets `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION` (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong). Do not quote a partial journal as the score. |
 
@@ -407,6 +416,8 @@ python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
+python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
+python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml --dry-run
 ```
 
 Compose: `make serve-sglang` then `make eval-gpqa`. `eval-gpqa` does not

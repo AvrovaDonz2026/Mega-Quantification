@@ -30,6 +30,7 @@ MIXED_5090 = RECIPES / "qwen3.8-27b-nvfp4-mixed.5090.yaml"
 MIXED_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-mixed.public-calib.yaml"
 GPQA = RECIPES / "eval-gpqa-diamond.yaml"
 GPQA_5090 = RECIPES / "eval-gpqa-diamond.5090.yaml"
+GPQA_6000D = RECIPES / "eval-gpqa-diamond.6000d.yaml"
 LOCAL_EXPORT = "outputs/Qwen3.8-27B-NVFP4-W4A8"
 HUB_BF16 = "Qwen/Qwen3.8-27B"
 
@@ -168,7 +169,11 @@ def test_5090_and_public_calib_recipes() -> None:
 
 
 def _assert_gpqa_official_cards(
-    data: dict, *, attention_backend: str, kv_offloading_size_gb: float = 12
+    data: dict,
+    *,
+    attention_backend: str,
+    kv_offloading_size_gb: float = 12,
+    disable_cuda_graph: bool = True,
 ) -> None:
     """Lock the Qwen thinking / NVIDIA cookbook knobs shared by both GPQA recipes."""
     assert data["model"] == LOCAL_EXPORT
@@ -184,7 +189,7 @@ def _assert_gpqa_official_cards(
     assert serve["engine"] == "sglang"
     assert serve["attention_backend"] == attention_backend
     assert serve["kv_offloading_size_gb"] == kv_offloading_size_gb
-    assert serve["disable_cuda_graph"] is True
+    assert serve["disable_cuda_graph"] is disable_cuda_graph
 
 
 def test_gpqa_eval_recipe_matches_official_cards() -> None:
@@ -215,6 +220,30 @@ def test_gpqa_5090_recipe_matches_official_cards_except_triton() -> None:
     for key, value in optional.items():
         if key in serve:
             assert serve[key] == value, key
+
+
+def test_gpqa_6000d_recipe_matches_official_cards_with_graphs() -> None:
+    data = _load(GPQA_6000D)
+    _assert_gpqa_official_cards(
+        data,
+        attention_backend="triton",
+        kv_offloading_size_gb=0,
+        disable_cuda_graph=False,
+    )
+    assert data["name"] == "gpqa-diamond-qwen38-6000d"
+    assert data["concurrency"] == 64
+    serve = data["serve"]
+    assert serve["max_running_requests"] == 64
+    assert serve["max_mamba_cache_size"] == 256
+    assert serve["mamba_ssm_dtype"] == "bfloat16"
+    assert serve["mem_fraction_static"] == 0.90
+    assert serve["chunked_prefill_size"] == 4096
+    assert serve["fp8_gemm_backend"] == "cutlass"
+    assert serve["fp4_gemm_backend"] == "marlin"
+    assert serve["enable_hierarchical_cache"] is False
+    assert serve["disable_radix_cache"] is True
+    assert serve["disable_silu_fp4_quant_fusion"] is True
+    assert serve["flashinfer_available"] is False
 
 
 def test_gpqa_5090_recipe_stays_distinct_from_default() -> None:

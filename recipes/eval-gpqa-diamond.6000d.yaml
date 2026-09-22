@@ -1,0 +1,83 @@
+# GPQA Diamond on an 80 GB-class SM120 (RTX PRO 6000 / 6000D) with CUDA 12.8.
+# Same official cards as eval-gpqa-diamond.yaml. CUDA graph stays on: 84 GB
+# holds mixed NVFP4 plus bf16 GDN (256 slots, 64-way) without the 32 GB
+# capture OOM that forces eval-gpqa-diamond.5090.yaml to disable graphs.
+# KV stays on the GPU. Radix cache is off because each Diamond prompt is
+# unique. FlashInfer SM120 JIT needs CUDA >= 12.9, so this recipe uses
+# Triton attention, Marlin NVFP4, CUTLASS FP8, and turns off SiLU+FP4
+# fusion (that path still imports FlashInfer when the GEMM backend is Marlin).
+# Checkpoint is the mixed W4A4 export (nvfp4_w4a8 / nvfp4_mixed), which is
+# also the DGX Spark serve map. Do not point this at Qwen/Qwen3.8-27B.
+name: gpqa-diamond-qwen38-6000d
+benchmark: gpqa_diamond
+dataset: Idavidrein/gpqa
+dataset_config: gpqa_diamond
+model: outputs/Qwen3.8-27B-NVFP4-W4A8
+backend: auto
+base_url: null
+shuffle_choices: true
+limit: null
+output_dir: outputs/eval/gpqa_diamond
+# 256 bf16 mamba slots → 64 in-flight. The 84 GB card keeps those plus
+# the FP8 KV pool on GPU, so HiCache is off.
+concurrency: 64
+
+thinking:
+  enable: true
+  preserve: true
+  reasoning_effort: xhigh
+
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  do_sample: true
+
+generation:
+  max_model_len: 262144
+  max_new_tokens: 0
+  continue_on_length: true
+  seed: 0
+
+serve:
+  engine: sglang
+  host: 127.0.0.1
+  kv_cache_dtype: fp8_e4m3
+  gpu_memory_utilization: 0.90
+  mem_fraction_static: 0.90
+  max_num_seqs: 64
+  max_running_requests: 64
+  max_num_batched_tokens: 32768
+  chunked_prefill_size: 4096
+  reasoning_parser: qwen3
+  enable_chunked_prefill: true
+  enable_auto_tool_choice: true
+  tool_call_parser: qwen3_coder
+  mm_encoder_tp_mode: data
+  quantization: modelopt
+  tensor_parallel_size: 1
+  attention_backend: triton
+  sampling_backend: pytorch
+  linear_attn_backend: triton
+  mamba_backend: triton
+  fp8_gemm_backend: cutlass
+  fp4_gemm_backend: marlin
+  force_fp8_marlin: true
+  disable_silu_fp4_quant_fusion: true
+  flashinfer_available: false
+  enable_jit_deepgemm: false
+  disable_radix_cache: true
+  disable_flashinfer_autotune: true
+  mamba_full_memory_ratio: 4.59
+  mamba_radix_cache_strategy: extra_buffer_lazy
+  mamba_ssm_dtype: bfloat16
+  max_mamba_cache_size: 256
+  enable_hierarchical_cache: false
+  kv_offloading_backend: "off"
+  kv_offloading_size_gb: 0
+  swap_space_gb: 0
+  cpu_reserve_gib: 6
+  disable_cuda_graph: false

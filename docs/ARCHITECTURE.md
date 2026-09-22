@@ -10,7 +10,10 @@ be enough to quantize any Hugging Face causal / VLM checkpoint.
 gs16，注意力 FP8，导出 `MIXED_PRECISION`）。5090 生产 PTQ 是
 `mixed.5090.yaml`：ModelOpt 0.46.1、算法 **`max`**、ultrachat 256×1024。
 NVIDIA 公开权重才是 Local-Hessian + Nemotron v3 2048（modelopt 0.48.0）。
-5090 GPQA 24 路 / HiCache 64 GiB / bf16 GDN；journal 跑完前不要报 198 分。
+5090 GPQA 24 路 / HiCache 64 GiB / bf16 GDN / CUDA graph 关。80 GB SM120
+GPQA 用 `eval-gpqa-diamond.6000d.yaml`：64 路、KV 在 GPU、CUDA graph 开、
+关掉 SiLU+FP4 融合。DGX Spark 用同一份混合 W4A4 checkpoint；`nvfp4_w4a16_mixed`
+不是 Spark 快路径。journal 跑完前不要报 198 分。
 
 ## Goal
 
@@ -37,8 +40,12 @@ block 16. Default W4A8 and mixed share the NVIDIA gs16/FP8 map.
 is `recipes/qwen3.8-27b-nvfp4-mixed.yaml` and needs a larger GPU.
 
 5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): 24-way, HiCache 64 GiB
-(split by GPU KV vs GDN pool), bf16 mamba 96 slots, Triton + Marlin. Do not
-quote a partial GPQA journal as `correct/198`.
+(split by GPU KV vs GDN pool), bf16 mamba 96 slots, Triton + Marlin, CUDA
+graph off. 80 GB SM120 GPQA (`recipes/eval-gpqa-diamond.6000d.yaml`): 64-way,
+KV on GPU, CUDA graph on, `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. DGX
+Spark serves the mixed W4A4 checkpoint; `nvfp4_w4a16_mixed` is an optional
+Marlin export, not that fast path. Do not quote a partial GPQA journal as
+`correct/198`.
 
 | Recipe | Meaning |
 |---|---|
@@ -197,6 +204,7 @@ Default ignore for `qwen3_5` (language-model W4A8):
 | `w4a8_nvfp4_fp8` | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` | **32** weights + FP8 E4M3 activations, uniform (TRT-LLM) |
 | `nvfp4_w4a4` | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | **16** weights and activations, uniform |
 | `nvfp4_w4a16` | `mtq.W4A16_NVFP4_CFG` / `w4a16_nvfp4` | 16, weight-only |
+| `nvfp4_w4a16_mixed` | mixed W4A16 MLP + FP8 attn / `W4A16_NVFP4` on MLP | 16 MLP weights, BF16 MLP activations, FP8 attention. Optional Marlin export, not the Spark fast path |
 | `fp8_w8a8` | `mtq.FP8_DEFAULT_CFG` / `fp8` | n/a (FP8) |
 
 SGLang-serving NVFP4 uses **group_size 16** on MLP + `lm_head`. TensorRT-LLM

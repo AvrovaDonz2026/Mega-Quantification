@@ -258,6 +258,7 @@ def test_w4a16_mixed_cfg_disables_mlp_activation_quant() -> None:
     summary = describe_cfg("nvfp4_w4a16_mixed")
     assert summary["mlp_quant_algo"] == "W4A16_NVFP4"
     assert summary["mlp_activation_format"] == "bf16"
+    assert "not the DGX Spark fast path" in summary["notes"]
     assert describe_cfg("w4a16_nvfp4_fp8_attn")["scheme"] == "nvfp4_w4a16_mixed"
 
 

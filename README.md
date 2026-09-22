@@ -58,10 +58,19 @@ defaults to the 5090 `max` recipe; override with
 
 5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
 **64 GiB** (SGLang splits that host pool by GPU KV vs GDN size), **bf16**
-GDN with `max_mamba_cache_size: 96`, Triton attention + Marlin NVFP4
-(CUDA 12.8 cannot FlashInfer-JIT SM 12.0). NVIDIA's mixed card used vLLM on
-GB300; their SGLang cookbook uses `extra_buffer` + float32 mamba. Keep the
-default FlashInfer recipe and the 5090 Triton recipe distinct.
+GDN with `max_mamba_cache_size: 96`, Triton attention + Marlin NVFP4,
+CUDA graph off (CUDA 12.8 cannot FlashInfer-JIT SM 12.0, and 32 GB OOMs
+during graph capture). An 80 GB SM120 uses
+`recipes/eval-gpqa-diamond.6000d.yaml`: **64-way**, KV on GPU, CUDA graph
+on, SiLU+FP4 fusion off. NVIDIA's mixed card used vLLM on GB300; their
+SGLang cookbook uses `extra_buffer` + float32 mamba. Keep the FlashInfer,
+32 GB, and 80 GB recipes distinct.
+
+DGX Spark serves this same mixed W4A4 checkpoint (NVFP4 activations on the
+MLP, FP8 attention, FP8 KV). Plain GB10 decode sits near 12 tok/s under a
+~14 tok/s bandwidth ceiling; the extra speed is speculative decode on that
+checkpoint. `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` is an optional
+Marlin export, not that fast path.
 
 ### Qwen3.8-27B W4A8 quickstart
 
@@ -266,10 +275,17 @@ mixed checkpoint，没有再跑一遍 PTQ。
 
 5090 GPQA（`recipes/eval-gpqa-diamond.5090.yaml`）：**24 路**，HiCache
 **64 GiB**（按 GPU 上 KV / GDN 池比例切主机内存），GDN **bf16** 且
-`max_mamba_cache_size: 96`，Triton 注意力 + Marlin NVFP4（CUDA 12.8 编不了
-SM 12.0 的 FlashInfer JIT）。NVIDIA 模型卡用 GB300 上的 vLLM；他们的
-SGLang cookbook 是 `extra_buffer` + float32 mamba。默认 FlashInfer 配方和
-5090 Triton 配方不要混用。
+`max_mamba_cache_size: 96`，Triton 注意力 + Marlin NVFP4，CUDA graph 关闭
+（CUDA 12.8 编不了 SM 12.0 的 FlashInfer JIT，32 GB 抓 graph 会 OOM）。
+80 GB 级 SM120 用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，KV 在
+GPU 上，CUDA graph 开着，SiLU+FP4 融合关掉。NVIDIA 模型卡用 GB300 上的
+vLLM；他们的 SGLang cookbook 是 `extra_buffer` + float32 mamba。FlashInfer、
+32 GB、80 GB 三套配方不要混用。
+
+DGX Spark 推理用的就是这份混合 W4A4 checkpoint（MLP 为 NVFP4 激活，注意力
+FP8，KV FP8）。GB10 普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s；
+再快是这份权重上的投机解码。`qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` 是可选
+Marlin 导出，不是这条快路径。
 
 ### Qwen3.8-27B W4A8 快速开始
 
