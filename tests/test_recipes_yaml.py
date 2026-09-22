@@ -72,21 +72,15 @@ def test_w4a8_recipe_documents_sglang_mixed() -> None:
     assert "mixed" in lowered
     assert "16" in text
     assert "sglang" in lowered or "mixed_precision" in lowered
-    assert "w4a8_nvfp4_fp8" in lowered
+    assert "trtllm.yaml" not in lowered
     assert "not" in lowered and "block 32" in lowered
 
 
-def test_trtllm_w4a8_recipe_if_present() -> None:
-    path = RECIPES / "qwen3.8-27b-nvfp4-w4a8-trtllm.yaml"
-    assert path.is_file()
-    data = _load(path)
-    _assert_schema(data, path)
-    assert data["scheme"] == "w4a8_nvfp4_fp8"
-    assert data["backend"] == "modelopt"
-    assert data["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A8-TRTLLM"
-    text = path.read_text().lower()
-    assert "32" in text
-    assert "sglang" in text
+def test_trtllm_uniform_w4a8_recipe_is_not_shipped() -> None:
+    assert not (RECIPES / "qwen3.8-27b-nvfp4-w4a8-trtllm.yaml").exists()
+    for path in RECIPES.glob("*.yaml"):
+        data = _load(path)
+        assert data.get("scheme") != "w4a8_nvfp4_fp8", path.name
 
 
 def test_mixed_recipe_matches_nvidia_intent() -> None:

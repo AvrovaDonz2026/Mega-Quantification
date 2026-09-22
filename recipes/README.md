@@ -18,7 +18,6 @@ change when a hardware profile is added. Groups below are the public index.
 | `qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | Same layer map as `nvfp4_w4a8`. Local-Hessian + Nemotron v3. Needs a larger GPU than 32 GB. |
 | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB production PTQ: algorithm `max`, ultrachat 256×1024. |
 | `qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | Local-Hessian with anonymous ultrachat. |
-| `qwen3.8-27b-nvfp4-w4a8-trtllm.yaml` | `w4a8_nvfp4_fp8` | TensorRT-LLM only. Uniform NVFP4 group 32 + FP8 activations. SGLang rejects this tag. |
 | `qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | Optional Marlin export (BF16 MLP activations). Not the DGX Spark fast path. |
 
 ## GPQA (SGLang)

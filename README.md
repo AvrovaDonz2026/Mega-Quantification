@@ -25,14 +25,13 @@ TensorRT-LLM.
 | `nvfp4_w4a8` | **SGLang default.** Same mixed map as `nvidia/Qwen3.8-27B-NVFP4`: NVFP4 **group_size 16** on MLP + `lm_head`, FP8 on self-attn + linear-attn. Export writes `quant_algo=MIXED_PRECISION` + `quantized_layers`. |
 | `nvfp4_w4a4` | Uniform NVFP4 W4A4 (`NVFP4_DEFAULT_CFG`; block **16** weights and activations). SGLang `quant_algo=NVFP4`. |
 | `nvfp4_mixed` | Same encoding as `nvfp4_w4a8`; quality recipe uses Local-Hessian + Nemotron v3. |
-| `w4a8_nvfp4_fp8` | TensorRT-LLM **only**: uniform NVFP4 block **32** + FP8 activations (`W4A8_NVFP4_FP8`). SGLang rejects this tag. |
 
 NVIDIA's public [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
 is mixed NVFP4/FP8 (Local-Hessian, 2048 samples,
 `Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0). NVFP4 layers
 use **group_size 16**. Default `nvfp4_w4a8` in this repo matches that map so
-SGLang `modelopt_mixed` can serve the checkpoint. Uniform ModelOpt
-`W4A8_NVFP4_FP8` (block 32) is scheme `w4a8_nvfp4_fp8`.
+SGLang `modelopt_mixed` can serve the checkpoint. This repo does not ship a
+recipe for ModelOpt `W4A8_NVFP4_FP8` (block 32); SGLang rejects that tag.
 
 Bits on that default checkpoint (`nvfp4_w4a8` / `nvfp4_mixed`). The recipe
 name says W4A8; the MLP is NVFP4 weights and NVFP4 activations:
@@ -148,11 +147,8 @@ ModelOpt for NVFP4 W4A8, else llm-compressor.
   **rejects** `W4A8_NVFP4_FP8`.
 - Default `nvfp4_w4a8` therefore uses the NVIDIA mixed map (NVFP4 gs16 MLP +
   `lm_head`, FP8 attention) and rewrites `hf_quant_config.json` after export.
-- TensorRT-LLM uniform W4A8 remains `w4a8_nvfp4_fp8` /
-  `mtq.W4A8_NVFP4_FP8_CFG` (NVFP4 **block size 32**).
-- llm-compressor has **no** stock `NVFP4A8` preset; mixed W4A8 is two custom
-  groups, uniform TRT-LLM W4A8 is FP4 `TENSOR_GROUP` `group_size=32` + FP8
-  activations.
+- llm-compressor has **no** stock `NVFP4A8` preset. Mixed W4A8 is two custom
+  groups. This repo does not ship a uniform `W4A8_NVFP4_FP8` recipe.
 
 Uniform W4A4 (`nvfp4_w4a4`, `NVFP4_DEFAULT_CFG`) uses block size **16** for
 weights and activations. Default W4A8 NVFP4 layers also use **group_size 16**.
@@ -285,12 +281,11 @@ Weights stay on the host (`./.cache/huggingface`, `./models`, `./outputs`).
 | `nvfp4_w4a8` | **SGLang 默认。** 与 `nvidia/Qwen3.8-27B-NVFP4` 同一套混合图：MLP + `lm_head` NVFP4 **group_size 16**，self-attn + linear-attn 为 FP8。导出 `quant_algo=MIXED_PRECISION`。 |
 | `nvfp4_w4a4` | 均匀：`NVFP4_DEFAULT_CFG`，权重和激活均为 NVFP4 block **16** |
 | `nvfp4_mixed` | 与 `nvfp4_w4a8` 同一套编码；质量配方用 Local-Hessian + Nemotron v3 |
-| `w4a8_nvfp4_fp8` | **仅 TensorRT-LLM**：均匀 NVFP4 block **32** + FP8 激活。SGLang 拒收该 `quant_algo`。 |
 
 NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合 NVFP4/FP8**：MLP + `lm_head`
 为 **NVFP4 group_size 16**，self-attn + linear-attn 为 **FP8**。默认 W4A8
-对齐这套图，好让 SGLang `modelopt_mixed` 加载。均匀 `W4A8_NVFP4_FP8`
-（block 32）改叫 `w4a8_nvfp4_fp8`。
+对齐这套图，好让 SGLang `modelopt_mixed` 加载。本仓库不提供 SGLang 拒收的
+均匀 `W4A8_NVFP4_FP8`（block 32）配方。
 
 默认 checkpoint（`nvfp4_w4a8` / `nvfp4_mixed`）的位宽。配方名叫 W4A8，MLP 是 NVFP4 权重加 NVFP4 激活：
 
@@ -383,7 +378,7 @@ pip install -e '.[hf,llmcompressor]'    # 备选：compressed-tensors / vLLM
 SGLang 只认 `NVFP4` / `MIXED_PRECISION`（外加非空 `quantized_layers`），
 **拒收** `W4A8_NVFP4_FP8`。所以默认 `nvfp4_w4a8` 走 NVIDIA 混合图
 （MLP NVFP4 gs16 + 注意力 FP8），导出后再改写 `hf_quant_config.json`。
-TensorRT-LLM 均匀 W4A8（block 32）用 `w4a8_nvfp4_fp8`。
+本仓库不提供 SGLang 拒收的均匀 `W4A8_NVFP4_FP8` 配方。
 
 均匀 W4A4（`NVFP4_DEFAULT_CFG`）的 block size 是 **16**。默认 W4A8 的 NVFP4
 层也是 **group_size 16**，不要写成 `W4A8_NVFP4_FP8` block 32。

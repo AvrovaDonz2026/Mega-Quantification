@@ -26,9 +26,8 @@ mixed checkpoint。Local-Hessian 2048 需要更大卡：
 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。
 
 均匀 W4A4 是 `NVFP4_DEFAULT_CFG`（权重和激活均为 NVFP4 block 16）。
-TensorRT-LLM 均匀 W4A8（`W4A8_NVFP4_FP8`，block 32）见
-`recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml`。NVFP4 推理需要 Blackwell；校准
-可以在 Hopper 上用多卡 / offload 做。
+本仓库不提供 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`（block 32）配方。
+NVFP4 推理需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做。
 
 5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
 （按 GPU KV / GDN 池比例切主机内存），GDN **bf16**、96 个 mamba slot，Triton
@@ -63,7 +62,6 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 | 方案 | 与上表的差别 | 导出 | 运行时 |
 |---|---|---|---|
 | `nvfp4_w4a4` | 被选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
-| `w4a8_nvfp4_fp8` | 被选中的 LM 线性层全部是 NVFP4 group 32 权重 + FP8 激活 | `quant_algo: W4A8_NVFP4_FP8` | TensorRT-LLM |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head` 为 NVFP4 group 16 权重、BF16 激活；注意力仍是 FP8 | MLP 条目 `quant_algo: W4A16_NVFP4` | 可选 Marlin 导出 |
 
 5090 生产运行：ModelOpt **0.46.1**，算法 **`max`**，ultrachat **256×1024**，batch 4，配方 `qwen3.8-27b-nvfp4-mixed.5090.yaml`。目录 `outputs/Qwen3.8-27B-NVFP4-W4A8` 就是这份导出。NVIDIA 公开权重是同一层图，校准为 Local-Hessian（`mixed.yaml`，modelopt 0.48.0，Nemotron v3，2048×2048）。
@@ -123,7 +121,6 @@ The production checkpoint, default scheme `nvfp4_w4a8`, and scheme `nvfp4_mixed`
 | Scheme | How it differs from the table | Export | Runtime |
 |---|---|---|---|
 | `nvfp4_w4a4` | every targeted LM linear is NVFP4 W4A4 group 16, including attention | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
-| `w4a8_nvfp4_fp8` | every targeted LM linear is NVFP4 group 32 weights + FP8 activations | `quant_algo: W4A8_NVFP4_FP8` | TensorRT-LLM |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head` are NVFP4 group 16 weights with BF16 activations; attention stays FP8 | MLP entry `quant_algo: W4A16_NVFP4` | optional Marlin export |
 
 The 5090 production run is ModelOpt **0.46.1**, algorithm **`max`**, ultrachat **256×1024**, batch 4, recipe `qwen3.8-27b-nvfp4-mixed.5090.yaml`. The directory `outputs/Qwen3.8-27B-NVFP4-W4A8` is that export. NVIDIA's public checkpoint uses the same layer map with Local-Hessian (`mixed.yaml`, modelopt 0.48.0, Nemotron v3, 2048×2048).
@@ -214,7 +211,6 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8` |
 | `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml` | `nvfp4_w4a8` | `max` | ultrachat 512 (anonymous Hub) | same |
-| `recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml` | `w4a8_nvfp4_fp8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8-TRTLLM` |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A4` |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
@@ -249,19 +245,21 @@ Uniform quality recipes (`w4a8.yaml`, `w4a4.yaml`) use
 
 Norms are not `Linear` and stay unquantized automatically.
 
-## Mixed vs SGLang W4A8 vs uniform W4A4 vs TRT-LLM W4A8
+## Mixed vs SGLang W4A8 vs uniform W4A4
 
 Default `nvfp4_w4a8` is the same encoding as the public NVIDIA checkpoint
-(and as `nvfp4_mixed`). That is what SGLang can serve.
+(and as `nvfp4_mixed`). That is what SGLang can serve. This repo does not
+ship a recipe for ModelOpt uniform `W4A8_NVFP4_FP8` (NVFP4 block 32); SGLang
+rejects that tag.
 
-| | SGLang W4A8 (default) | Uniform W4A4 | Mixed quality | TRT-LLM W4A8 |
-|---|---|---|---|---|
-| Scheme | `nvfp4_w4a8` | `nvfp4_w4a4` | `nvfp4_mixed` | `w4a8_nvfp4_fp8` |
-| ModelOpt | mixed overrides + `MIXED_PRECISION` rewrite | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | same mixed cfg as W4A8; Local-Hessian | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` |
-| NVFP4 group / block | **16** on MLP + `lm_head` | **16** uniform | **16** on MLP + `lm_head` | **32** (`nvfp4_bs32`) |
-| Weights / activations | NVFP4 gs16 on MLP + `lm_head`; **FP8** on self-attn + linear-attn | NVFP4 weights **and** activations (block 16) | same map as SGLang W4A8 | NVFP4 weights + FP8 E4M3 activations on every targeted LM linear |
-| SGLang | `modelopt_mixed` (`MIXED_PRECISION`) | `modelopt_fp4` (`NVFP4`) | `modelopt_mixed` | **rejected** (`W4A8_NVFP4_FP8`) |
-| Public HF id | — | — | [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) | — |
+| | SGLang W4A8 (default) | Uniform W4A4 | Mixed quality |
+|---|---|---|---|
+| Scheme | `nvfp4_w4a8` | `nvfp4_w4a4` | `nvfp4_mixed` |
+| ModelOpt | mixed overrides + `MIXED_PRECISION` rewrite | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | same mixed cfg as W4A8; Local-Hessian |
+| NVFP4 group / block | **16** on MLP + `lm_head` | **16** uniform | **16** on MLP + `lm_head` |
+| Weights / activations | NVFP4 gs16 on MLP + `lm_head`; **FP8** on self-attn + linear-attn | NVFP4 weights **and** activations (block 16) | same map as SGLang W4A8 |
+| SGLang | `modelopt_mixed` (`MIXED_PRECISION`) | `modelopt_fp4` (`NVFP4`) | `modelopt_mixed` |
+| Public HF id | — | — | [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) |
 
 `nvidia/Qwen3.8-27B-NVFP4` is mixed NVFP4/FP8. It is **not**
 `W4A8_NVFP4_FP8` and **not** NVFP4 block 32.
@@ -335,8 +333,8 @@ megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 
 Do this **before SGLang serve** when `hf_quant_config.json` is still a
 bare `NVFP4` tag without `quantized_layers` (ModelOpt 0.46 often writes
-that). Uniform `w4a8_nvfp4_fp8` is TensorRT-LLM only — do not rewrite it
-and call it SGLang-loadable.
+that). Do not rewrite a `W4A8_NVFP4_FP8` export and call it SGLang-loadable.
+This repo does not ship a recipe for that tag.
 
 27B BF16 ≈ 54 GiB of weights plus activations. Set `model.device_map` (`auto`
 by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
@@ -404,8 +402,8 @@ multipart upload.
 
 Mixed encoding **is** the default W4A8. A finished mixed export can be
 published twice (`--scheme mixed` and `--scheme w4a8`) under the **same
-content-hash** — do not run a second PTQ. Uniform `w4a8_nvfp4_fp8` is
-TensorRT-LLM only; do not publish or advertise it as SGLang-loadable `w4a8`.
+content-hash** — do not run a second PTQ. Do not publish a
+`W4A8_NVFP4_FP8` export as SGLang-loadable `w4a8`.
 
 ```bash
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
@@ -569,6 +567,6 @@ CSV with the Hub columns (`Question`, `Correct Answer`,
 - Block size 16 vs 32: default SGLang W4A8 (`nvfp4_w4a8`) is NVFP4
   **group_size 16** on MLP + `lm_head` with FP8 attention
   (`MIXED_PRECISION`). Uniform W4A4 is NVFP4 **16** (`NVFP4_DEFAULT_CFG`).
-  TensorRT-LLM uniform W4A8 is NVFP4 **32** (`W4A8_NVFP4_FP8` /
-  scheme `w4a8_nvfp4_fp8`). SGLang rejects that tag. Using block 32 for
-  mixed will not match `nvidia/Qwen3.8-27B-NVFP4`.
+  This repo does not ship a recipe for ModelOpt uniform `W4A8_NVFP4_FP8`
+  (NVFP4 block **32**). SGLang rejects that tag. Using block 32 for mixed
+  will not match `nvidia/Qwen3.8-27B-NVFP4`.

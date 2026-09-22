@@ -21,15 +21,15 @@ GPQA 用 `eval-gpqa-diamond.6000d.yaml`：64 路、KV 在 GPU、CUDA graph 开�
   NVFP4 (E2M1, group_size **16**) on MLP + `lm_head`; FP8 E4M3 on self-attn +
   linear-attn. Export `quant_algo=MIXED_PRECISION` + `quantized_layers`.
 - Uniform W4A4 (`nvfp4_w4a4`): NVFP4 block **16** weights and activations.
-- TensorRT-LLM uniform W4A8 (`w4a8_nvfp4_fp8`): NVFP4 block **32** + FP8
-  activations (`W4A8_NVFP4_FP8`). SGLang rejects that `quant_algo`.
+- No recipe for ModelOpt uniform `W4A8_NVFP4_FP8` (NVFP4 block **32**).
+  SGLang rejects that `quant_algo`.
 
 NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` checkpoint is mixed NVFP4/FP8:
 **NVFP4 group_size 16** on MLP + `lm_head`, **FP8** on self-attn + linear-attn.
 Default `nvfp4_w4a8` matches that map. Card: Local-Hessian, 2048 samples,
 `Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0.
 
-This repo ships four Qwen3.8-27B schemes. Uniform W4A4 is `NVFP4_DEFAULT_CFG`
+Shipped Qwen3.8-27B recipes are the SGLang schemes below. Uniform W4A4 is `NVFP4_DEFAULT_CFG`
 block 16. Default W4A8 and mixed share the NVIDIA gs16/FP8 map.
 
 **5090 production PTQ is `max`, not Hessian.** Compose `mixed` and
@@ -52,7 +52,6 @@ Marlin export, not that fast path. Do not quote a partial GPQA journal as
 | `nvfp4_w4a8`, `nvfp4_mixed` | MLP + `lm_head`: NVFP4 E2M1 group **16**. Attention projections: FP8 E4M3. Vision, MTP, embeddings, GDN `conv1d` / `in_proj_a` / `in_proj_b`: BF16 | MLP + `lm_head`: NVFP4 group 16. Attention: FP8. KV at serve: fp8_e4m3 | `MIXED_PRECISION`; per layer `NVFP4` or `FP8` | SGLang `modelopt_mixed` |
 | `nvfp4_w4a4` | NVFP4 group **16** on every targeted LM linear | NVFP4 group 16 | `NVFP4` | SGLang `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head`: NVFP4 group 16. Attention: FP8 | MLP activations stay BF16. Attention activations: FP8 | MLP entry `W4A16_NVFP4` | optional Marlin export |
-| `w4a8_nvfp4_fp8` | NVFP4 group **32** on every targeted LM linear | FP8 E4M3 | `W4A8_NVFP4_FP8` | TensorRT-LLM |
 
 SGLang GPQA uses the mixed checkpoint above. Recipes:
 `eval-gpqa-diamond.yaml` (FlashInfer, HiCache 12 GiB),
@@ -150,7 +149,7 @@ class QuantBackend(Protocol):
     def export(self, model, recipe, tokenizer=None) -> Path: ...
 ```
 
-`auto` backend: prefer `modelopt` for NVFP4 (mixed W4A8 / W4A4 / `W4A8_NVFP4_FP8`),
+`auto` backend: prefer `modelopt` for NVFP4 (mixed W4A8 and uniform W4A4),
 else `llmcompressor`.
 
 Dry-run (no GPU, missing optional deps) must still:
@@ -205,7 +204,7 @@ Default ignore for `qwen3_5` (language-model W4A8):
 |---|---|---|
 | `nvfp4_w4a8` | mixed overrides + `MIXED_PRECISION` export / `mixed_nvfp4_fp8` | **16** on MLP + `lm_head`; FP8 on attention (SGLang) |
 | `nvfp4_mixed` | same mixed cfg / `mixed_nvfp4_fp8` | **16** on MLP + `lm_head` (NVIDIA public mapping) |
-| `w4a8_nvfp4_fp8` | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` | **32** weights + FP8 E4M3 activations, uniform (TRT-LLM) |
+| `w4a8_nvfp4_fp8` | `mtq.W4A8_NVFP4_FP8_CFG` / `w4a8_nvfp4_fp8` | **32** weights + FP8 activations. Recognized so serve can reject it. No recipe file. |
 | `nvfp4_w4a4` | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | **16** weights and activations, uniform |
 | `nvfp4_w4a16` | `mtq.W4A16_NVFP4_CFG` / `w4a16_nvfp4` | 16, weight-only |
 | `nvfp4_w4a16_mixed` | mixed W4A16 MLP + FP8 attn / `W4A16_NVFP4` on MLP | 16 MLP weights, BF16 MLP activations, FP8 attention. Optional Marlin export, not the Spark fast path |
@@ -284,8 +283,8 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
   `serve`/`eval` default to SGLang (`:30000`, HiCache KV → RAM).
 - After mixed / default-W4A8 export: `megaquant rewrite-sglang <export_dir>`
   before SGLang serve if `hf_quant_config.json` is bare NVFP4 without
-  `quantized_layers`. Uniform `w4a8_nvfp4_fp8` is TensorRT-LLM only — not
-  SGLang-loadable.
+  `quantized_layers`. A `W4A8_NVFP4_FP8` export is not SGLang-loadable, and
+  this repo does not ship a recipe that produces it.
 - Publish: `python scripts/oss_publish.py <export> --scheme w4a4|mixed|w4a8`
   and/or `bash scripts/gpu-pod.sh publish [scheme]`. Bucket/endpoint from
   `OSS_BUCKET` / `OSS_ENDPOINT` (optional `.oss.env`). Mixed encoding **is**
@@ -302,7 +301,6 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8-trtllm.yaml
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 megaquant serve -c recipes/eval-gpqa-diamond.yaml --dry-run
