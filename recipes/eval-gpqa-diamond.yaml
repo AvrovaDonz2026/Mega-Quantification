@@ -1,8 +1,9 @@
 # GPQA Diamond eval for Qwen3.8-27B NVFP4 exports.
 #
-# Protocol matches the public model cards, not a short-context smoke test:
-#   Qwen/Qwen3.8-27B thinking mode (generation_config.json):
-#     temperature=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0
+# Protocol matches the public model cards, except this eval sends temperature 0.
+# Published Qwen / NVIDIA cards use temperature 1.0.
+#   Qwen/Qwen3.8-27B thinking mode, with temperature overridden to 0:
+#     temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0
 #     repetition_penalty=1.0 do_sample=true
 #     enable_thinking=true preserve_thinking=true reasoning_effort=xhigh
 #   Serve is **SGLang** (NVIDIA Qwen3.8 cookbook + mixed NVFP4):
@@ -17,7 +18,7 @@
 # continue_on_length continues if the server still hits length.
 # KV that does not fit GPU HBM is offloaded to host RAM
 # (SGLang HiCache `--hicache-size` 0 = MemTotal − cpu_reserve_gib).
-# Do not greedy-decode; Qwen documents that it degrades thinking quality.
+# This eval sends temperature 0. The published Qwen / NVIDIA cards use 1.0.
 
 name: gpqa-diamond-qwen38-official
 benchmark: gpqa_diamond
@@ -37,7 +38,7 @@ thinking:
   reasoning_effort: xhigh
 
 sampling:
-  temperature: 1.0
+  temperature: 0.0
   top_p: 0.95
   top_k: 20
   min_p: 0.0

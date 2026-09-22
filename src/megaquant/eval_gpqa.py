@@ -1,10 +1,12 @@
-"""GPQA Diamond eval matching the Qwen3.8-27B / NVIDIA NVFP4 model cards.
+"""GPQA Diamond eval for the Qwen3.8-27B / NVIDIA NVFP4 checkpoints.
 
-Official protocol this module encodes
--------------------------------------
-Qwen/Qwen3.8-27B thinking-mode sampling (model card + generation_config.json)::
+Sampling this module sends
+--------------------------
+Eval recipes use temperature 0. ``QWEN_THINKING_SAMPLING`` keeps the published
+Qwen / NVIDIA card (temperature 1.0) so the two protocols stay distinct.
+Everything else matches Qwen/Qwen3.8-27B thinking mode::
 
-    temperature=1.0, top_p=0.95, top_k=20, min_p=0.0,
+    temperature=0, top_p=0.95, top_k=20, min_p=0.0,
     presence_penalty=0.0, repetition_penalty=1.0, do_sample=True
     enable_thinking=True, preserve_thinking=True, reasoning_effort=xhigh
 
@@ -110,7 +112,7 @@ class StrictModel(BaseModel):
 
 
 class EvalSampling(StrictModel):
-    temperature: float = 1.0
+    temperature: float = 0.0
     top_p: float = 0.95
     top_k: int = 20
     min_p: float = 0.0

@@ -70,7 +70,7 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 
 ### SGLang 推理与 GPQA
 
-推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样对齐 Qwen thinking 卡：`temperature=1.0`，`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
+推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -132,7 +132,7 @@ DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mix
 
 ## SGLang inference and GPQA
 
-Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling is the Qwen thinking card: `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
+Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
 
 | | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
 |---|---|---|---|
@@ -495,13 +495,14 @@ vLLM support for that combo is limited.
 
 The bit layout and the three SGLang recipes are in [Quantization format](#quantization-format) and [SGLang inference and GPQA](#sglang-inference-and-gpqa). This section keeps the sampling locks and the launch notes.
 
-Evaluate each NVFP4 export with the **same sampling as the Qwen thinking
-card** on a **SGLang** server (NVIDIA Qwen3.8 cookbook flags). Do not
-greedy-decode. Do not cap generation at 512/2048 tokens.
+Evaluate each NVFP4 export on a **SGLang** server (NVIDIA Qwen3.8 cookbook
+flags). This eval sends **temperature 0**. The other sampling fields match
+the Qwen thinking card. Published cards stay at temperature 1.0. Do not cap
+generation at 512/2048 tokens.
 
 | Knob | Value |
 |---|---|
-| Sampling | `temperature=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true` |
+| Sampling | `temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true`. Published Qwen / NVIDIA cards use temperature 1.0. |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
 | Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
 | Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
