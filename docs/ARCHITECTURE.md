@@ -13,7 +13,9 @@ NVIDIA 公开权重才是 Local-Hessian + Nemotron v3 2048（modelopt 0.48.0）�
 5090 GPQA 24 路 / HiCache 64 GiB / bf16 GDN / CUDA graph 关。80 GB SM120
 GPQA 用 `eval-gpqa-diamond.6000d.yaml`：64 路、KV 在 GPU、CUDA graph 开、
 关掉 SiLU+FP4 融合。DGX Spark 用同一份混合 W4A4 checkpoint；`nvfp4_w4a16_mixed`
-不是 Spark 快路径。journal 跑完前不要报 198 分。
+不是 Spark 快路径。混合 checkpoint 的 GPQA Diamond 已完成：**178/198**，
+temperature **1.0**（80 GB SM120，SGLang，64 路；截断 0）。仓库评测配方现在是
+temperature 0。journal 不满 198 行时不要报总分。
 
 ## Goal
 
@@ -44,8 +46,10 @@ is `recipes/qwen3.8-27b-nvfp4-mixed.yaml` and needs a larger GPU.
 graph off. 80 GB SM120 GPQA (`recipes/eval-gpqa-diamond.6000d.yaml`): 64-way,
 KV on GPU, CUDA graph on, `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. DGX
 Spark serves the mixed W4A4 checkpoint; `nvfp4_w4a16_mixed` is an optional
-Marlin export, not that fast path. Do not quote a partial GPQA journal as
-`correct/198`.
+Marlin export, not that fast path. Finished mixed-checkpoint GPQA Diamond:
+**178/198** at temperature **1.0** (80 GB SM120, SGLang, 64-way; truncated 0,
+unparsed 0). Eval recipes in this tree now send temperature 0. Do not quote
+a partial GPQA journal as `correct/198`.
 
 | Scheme | Weights | Activations | Export `quant_algo` | Runtime |
 |---|---|---|---|---|

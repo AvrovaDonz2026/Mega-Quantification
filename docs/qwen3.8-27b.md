@@ -35,8 +35,11 @@ NVFP4 推理需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做
 （RTX PRO 6000 / 6000D）用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，
 KV 留在 GPU，CUDA graph 开着，并关掉 SiLU+FP4 融合（CUDA 12.8 的 FlashInfer
 JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
-会排队。198 题 journal 跑完前不要报总分；eval 客户端按 `item_id` 续跑，不要
-用 `open("w")` 清空 jsonl。
+会排队。混合 checkpoint（5090 `max` + ultrachat）的 GPQA Diamond 已完成：
+**178/198**，temperature **1.0**（80 GB SM120，SGLang，64 路，2026-09-22；
+截断 0，解析失败 0）。仓库里的评测 YAML 现在发的是 temperature 0，这个分数
+不是那套配方的重跑。journal 不满 198 行时不要报总分；eval 客户端按 `item_id`
+续跑，不要用 `open("w")` 清空 jsonl。
 
 DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 （MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
@@ -68,7 +71,7 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 
 ### SGLang 推理与 GPQA
 
-推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。
+推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。已完成的混合权重量测是 **178/198**，temperature **1.0**。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -129,7 +132,7 @@ DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mix
 
 ## SGLang inference and GPQA
 
-Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal.
+Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal. The finished mixed-checkpoint measurement is **178/198** at temperature **1.0**.
 
 | | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
 |---|---|---|---|
@@ -186,7 +189,11 @@ FP8 scale sweep. A 32 GB 5090 cannot hold Hessian 2048 with 27B BF16
 offload. Quality requant is `mixed.yaml` on Hopper / larger Blackwell.
 
 Do **not** treat an in-flight GPQA journal as a 198-row score. Truncated or
-unparsed answers count as wrong; resume appends by `item_id`.
+unparsed answers count as wrong; resume appends by `item_id`. The finished
+mixed checkpoint (this 5090 `max` + ultrachat export) scored **178/198**
+GPQA Diamond at temperature **1.0** on an 80 GB SM120 with SGLang, 64-way
+(2026-09-22; truncated 0, unparsed 0). Eval YAML in this tree now sends
+temperature 0, so that number is the temperature-1 measurement.
 
 ## Model facts
 
@@ -511,11 +518,18 @@ generation at 512/2048 tokens.
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong). Do not quote a partial journal as the score. |
 
+Measured on this repo's mixed checkpoint (5090 `max` + ultrachat, same map
+as `nvfp4_w4a8`): **178/198** GPQA Diamond at temperature **1.0** (80 GB
+SM120, SGLang 64-way, 2026-09-22; truncated 0, unparsed 0). Other sampling
+matched the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on).
+Recipes in this tree now send temperature 0; do not read 178/198 as that
+setting.
+
 NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4** on
 GB300 **vLLM** (`temp=1.0 top_p=0.95`, `max_new_tokens=65536`). The Qwen
 card reports **89.2** (thinking, `top_k=20`). Those numbers are not greedy.
-A 5090 SGLang run of our `max`+ultrachat checkpoint is a different PTQ
-**and** a different eval stack; treat it as a separate measurement.
+Our 178/198 run is also temperature 1.0, on a different PTQ (`max` +
+ultrachat) and a different stack (SGLang on an 80 GB SM120).
 
 On a 32 GB 5090 the 262k window does not fit in HBM. **Offload KV into host
 RAM** rather than shrinking `max_new_tokens`. Qwen GPQA traces can run tens
