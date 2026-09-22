@@ -32,11 +32,24 @@ RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --r
 ```
 
 5090 GPQA (`recipes/eval-gpqa-diamond.5090.yaml`): **24-way**, HiCache
-**64 GiB**, bf16 GDN / 96 mamba slots, Triton + Marlin. Host
+**64 GiB**, bf16 GDN / 96 mamba slots, Triton + Marlin, CUDA graph off. Host
 `docker-compose.override.yml` (never git) that hardcodes `sglang` argv must
 use the same `--hicache-size 64 --max-mamba-cache-size 96 --mamba-ssm-dtype
-bfloat16`. Do not wipe `gpqa_diamond.jsonl`; the client resumes by
-`item_id`.
+bfloat16`. An 80 GB SM120 uses `recipes/eval-gpqa-diamond.6000d.yaml`
+(64-way, KV on GPU, CUDA graph on, SiLU+FP4 fusion off). Do not wipe
+`gpqa_diamond.jsonl`; the client resumes by `item_id`. The jsonl is the
+full trace and is written under the model directory (`<model>/gpqa_diamond/`).
+
+The checkpoint those recipes serve is mixed: MLP + `lm_head` are NVFP4
+group 16 weights **and** NVFP4 activations, attention projections are FP8,
+KV is fp8_e4m3, and `hf_quant_config.json` is `MIXED_PRECISION`. SGLang is
+the eval runtime (`megaquant serve` then `megaquant eval` on `:30000`).
+
+| Box | `EVAL_RECIPE` | Serve |
+|---|---|---|
+| CUDA ≥ 12.9 | `recipes/eval-gpqa-diamond.yaml` | FlashInfer, HiCache 12 GiB |
+| 32 GB / CUDA 12.8 | `recipes/eval-gpqa-diamond.5090.yaml` | Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off |
+| 80 GB / CUDA 12.8 | `recipes/eval-gpqa-diamond.6000d.yaml` | Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on |
 
 ---
 
@@ -55,8 +68,22 @@ ultrachat 256×1024 batch 4）。NVIDIA 公开 `nvidia/Qwen3.8-27B-NVFP4` 层图
 `qwen3.8-27b-nvfp4-mixed.yaml`，单卡 32 GB 放不下。
 
 5090 GPQA：`eval-gpqa-diamond.5090.yaml`，**24 路** / HiCache **64 GiB** /
-bf16 GDN 96 slot / Triton + Marlin。宿主机 override 写死 argv 时必须同步
-hicache / mamba。不要清空 `gpqa_diamond.jsonl`。
+bf16 GDN 96 slot / Triton + Marlin / CUDA graph 关。宿主机 override 写死
+argv 时必须同步 hicache / mamba。80 GB SM120 用
+`eval-gpqa-diamond.6000d.yaml`（64 路、KV 在 GPU、CUDA graph 开、关掉
+SiLU+FP4 融合）。不要清空 `gpqa_diamond.jsonl`。完整轨迹写在模型目录
+`<model>/gpqa_diamond/` 里。
+
+这些配方加载的权重是混合格式：MLP + `lm_head` 为 NVFP4 group 16 权重和
+NVFP4 激活，注意力投影为 FP8，KV 为 fp8_e4m3，`hf_quant_config.json` 为
+`MIXED_PRECISION`。评测运行时是 SGLang（先 `megaquant serve`，再
+`megaquant eval`，端口 `:30000`）。
+
+| 机器 | `EVAL_RECIPE` | 推理 |
+|---|---|---|
+| CUDA ≥ 12.9 | `recipes/eval-gpqa-diamond.yaml` | FlashInfer，HiCache 12 GiB |
+| 32 GB / CUDA 12.8 | `recipes/eval-gpqa-diamond.5090.yaml` | Triton + Marlin，HiCache 64 GiB，24 路，CUDA graph 关 |
+| 80 GB / CUDA 12.8 | `recipes/eval-gpqa-diamond.6000d.yaml` | Triton + Marlin + CUTLASS，KV 在 GPU，64 路，CUDA graph 开 |
 
 | 镜像 | 用途 |
 |---|---|

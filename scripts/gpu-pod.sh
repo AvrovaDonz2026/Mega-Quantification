@@ -229,7 +229,7 @@ case "${CMD}" in
       mixed) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-mixed" ;;
       *) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A8" ;;
     esac
-    EVAL_OUT="$ROOT/outputs/eval/gpqa_diamond-${SCHEME}"
+    EVAL_OUT="${EVAL_MODEL}/gpqa_diamond"
     if [[ "${CMD}" == "serve" ]]; then
       log "serve recipe=${EVAL_RECIPE} model=${EVAL_MODEL} (SGLang HiCache KV CPU offload = MemTotal − reserve)"
       exec "${PY}" -m megaquant.cli serve -c "${EVAL_RECIPE}" --model "${EVAL_MODEL}" "$@"

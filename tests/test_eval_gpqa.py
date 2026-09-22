@@ -23,6 +23,7 @@ from megaquant.eval_gpqa import (
     eval_base_url_from_env,
     extract_choice,
     format_gpqa_prompt,
+    gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
     remaining_new_tokens,
@@ -83,6 +84,16 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert default_eval_base_url(recipe) == "http://127.0.0.1:30000/v1"
 
 
+def test_default_traces_sit_inside_the_model_directory() -> None:
+    recipe = load_eval_recipe(RECIPE)
+    assert recipe.output_dir == ""
+    traced = gpqa_trace_dir(recipe.model, recipe.output_dir)
+    assert traced == Path(recipe.model) / "gpqa_diamond"
+    assert describe_eval(recipe)["journal_dir"] == str(traced)
+    custom = gpqa_trace_dir(recipe.model, "/tmp/keep-this")
+    assert custom == Path("/tmp/keep-this")
+
+
 def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.5090.yaml")
     assert recipe.serve.attention_backend == "triton"
@@ -113,6 +124,36 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert "--max-running-requests 24" in joined
     assert "--mem-fraction-static 0.95" in joined
     assert sglang_serve_environ(recipe) == {"SGLANG_FORCE_FP8_MARLIN": "1"}
+
+
+def test_6000d_recipe_keeps_cuda_graph_and_skips_flashinfer_fusion() -> None:
+    recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.6000d.yaml")
+    assert recipe.concurrency == 64
+    assert recipe.serve.disable_cuda_graph is False
+    assert recipe.serve.enable_hierarchical_cache is False
+    assert recipe.serve.max_mamba_cache_size == 256
+    assert recipe.serve.fp8_gemm_backend == "cutlass"
+    argv = sglang_serve_argv_from_recipe(recipe)
+    joined = " ".join(argv)
+    assert "--disable-cuda-graph" not in joined
+    assert "--enable-hierarchical-cache" not in joined
+    assert "--hicache-size" not in joined
+    assert "--attention-backend triton" in joined
+    assert "--mamba-backend triton" in joined
+    assert "--fp8-gemm-backend cutlass" in joined
+    assert "--fp4-gemm-backend marlin" in joined
+    assert "--disable-radix-cache" in joined
+    assert "--disable-flashinfer-autotune" in joined
+    assert "--max-running-requests 64" in joined
+    assert "--max-mamba-cache-size 256" in joined
+    assert "--chunked-prefill-size 4096" in joined
+    assert "--mem-fraction-static 0.9" in joined
+    assert sglang_serve_environ(recipe) == {
+        "SGLANG_FORCE_FP8_MARLIN": "1",
+        "SGLANG_DISABLE_SILU_FP4_QUANT_FUSION": "1",
+        "SGLANG_IS_FLASHINFER_AVAILABLE": "0",
+        "SGLANG_ENABLE_JIT_DEEPGEMM": "0",
+    }
 
 
 def test_remaining_tokens_never_uses_small_default_cap() -> None:

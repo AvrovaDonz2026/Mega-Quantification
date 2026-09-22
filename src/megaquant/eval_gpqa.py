@@ -159,6 +159,16 @@ class EvalServe(StrictModel):
     # then --fp8-gemm-backend. CUDA 12.8 FlashInfer JIT cannot see SM 12.0, so
     # 5090 recipes set this and cmd_serve exports SGLANG_FORCE_FP8_MARLIN=1.
     force_fp8_marlin: bool = False
+    # Fused SiLU+FP4 quant imports FlashInfer even when the FP4 GEMM backend
+    # is Marlin. SM120 + CUDA 12.8 then dies in the SM120f JIT. 80 GB recipes
+    # set this; cmd_serve exports SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1.
+    disable_silu_fp4_quant_fusion: bool = False
+    # None leaves the process env alone. False exports the SM120 workaround.
+    flashinfer_available: bool | None = None
+    enable_jit_deepgemm: bool | None = None
+    mamba_backend: str | None = None
+    disable_radix_cache: bool = False
+    disable_flashinfer_autotune: bool = False
     mamba_full_memory_ratio: float | None = 4.59
     mamba_radix_cache_strategy: str = "extra_buffer_lazy"
     mamba_ssm_dtype: str = "float32"
@@ -187,7 +197,8 @@ class EvalRecipe(StrictModel):
     sampling: EvalSampling = Field(default_factory=EvalSampling)
     generation: EvalGeneration = Field(default_factory=EvalGeneration)
     serve: EvalServe = Field(default_factory=EvalServe)
-    output_dir: str = "outputs/eval/gpqa_diamond"
+    # Empty means `<model>/gpqa_diamond` (full traces beside the weights).
+    output_dir: str = ""
     limit: int | None = None
     shuffle_choices: bool = True
     # HTTP client fan-out. Serve max_running_requests is the hard cap (GDN
@@ -314,6 +325,14 @@ def eval_base_url_from_env() -> str | None:
     return None
 
 
+def gpqa_trace_dir(model: str, output_dir: str | None = None) -> Path:
+    """Folder for GPQA traces. The default sits inside the model directory."""
+    raw = (output_dir or "").strip()
+    if not raw:
+        return Path(model) / "gpqa_diamond"
+    return Path(raw)
+
+
 def default_eval_base_url(recipe: EvalRecipe | None = None) -> str:
     """Local OpenAI-compatible URL for the selected serve engine."""
     if recipe is not None and recipe.serve.engine == "vllm":
@@ -351,6 +370,7 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
             explicit_gb=recipe.serve.kv_offloading_size_gb,
         ),
         "concurrency": recipe.concurrency,
+        "journal_dir": str(gpqa_trace_dir(recipe.model, recipe.output_dir)),
         "kv_offloading_backend": kv_backend,
         # Local export only: missing dir -> null (never Hub-download 27B).
         "sglang_quant": sglang_quant_snapshot(recipe.model),
@@ -494,6 +514,9 @@ def sglang_serve_argv(
     linear_attn_backend: str | None = None,
     fp8_gemm_backend: str | None = None,
     fp4_gemm_backend: str | None = None,
+    mamba_backend: str | None = None,
+    disable_radix_cache: bool = False,
+    disable_flashinfer_autotune: bool = False,
     max_mamba_cache_size: int | None = None,
     seed: int | None = None,
     enable_hierarchical_cache: bool = True,
@@ -575,6 +598,12 @@ def sglang_serve_argv(
         argv.extend(["--fp8-gemm-backend", str(fp8_gemm_backend)])
     if fp4_gemm_backend:
         argv.extend(["--fp4-gemm-backend", str(fp4_gemm_backend)])
+    if mamba_backend:
+        argv.extend(["--mamba-backend", str(mamba_backend)])
+    if disable_radix_cache:
+        argv.append("--disable-radix-cache")
+    if disable_flashinfer_autotune:
+        argv.append("--disable-flashinfer-autotune")
     if max_mamba_cache_size is not None and int(max_mamba_cache_size) > 0:
         argv.extend(["--max-mamba-cache-size", str(int(max_mamba_cache_size))])
     offload = (kv_offloading_backend or "native").strip().lower()
@@ -621,6 +650,9 @@ def sglang_serve_argv_from_recipe(
         linear_attn_backend=serve.linear_attn_backend,
         fp8_gemm_backend=serve.fp8_gemm_backend,
         fp4_gemm_backend=serve.fp4_gemm_backend,
+        mamba_backend=serve.mamba_backend,
+        disable_radix_cache=serve.disable_radix_cache,
+        disable_flashinfer_autotune=serve.disable_flashinfer_autotune,
         max_mamba_cache_size=serve.max_mamba_cache_size,
         seed=recipe.generation.seed,
         enable_hierarchical_cache=serve.enable_hierarchical_cache,
@@ -634,8 +666,17 @@ def sglang_serve_argv_from_recipe(
 def sglang_serve_environ(recipe: EvalRecipe) -> dict[str, str]:
     """Extra process env for ``sglang serve`` (not CLI flags)."""
     env: dict[str, str] = {}
-    if recipe.serve.engine == "sglang" and recipe.serve.force_fp8_marlin:
+    serve = recipe.serve
+    if serve.engine != "sglang":
+        return env
+    if serve.force_fp8_marlin:
         env["SGLANG_FORCE_FP8_MARLIN"] = "1"
+    if serve.disable_silu_fp4_quant_fusion:
+        env["SGLANG_DISABLE_SILU_FP4_QUANT_FUSION"] = "1"
+    if serve.flashinfer_available is False:
+        env["SGLANG_IS_FLASHINFER_AVAILABLE"] = "0"
+    if serve.enable_jit_deepgemm is False:
+        env["SGLANG_ENABLE_JIT_DEEPGEMM"] = "0"
     return env
 
 
@@ -778,7 +819,9 @@ def openai_chat_complete(
     thinking: EvalThinking,
     max_tokens: int,
     seed: int,
-    timeout: float = 3600.0,
+    # xhigh traces at ~20 tok/s run well past one hour. 21600 matches the
+    # 80 GB GPQA client that already scored this checkpoint.
+    timeout: float = 21600.0,
 ) -> GenerationResult:
     url = base_url.rstrip("/") + "/chat/completions"
     body: dict[str, Any] = {
@@ -1010,7 +1053,7 @@ def run_gpqa(
             return int(count_prompt_tokens(text))
         return max(1, len(text) // 4)
 
-    out_dir = Path(recipe.output_dir)
+    out_dir = gpqa_trace_dir(recipe.model, recipe.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     journal_path = out_dir / "gpqa_diamond.jsonl"
     prior = load_gpqa_journal(journal_path)

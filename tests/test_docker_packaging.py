@@ -113,7 +113,7 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "eval-gpqa-diamond.yaml" in script
     assert "serve|eval" in script
     assert "HiCache" in script or "KV CPU offload" in script
-    assert "gpqa_diamond-${SCHEME}" in script
+    assert "${EVAL_MODEL}/gpqa_diamond" in script
     assert "MEGAQUANT_SGLANG_BASE_URL" in script
     assert "http://127.0.0.1:30000/v1" in script
     assert "publish|rewrite-sglang" in script
