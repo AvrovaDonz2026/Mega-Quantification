@@ -27,6 +27,7 @@ thinking:
   preserve: true
   reasoning_effort: xhigh
 
+# This eval sends temperature 0. Published Qwen / NVIDIA cards use 1.0.
 sampling:
   temperature: 0.0
   top_p: 0.95
