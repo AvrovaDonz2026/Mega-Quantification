@@ -148,7 +148,7 @@ def _assert_eval_serve_dry_run_payload(kind: str, out: str, recipe: str) -> None
         assert data["generation"]["seed"] == 0
         assert data["generation"]["max_model_len"] == 262144
         assert data["thinking"]["reasoning_effort"] == "xhigh"
-        assert data["sampling"]["temperature"] == 1.0
+        assert data["sampling"]["temperature"] == 0.0
         assert data["sampling"]["top_p"] == 0.95
         assert data["sampling"]["top_k"] == 20
         kv_gb = 64 if recipe.endswith("5090.yaml") else 12

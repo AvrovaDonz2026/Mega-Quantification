@@ -179,7 +179,7 @@ def _assert_gpqa_official_cards(
     assert data["model"] == LOCAL_EXPORT
     assert data["model"] != HUB_BF16
     assert data["thinking"]["reasoning_effort"] == "xhigh"
-    assert data["sampling"]["temperature"] == 1.0
+    assert data["sampling"]["temperature"] == 0.0
     assert data["sampling"]["top_p"] == 0.95
     assert data["sampling"]["top_k"] == 20
     assert data["generation"]["max_new_tokens"] == 0

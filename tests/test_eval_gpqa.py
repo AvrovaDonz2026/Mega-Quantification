@@ -53,7 +53,10 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert recipe.generation.max_model_len == DEFAULT_MAX_MODEL_LEN
     assert recipe.generation.seed == 0
     samp = recipe.sampling.model_dump()
+    assert samp["temperature"] == 0.0
     for key, value in QWEN_THINKING_SAMPLING.items():
+        if key == "temperature":
+            continue
         assert samp[key] == value, key
     serve = recipe.serve.model_dump()
     assert serve["engine"] == "sglang"
@@ -507,7 +510,7 @@ def test_dry_run_does_not_need_a_model() -> None:
     recipe = load_eval_recipe(RECIPE)
     out = run_gpqa(recipe, dry_run=True)
     assert out["dry_run"] is True
-    assert out["plan"]["sampling"]["temperature"] == 1.0
+    assert out["plan"]["sampling"]["temperature"] == 0.0
     assert out["plan"]["sglang_quant"] is None
 
 
