@@ -47,12 +47,18 @@ Spark serves the mixed W4A4 checkpoint; `nvfp4_w4a16_mixed` is an optional
 Marlin export, not that fast path. Do not quote a partial GPQA journal as
 `correct/198`.
 
-| Recipe | Meaning |
-|---|---|
-| `nvfp4_w4a8` | SGLang mixed: NVFP4 group_size **16** on MLP + `lm_head`, FP8 on attention; `MIXED_PRECISION` export |
-| `nvfp4_w4a4` | Uniform NVFP4 W4A4 (`NVFP4_DEFAULT_CFG`, block **16** weights and activations) |
-| `nvfp4_mixed` | Same encoding as `nvfp4_w4a8`; quality recipe uses Local-Hessian |
-| `w4a8_nvfp4_fp8` | TensorRT-LLM uniform NVFP4 block **32** + FP8 activations |
+| Scheme | Weights | Activations | Export `quant_algo` | Runtime |
+|---|---|---|---|---|
+| `nvfp4_w4a8`, `nvfp4_mixed` | MLP + `lm_head`: NVFP4 E2M1 group **16**. Attention projections: FP8 E4M3. Vision, MTP, embeddings, GDN `conv1d` / `in_proj_a` / `in_proj_b`: BF16 | MLP + `lm_head`: NVFP4 group 16. Attention: FP8. KV at serve: fp8_e4m3 | `MIXED_PRECISION`; per layer `NVFP4` or `FP8` | SGLang `modelopt_mixed` |
+| `nvfp4_w4a4` | NVFP4 group **16** on every targeted LM linear | NVFP4 group 16 | `NVFP4` | SGLang `modelopt_fp4` |
+| `nvfp4_w4a16_mixed` | MLP + `lm_head`: NVFP4 group 16. Attention: FP8 | MLP activations stay BF16. Attention activations: FP8 | MLP entry `W4A16_NVFP4` | optional Marlin export |
+| `w4a8_nvfp4_fp8` | NVFP4 group **32** on every targeted LM linear | FP8 E4M3 | `W4A8_NVFP4_FP8` | TensorRT-LLM |
+
+SGLang GPQA uses the mixed checkpoint above. Recipes:
+`eval-gpqa-diamond.yaml` (FlashInfer, HiCache 12 GiB),
+`eval-gpqa-diamond.5090.yaml` (32 GB, Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off),
+`eval-gpqa-diamond.6000d.yaml` (80 GB, Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off).
+Sampling is the Qwen thinking card on SGLang `:30000`. Score is `correct/198` after the journal has every row. Flag table: `docs/qwen3.8-27b.md`.
 
 ## Package layout (file ownership)
 
