@@ -1,12 +1,14 @@
-# 5090 PTQ for DGX Spark decode: weight-only NVFP4 on MLP + lm_head, FP8 attention.
+# Optional Marlin/W4A16 export. Not the DGX Spark fast path.
 #
-# SM121 is bandwidth-bound (~273 GB/s). W4A16 keeps MLP activations in BF16 so
-# the wide GEMMs do not pay an FP4 activation quant. SGLang 0.5.20 loads the
-# export as MIXED_PRECISION with per-layer quant_algo W4A16_NVFP4 (Marlin).
-# This is not uniform nvfp4_w4a16 (that NVFP4-quantizes attention too) and not
-# the GB300 W4A4 mixed map already published as W4A8.
+# Published Spark tok/s (SGLang cookbook and GB10 measurements) use the existing
+# mixed checkpoint: NVFP4 W4A4 group 16 on MLP, FP8 on attention, FP8 KV.
+# Plain decode on GB10 is ~12 tok/s under a ~14 tok/s bandwidth ceiling, slower
+# than the 5090's ~21 tok/s. The lever past that ceiling is speculative decode
+# (DFlash / MTP) on that mixed checkpoint, not a second PTQ. Forcing W4A16
+# Marlin reintroduces a BF16 activation read once native FP4 GEMM works.
 #
-# Algorithm is max at 256x1024, batch 4. A 32 GB card cannot hold Hessian 2048.
+# Kept so a 32 GB box can still emit MIXED_PRECISION layers tagged W4A16_NVFP4
+# (max, 256x1024, batch 4). Do not start it while the mixed W4A8 eval is the job.
 
 name: qwen3.8-27b-nvfp4-w4a16-mixed-5090
 backend: modelopt
