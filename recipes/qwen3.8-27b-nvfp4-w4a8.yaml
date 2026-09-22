@@ -9,7 +9,7 @@
 # writes a single NVFP4 / W4A8_NVFP4_FP8 tag; do not ship that as-is.
 #
 # This is NOT uniform W4A8_NVFP4_FP8 (NVFP4 block 32 + FP8 activations).
-# SGLang rejects that quant_algo. This repo does not ship a recipe for it.
+# SGLang rejects that quant_algo. This repo does not quantize to it.
 #
 # Algorithm `max` is the lighter PTQ path. NVIDIA's published mixed checkpoint
 # uses Local-Hessian + 2048 samples; see qwen3.8-27b-nvfp4-mixed.yaml.

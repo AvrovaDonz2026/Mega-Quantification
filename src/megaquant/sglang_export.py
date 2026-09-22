@@ -8,8 +8,7 @@ SGLang's ModelOpt loader accepts:
   routes that map to ``modelopt_mixed``.
 
 It **rejects** ``quant_algo: W4A8_NVFP4_FP8`` (uniform NVFP4 block 32 +
-FP8 activations). That encoding stays TensorRT-LLM-only
-(``w4a8_nvfp4_fp8``).
+FP8 activations). This repo does not quantize to that tag.
 
 ModelOpt 0.46 ``export_hf_checkpoint`` of a mixed quant_cfg often writes a
 single ``NVFP4`` / ``W4A8_NVFP4_FP8`` tag. This module rebuilds the NVIDIA
@@ -141,8 +140,9 @@ def inspect_sglang_quant_config(export_dir: str | Path) -> dict[str, Any]:
     warning: str | None = None
     if not sglang_ok:
         warning = (
-            f"SGLang rejects quant_algo={quant_algo} (TRT-LLM uniform W4A8 / "
-            "scheme w4a8_nvfp4_fp8). Do not rewrite gs32 weights in place."
+            f"SGLang rejects quant_algo={quant_algo} "
+            "(uniform NVFP4 block 32 + FP8 activations). "
+            "Do not rewrite these weights in place."
         )
     elif _is_nvfp4_or_mixed_algo(quant_algo) and not has_layers:
         warning = (

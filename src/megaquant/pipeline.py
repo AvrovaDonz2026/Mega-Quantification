@@ -115,9 +115,6 @@ def _placeholder_group(scheme: str) -> LayerGroup:
     elif "int4" in key:
         weights = PrecisionSpec(format="int4", bits=4)
         activations = None
-    elif "w4a8_nvfp4_fp8" in key or key.endswith("nvfp4_fp8"):
-        weights = PrecisionSpec(format="nvfp4", bits=4, group_size=32)
-        activations = PrecisionSpec(format="fp8", bits=8, dynamic=True, strategy="token")
     elif "mixed" in key or key == "nvfp4_w4a8":
         weights = PrecisionSpec(format="nvfp4", bits=4, group_size=16)
         activations = PrecisionSpec(format="nvfp4", bits=4, group_size=16, dynamic=True)
