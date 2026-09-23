@@ -1,6 +1,8 @@
 # Contributing
 
-Mega-Quantification is Apache-2.0. See `LICENSE`.
+Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
+
+协议是 GNU AGPL v3，或以后的版本。
 
 ## English
 
