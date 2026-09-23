@@ -51,6 +51,8 @@ JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不�
 | 推理 | 80 GB SM120，SGLang，64 路，KV 在 GPU |
 | 日期 | 2026-09-22 |
 
+均匀 W4A4、temperature **0**、Marlin：**172/198**（截断 4，解析失败 6），同一天。混合权重没有跑完的 temperature 0 总分。
+
 DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 （MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
 12 tok/s，带宽上限大约 14 tok/s；再快靠这份权重上的投机解码，不靠再量化一次。
@@ -81,7 +83,7 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 
 ### SGLang 推理与 GPQA
 
-推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。已完成的混合权重量测是 **178/198**，temperature **1.0**。
+推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。已完成的混合权重量测是 **178/198**，temperature **1.0**（截断 0，解析失败 0）。均匀 W4A4、temperature **0**、Marlin 是 **172/198**（截断 4，解析失败 6）。两份都是 2026-09-22。评测 YAML 现在发 temperature 0，混合权重没有跑完的 temperature 0 总分。`megaquant serve` 不会自动加 `--speculative-draft-model-path`。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -142,7 +144,7 @@ DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mix
 
 ## SGLang inference and GPQA
 
-Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal. The finished mixed-checkpoint measurement is **178/198** at temperature **1.0**.
+Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal. The finished mixed-checkpoint measurement is **178/198** at temperature **1.0** (truncated 0, unparsed 0). Uniform W4A4 at temperature **0** on Marlin is **172/198** (truncated 4, unparsed 6). Both are 2026-09-22. Eval YAML now sends temperature 0; there is no finished mixed score at temperature 0. `megaquant serve` does not add `--speculative-draft-model-path`.
 
 | | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
 |---|---|---|---|
@@ -202,8 +204,11 @@ Do **not** treat an in-flight GPQA journal as a 198-row score. Truncated or
 unparsed answers count as wrong; resume appends by `item_id`. The finished
 mixed checkpoint (this 5090 `max` + ultrachat export) scored **178/198**
 GPQA Diamond at temperature **1.0** on an 80 GB SM120 with SGLang, 64-way
-(2026-09-22; truncated 0, unparsed 0). Eval YAML in this tree now sends
-temperature 0, so that number is the temperature-1 measurement.
+(2026-09-22; truncated 0, unparsed 0). Uniform W4A4 at temperature **0** on
+Marlin scored **172/198** (truncated 4, unparsed 6) the same day. Eval YAML
+in this tree now sends temperature 0, so the mixed number is the
+temperature-1 measurement. There is no finished 198-row mixed score at
+temperature 0.
 
 ## Model facts
 
@@ -303,6 +308,8 @@ now sends temperature 0, so this row is not a rerun of those recipes.
 | Truncated / unparsed | 0 / 0 |
 | Serve | 80 GB SM120, SGLang, 64-way, KV on GPU |
 | Date | 2026-09-22 |
+
+Uniform W4A4, temperature **0**, Marlin: **172/198** (truncated 4, unparsed 6), same day. No finished mixed score at temperature 0.
 
 ## Calibration
 
@@ -451,7 +458,9 @@ sglang serve --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
 ```
 
 Do not pass the 64-layer export as `--speculative-draft-model-path`.
-Do not publish the `*-draft` directory as scheme `w4a8` / `w4a4` / `mixed`.
+`megaquant serve` / `megaquant eval` do not add these speculative flags;
+pass them on the `sglang serve` command line. Do not publish the `*-draft`
+directory as scheme `w4a8` / `w4a4` / `mixed`.
 Set `model.quantize_mtp: true` only if you want a quantized draft.
 
 ## OSS publish

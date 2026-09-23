@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 modelopt = [
-  "nvidia-modelopt[hf]>=0.46.1",
+  "nvidia-modelopt[hf]==0.46.1",
 ]
 llmcompressor = [
   "llmcompressor>=0.8",

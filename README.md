@@ -40,7 +40,7 @@ name says W4A8; the MLP is NVFP4 weights and NVFP4 activations:
 |---|---|---|---|
 | `mlp.{gate,up,down}_proj`, `lm_head` | NVFP4 E2M1, group 16 | NVFP4, group 16 | `quant_algo: NVFP4` |
 | `self_attn.{q,k,v,o}_proj`, `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
-| vision, MTP, embeddings, `linear_attn.conv1d` / `in_proj_a` / `in_proj_b`, norms | BF16 | BF16 | omitted |
+| vision, MTP, embeddings, `linear_attn.conv1d` / `in_proj_a` / `in_proj_b`, norms | BF16 | BF16 | omitted from `quantized_layers`; MTP weights stay in `mtp.safetensors` |
 | KV at serve time | | fp8_e4m3 | recipe `kv_cache: fp8` |
 
 Top-level `hf_quant_config.json` is `quant_algo: MIXED_PRECISION` plus `quantized_layers`. Layer-by-layer notes: [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#quantization-format).
@@ -59,7 +59,7 @@ directory is that mixed checkpoint, not a second PTQ.
 | nvidia-modelopt | **0.46.1** (PyPI; 0.48 is not published there) | **0.48.0** |
 | Calib | `HuggingFaceH4/ultrachat_200k` **256×1024**, batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**, batch 1 |
 | Export | `quant_algo=MIXED_PRECISION` + `quantized_layers` | Same mixed HF layout |
-| GPQA Diamond | **178/198** at temperature **1.0** (80 GB SM120, SGLang, 64-way; truncated 0, unparsed 0). Recipes in this tree now send temperature 0 | **88.92** BF16 / **88.01** NVFP4 on GB300 **vLLM**, temperature 1.0 |
+| GPQA Diamond | **178/198** at temperature **1.0** (80 GB SM120, SGLang, 64-way; truncated 0, unparsed 0). Recipes in this tree now send temperature 0, so that score is not a rerun of the YAML | **88.92** BF16 / **88.01** NVFP4 on GB300 **vLLM**, temperature 1.0 |
 
 `max` is the cheap PTQ path and is what fits a 32 GB card with CPU offload.
 Local-Hessian at 2048 samples does not. Quality requant:
@@ -82,6 +82,21 @@ MLP, FP8 attention, FP8 KV). Plain GB10 decode sits near 12 tok/s under a
 ~14 tok/s bandwidth ceiling; the extra speed is speculative decode on that
 checkpoint. `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` is an optional
 Marlin export, not that fast path.
+
+### What a clone reproduces
+
+This repository is the pipeline: recipes, export, and the GPQA client. It does not ship the 27B BF16 weights or a finished NVFP4 checkpoint, and it does not name an object-storage bucket. `oss_publish.py` uploads to whatever `OSS_BUCKET` / `OSS_ENDPOINT` you set.
+
+`docker compose build` follows the CUDA **12.8.1** images. On SM 12.0 that is the Triton + Marlin path (`eval-gpqa-diamond.5090.yaml` on 32 GB, `eval-gpqa-diamond.6000d.yaml` on 80 GB). The default image does not include a CUDA 13 FlashInfer toolchain. PTQ installs `nvidia-modelopt[hf]==0.46.1`. Running PTQ again recomputes activation scales and will not byte-match an older export.
+
+Finished GPQA Diamond journals (do not read a partial journal as a score):
+
+| Checkpoint | Sampling | Score |
+|---|---|---|
+| Mixed / default W4A8 (`max` + ultrachat) | temperature **1.0**, Qwen thinking card otherwise | **178/198** (truncated 0, unparsed 0), 80 GB SM120, SGLang, 64-way, 2026-09-22 |
+| Uniform W4A4 | temperature **0**, Marlin | **172/198** (truncated 4, unparsed 6), 2026-09-22 |
+
+Eval YAML in this tree sends temperature **0**. There is no finished 198-row mixed score at temperature 0. `megaquant serve` does not turn on MTP speculative decode; point `--speculative-draft-model-path` at the sibling `*-draft` directory yourself.
 
 ### Qwen3.8-27B W4A8 quickstart
 
@@ -305,7 +320,7 @@ NVIDIA 公开的 `nvidia/Qwen3.8-27B-NVFP4` 是 **混合 NVFP4/FP8**：MLP + `lm
 |---|---|---|---|
 | `mlp.{gate,up,down}_proj`、`lm_head` | NVFP4 E2M1，group 16 | NVFP4，group 16 | `quant_algo: NVFP4` |
 | `self_attn.{q,k,v,o}_proj`、`linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
-| 视觉、MTP、embedding、`linear_attn.conv1d` / `in_proj_a` / `in_proj_b`、norm | BF16 | BF16 | 不写入 |
+| 视觉、MTP、embedding、`linear_attn.conv1d` / `in_proj_a` / `in_proj_b`、norm | BF16 | BF16 | 不写入 `quantized_layers`；MTP 留在 `mtp.safetensors` |
 | 推理时 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
 `hf_quant_config.json` 顶层是 `quant_algo: MIXED_PRECISION`，外加 `quantized_layers`。逐层说明见 [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md#量化格式)。
@@ -324,7 +339,7 @@ mixed checkpoint，没有再跑一遍 PTQ。
 | nvidia-modelopt | **0.46.1**（PyPI；0.48 未上 PyPI） | **0.48.0** |
 | 校准 | `HuggingFaceH4/ultrachat_200k` **256×1024**，batch 4 | `Nemotron-Post-Training-Dataset-v3` **2048×2048**，batch 1 |
 | 导出 | `MIXED_PRECISION` + `quantized_layers` | 同一套 mixed HF 布局 |
-| GPQA Diamond | **178/198**，temperature **1.0**（80 GB SM120，SGLang，64 路；截断 0，解析失败 0）。仓库里的评测配方现在发的是 temperature 0 | GB300 **vLLM**，temperature 1.0：**88.92** BF16 / **88.01** NVFP4 |
+| GPQA Diamond | **178/198**，temperature **1.0**（80 GB SM120，SGLang，64 路；截断 0，解析失败 0）。评测 YAML 现在发 temperature 0，这个分数不是那套 YAML 的重跑 | GB300 **vLLM**，temperature 1.0：**88.92** BF16 / **88.01** NVFP4 |
 
 `max` 省显存，单卡 32 GB 只能走这条。Local-Hessian 2048 需要更大卡：
 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。Compose `mixed` 默认就是 5090 的
@@ -343,6 +358,21 @@ DGX Spark 推理用的就是这份混合 W4A4 checkpoint（MLP 为 NVFP4 激活�
 FP8，KV FP8）。GB10 普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s；
 再快是这份权重上的投机解码。`qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` 是可选
 Marlin 导出，不是这条快路径。
+
+### clone 下来能复现什么
+
+这个仓库是管线：配方、导出和 GPQA 客户端。里面没有 27B BF16，也没有量化好的 NVFP4 checkpoint，也没有对象存储的桶名。`oss_publish.py` 发到你自己设置的 `OSS_BUCKET` / `OSS_ENDPOINT`。
+
+`docker compose build` 用的是 CUDA **12.8.1** 镜像。SM 12.0 上这就是 Triton + Marlin（32 GB 用 `eval-gpqa-diamond.5090.yaml`，80 GB 用 `eval-gpqa-diamond.6000d.yaml`）。默认镜像不包含 CUDA 13 的 FlashInfer 工具链。PTQ 安装 `nvidia-modelopt[hf]==0.46.1`。再跑一遍 PTQ 会重算激活 scale，不会和旧导出逐字节相同。
+
+已完成的 GPQA Diamond（journal 不满 198 行时不要报总分）：
+
+| Checkpoint | 采样 | 分数 |
+|---|---|---|
+| 混合 / 默认 W4A8（`max` + ultrachat） | temperature **1.0**，其余为 Qwen thinking 卡 | **178/198**（截断 0，解析失败 0），80 GB SM120，SGLang，64 路，2026-09-22 |
+| 均匀 W4A4 | temperature **0**，Marlin | **172/198**（截断 4，解析失败 6），2026-09-22 |
+
+仓库里的评测 YAML 发的是 temperature **0**。混合权重还没有一份跑完的 temperature 0 分数。`megaquant serve` 不会打开 MTP 投机解码；`--speculative-draft-model-path` 要自己指到旁边的 `*-draft` 目录。
 
 ### Qwen3.8-27B W4A8 快速开始
 
