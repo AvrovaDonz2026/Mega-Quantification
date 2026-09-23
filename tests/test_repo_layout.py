@@ -17,6 +17,10 @@ def test_agpl_license_is_at_repo_root() -> None:
     assert "Copyright 2026 Donz" in readme
     project = (REPO / "pyproject.toml").read_text(encoding="utf-8")
     assert 'license = "AGPL-3.0-or-later"' in project
+    assert (
+        "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)"
+        in project
+    )
 
 
 def test_recipe_index_names_every_yaml() -> None:
