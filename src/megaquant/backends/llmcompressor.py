@@ -601,6 +601,9 @@ class LLMCompressorBackend:
             save(str(output_dir))
         if tokenizer is not None and hasattr(tokenizer, "save_pretrained"):
             tokenizer.save_pretrained(str(output_dir))
+        from megaquant.mtp_export import restore_bf16_mtp_from_recipe
+
+        restore_bf16_mtp_from_recipe(output_dir, recipe, model=model)
         return output_dir
 
     # ------------------------------------------------------------------
