@@ -123,6 +123,28 @@ def cmd_rewrite_sglang(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore_mtp(args: argparse.Namespace) -> int:
+    import json
+
+    from megaquant.mtp_export import restore_bf16_mtp
+
+    note = restore_bf16_mtp(
+        args.export_dir,
+        source=args.source,
+        write_draft=not bool(getattr(args, "no_draft", False)),
+    )
+    print(json.dumps(note, indent=2))
+    return 0
+
+
+def cmd_write_mtp_draft(args: argparse.Namespace) -> int:
+    from megaquant.mtp_export import write_mtp_draft
+
+    dest = write_mtp_draft(args.export_dir, draft_dir=getattr(args, "output", None))
+    print(dest)
+    return 0
+
+
 def _eval_recipe_from_args(args: argparse.Namespace):
     overrides: dict[str, Any] = {}
     if getattr(args, "model", None):
@@ -253,6 +275,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory with model.safetensors.index.json / hf_quant_config.json",
     )
     rewrite.set_defaults(func=cmd_rewrite_sglang)
+
+    restore_mtp = sub.add_parser(
+        "restore-mtp",
+        help=(
+            "Copy unquantized BF16 mtp.* tensors into an HF export "
+            "(ModelOpt often drops CPU-pinned MTP). Does not download the full 27B"
+        ),
+    )
+    restore_mtp.add_argument("export_dir", type=Path)
+    restore_mtp.add_argument(
+        "--source",
+        default=None,
+        help="Original HF id or local BF16 dir (only shards that contain mtp.* are read)",
+    )
+    restore_mtp.add_argument(
+        "--no-draft",
+        action="store_true",
+        help="Do not write the sibling 1-layer SGLang draft directory",
+    )
+    restore_mtp.set_defaults(func=cmd_restore_mtp)
+
+    mtp_draft = sub.add_parser(
+        "write-mtp-draft",
+        help="Write a 1-layer SGLang speculative draft dir next to an MTP export",
+    )
+    mtp_draft.add_argument("export_dir", type=Path)
+    mtp_draft.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Draft directory (default: <export_dir>-draft)",
+    )
+    mtp_draft.set_defaults(func=cmd_write_mtp_draft)
 
     evaluate = sub.add_parser(
         "eval",

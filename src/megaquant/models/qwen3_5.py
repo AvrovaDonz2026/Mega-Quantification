@@ -11,6 +11,8 @@ Production target: ``Qwen/Qwen3.8-27B``
 
 Language-model W4A8 keeps vision, MTP, embeddings, and GDN extras
 (``linear_attn.conv1d`` / ``in_proj_a`` / ``in_proj_b``) in BF16 by default.
+MTP tensors are still written into the Hugging Face export as
+``mtp.safetensors``; they are not listed in ``quantized_layers``.
 ``lm_head`` is **not** ignored (NVIDIA mixed NVFP4 quantizes it).
 """
 

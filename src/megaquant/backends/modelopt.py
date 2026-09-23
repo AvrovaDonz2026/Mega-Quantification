@@ -903,6 +903,13 @@ def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) 
     return "partial-cpu"
 
 
+def _restore_mtp_export(output_dir: Path, model: Any, recipe: Any) -> dict[str, Any] | None:
+    """Copy ignored BF16 ``mtp.*`` tensors back into the Hugging Face export."""
+    from megaquant.mtp_export import restore_bf16_mtp_from_recipe
+
+    return restore_bf16_mtp_from_recipe(output_dir, recipe, model=model)
+
+
 def _rewrite_sglang_export(
     output_dir: Path, canonical: str
 ) -> dict[str, dict[str, Any]] | None:
@@ -1010,6 +1017,7 @@ class ModelOptBackend:
             if callable(save):
                 save(str(output_dir))
 
+        _restore_mtp_export(output_dir, model, recipe)
         canonical = canonicalize_scheme(str(_attr(recipe, "scheme", "") or ""))
         sglang_layers = _rewrite_sglang_export(output_dir, canonical)
         meta = {

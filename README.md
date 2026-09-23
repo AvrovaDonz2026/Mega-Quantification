@@ -117,6 +117,15 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
+Export keeps unquantized MTP in `mtp.safetensors` (`quantize_mtp: false`
+means leave it BF16, not drop it). A sibling `*-draft` directory is the
+SGLang speculative draft. To graft MTP onto an older export without
+re-running PTQ:
+
+```bash
+megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
+```
+
 End-to-end notes: [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md).
 
 ### Install extras
@@ -364,6 +373,14 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 # 5090 生产：
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+```
+
+导出把未量化的 MTP 留在 `mtp.safetensors`（`quantize_mtp: false` 是不量化，
+不是删掉）。旁边的 `*-draft` 给 SGLang speculative 用。已经导出、缺 MTP
+的目录不必重跑 PTQ：
+
+```bash
+megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ```
 
 完整手册见 [`docs/qwen3.8-27b.md`](docs/qwen3.8-27b.md)。

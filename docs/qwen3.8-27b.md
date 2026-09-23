@@ -6,7 +6,9 @@ End-to-end notes for quantizing **Qwen/Qwen3.8-27B** (BF16) with Mega-Quantifica
 
 这是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`）。
 默认量化语言模型线性层；视觉、MTP、embedding、GDN 的 `conv1d` / `in_proj_a` /
-`in_proj_b` 留 BF16。
+`in_proj_b` 留 BF16。MTP **会写进导出**（`mtp.safetensors`），只是不量化。
+SGLang speculative 把 `--speculative-draft-model-path` 指到旁边的 1-layer
+`*-draft` 目录。
 
 NVIDIA 公开 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
 是 **混合 NVFP4/FP8**：MLP + `lm_head` 为 **NVFP4 group_size 16**，self-attn +
@@ -65,7 +67,7 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
-| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入 |
+| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入 `quantized_layers`；MTP 张量留在 `mtp.safetensors` |
 | 推理时 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
 `hf_quant_config.json` 顶层 `quant_algo` 为 `MIXED_PRECISION`，并带非空 `quantized_layers`。SGLang 0.5.20 以 `modelopt_mixed` 加载。导出若仍是裸 `NVFP4` 或 `W4A8_NVFP4_FP8`，先 `megaquant rewrite-sglang <export_dir>`。
@@ -124,7 +126,7 @@ The production checkpoint, default scheme `nvfp4_w4a8`, and scheme `nvfp4_mixed`
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d`, `in_proj_a`, `in_proj_b` | BF16 | BF16 | omitted |
-| vision, MTP, embeddings, norms | BF16 | BF16 | omitted |
+| vision, MTP, embeddings, norms | BF16 | BF16 | omitted from `quantized_layers`; MTP tensors stay in `mtp.safetensors` |
 | KV cache at serve time | | fp8_e4m3 | recipe `kv_cache: fp8` |
 
 `hf_quant_config.json` has top-level `quant_algo: MIXED_PRECISION` and a non-empty `quantized_layers` map. SGLang 0.5.20 loads that as `modelopt_mixed`. If an export is still a bare `NVFP4` tag or `W4A8_NVFP4_FP8`, run `megaquant rewrite-sglang <export_dir>` before serve.
@@ -254,7 +256,7 @@ Uniform quality recipes (`w4a8.yaml`, `w4a4.yaml`) use
 | `*embed_tokens*`, `*embed_positions*` | Embedding tables are poor NVFP4 candidates; keep BF16. |
 | `*linear_attn.conv1d*` | Gated DeltaNet depthwise conv — not a standard Linear GEMM; ModelOpt / compressed-tensors NVFP4 paths do not treat it as `q/k/v/o` or `gate/up/down`. |
 | `*linear_attn.in_proj_a*`, `*linear_attn.in_proj_b*` | GDN extras (not `in_proj_qkv` / `in_proj_z` / `out_proj`). Mixed FP8 attention still quantizes the real GDN projections; these two stay BF16. |
-| `*mtp*` | Multi-Token Prediction heads. Off unless `model.quantize_mtp: true`. |
+| `*mtp*` | Multi-Token Prediction stays **BF16 in the export** (`mtp.safetensors`). `quantize_mtp: false` means do not quantize it, not delete it. See [MTP export](#mtp-export). |
 | **not** `*mlp*` | MLP `gate/up/down_proj` are the main NVFP4 targets. |
 | **not** `*lm_head*` | NVIDIA mixed NVFP4 quantizes `lm_head`. Uniform W4A8 / W4A4 do too. Add it in `extra_ignore` only if you want BF16 logits. |
 
@@ -417,6 +419,40 @@ single-digit. Do not compile `causal-conv1d` while another PTQ is on the GPU.
 
 Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 `MEGAQUANT_NUM_THREADS`, `MEGAQUANT_BATCH_SIZE`, `MEGAQUANT_GPU_HEADROOM_GIB`.
+
+## MTP export
+
+`quantize_mtp: false` keeps MTP in BF16. ModelOpt `export_hf_checkpoint`
+often drops CPU-pinned `mtp.*`, so the backend copies them back after
+export:
+
+1. In-memory `mtp` module if it is still on the quantized model
+2. Else the original HF source — **only** shards whose index entries are
+   `mtp.*` (Qwen3.8: the last BF16 shard). Never the full 27B.
+
+The tensors land in `mtp.safetensors` and stay out of `quantized_layers`
+(`exclude_modules` already lists `mtp*`). SGLang's Qwen3.5 target loader
+skips `mtp`; the draft loader wants those exact top-level `mtp.*` names.
+
+SGLang 0.5.20 does not shrink Qwen3.5 hybrid depth for the draft
+`ModelConfig`, so export also writes a sibling **1-layer** directory
+`<export_dir>-draft`. Point speculative decode there:
+
+```bash
+# already-exported checkpoint that lost MTP:
+megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
+# or just the draft helper:
+megaquant write-mtp-draft outputs/Qwen3.8-27B-NVFP4-W4A8
+
+sglang serve --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
+  --speculative-algorithm NEXTN \
+  --speculative-draft-model-path outputs/Qwen3.8-27B-NVFP4-W4A8-draft \
+  ...
+```
+
+Do not pass the 64-layer export as `--speculative-draft-model-path`.
+Do not publish the `*-draft` directory as scheme `w4a8` / `w4a4` / `mixed`.
+Set `model.quantize_mtp: true` only if you want a quantized draft.
 
 ## OSS publish
 

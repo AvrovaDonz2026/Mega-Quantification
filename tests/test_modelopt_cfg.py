@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from megaquant.backends.modelopt import (
     ModelOptBackend,
     _call_export_hf,
@@ -325,3 +327,25 @@ def test_clear_partial_export_removes_shard_parts(tmp_path: Path) -> None:
     _clear_partial_export(tmp_path)
     assert not leftover.exists()
     assert keep.exists()
+
+
+def test_restore_mtp_helper_forwards(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from megaquant.backends.modelopt import _restore_mtp_export
+
+    seen: dict[str, object] = {}
+
+    def fake(export_dir, recipe, model=None, write_draft=True):  # noqa: ANN001
+        seen["dir"] = str(export_dir)
+        seen["model"] = model
+        return {"method": "skipped-no-mtp"}
+
+    monkeypatch.setattr("megaquant.mtp_export.restore_bf16_mtp_from_recipe", fake)
+
+    class Recipe:
+        class model:
+            source = "Qwen/Qwen3.8-27B"
+            quantize_mtp = False
+
+    note = _restore_mtp_export(tmp_path, object(), Recipe)
+    assert note == {"method": "skipped-no-mtp"}
+    assert seen["dir"] == str(tmp_path)

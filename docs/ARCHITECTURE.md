@@ -181,9 +181,15 @@ Default ignore for `qwen3_5` (language-model W4A8):
 - vision tower: `*visual*`, `*vision*`
 - embeddings: `*embed_tokens*`, `*embed_positions*`
 - GDN extras: `*linear_attn.conv1d*`, `*linear_attn.in_proj_a*`, `*linear_attn.in_proj_b*`
-- MTP: `*mtp*`
+- MTP: `*mtp*` (leave BF16 **in the export** as `mtp.safetensors`; do not
+  drop the tensors. `quantize_mtp: true` quantizes the draft instead)
 - lm_head: **do not ignore** for mixed NVIDIA recipe; ignore only if recipe says so
 - norms stay unquantized automatically (not Linear)
+
+After `export_hf_checkpoint`, `megaquant.mtp_export.restore_bf16_mtp` copies
+ignored `mtp.*` weights back from the in-memory module or from the original
+HF source (MTP shards only). A sibling `<export>-draft` directory is a
+1-layer SGLang speculative draft (`--speculative-draft-model-path`).
 
 ## Qwen3.8-27B facts
 
@@ -268,7 +274,8 @@ Prefer ModelOpt for SGLang-serving mixed NVFP4 (`MIXED_PRECISION` rewrite).
 5. Load tokenizer + model in BF16
 6. Build calibration iterator
 7. `backend.quantize(...)`
-8. `backend.export(...)`
+8. `backend.export(...)` then restore BF16 `mtp.*` into `mtp.safetensors`
+   (and write `<export>-draft` for SGLang NEXTN/EAGLE)
 9. Write `provenance.json` (base model, scheme, backend, calib, git sha, timestamp)
 
 ## Docker / Compose (RTX 5090+)
@@ -307,6 +314,8 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
+megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
+megaquant write-mtp-draft outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant serve -c recipes/eval-gpqa-diamond.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.yaml --dry-run
 megaquant serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
