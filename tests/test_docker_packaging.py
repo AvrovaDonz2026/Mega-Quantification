@@ -78,6 +78,9 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     serve_image = str(services["serve-sglang"].get("image") or "")
     assert "megaquant:sglang" in serve_image
     assert "fetch-export" in services
+    req = (repo_root / "docker" / "requirements-gpu.txt").read_text()
+    assert "nvidia-modelopt[hf]==0.46.1" in req
+    assert "nvidia-modelopt[hf]>=" not in req
     assert "fetch-gpqa" in services
 
     volume_blob = text

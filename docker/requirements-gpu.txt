@@ -1,6 +1,6 @@
 # Installed *after* the CUDA PyTorch wheel. Do not pin torch here.
-# PyPI latest nvidia-modelopt is 0.46.1 (0.48 is not published there).
-nvidia-modelopt[hf]>=0.46.1
+# The 5090 production PTQ used this exact release. 0.48 is not on PyPI.
+nvidia-modelopt[hf]==0.46.1
 llmcompressor>=0.8.0
 compressed-tensors>=0.10.0
 transformers>=4.56.0
