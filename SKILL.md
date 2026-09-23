@@ -22,6 +22,7 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 - Re-running PTQ recomputes activation scales. It will not byte-match an existing export. Fetch a published content-hash when the bytes must match.
 - `quantize_mtp: false` means keep MTP in BF16 inside `mtp.safetensors`. It does not mean delete the tensors.
 - License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
+- The pipeline has been industrially validated. The concrete runs are the 5090 production PTQ and the finished GPQA journals in `docs/qwen3.8-27b.md`. Do not invent customers, certifications, or extra scores.
 
 ## Schemes
 

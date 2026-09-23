@@ -1,6 +1,6 @@
 # Qwen3.8-27B
 
-[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) 是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration`，`model_type=qwen3_5`）。量化打在语言模型的线性层上。视觉塔、embedding、MTP，以及 GDN 的 `conv1d` / `in_proj_a` / `in_proj_b` 留在 BF16。MTP 写进 `mtp.safetensors`。投机解码时，把 `--speculative-draft-model-path` 指到旁边那个 1 层的 `*-draft` 目录。`megaquant serve` 不会替你加上这个参数。
+[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) 是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration`，`model_type=qwen3_5`）。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。量化打在语言模型的线性层上。视觉塔、embedding、MTP，以及 GDN 的 `conv1d` / `in_proj_a` / `in_proj_b` 留在 BF16。MTP 写进 `mtp.safetensors`。投机解码时，把 `--speculative-draft-model-path` 指到旁边那个 1 层的 `*-draft` 目录。`megaquant serve` 不会替你加上这个参数。
 
 默认方案 `nvfp4_w4a8` 和 `nvfp4_mixed` 是同一张层图，跟 NVIDIA 公开的 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) 对齐：MLP 和 `lm_head` 是 NVFP4 group 16（权重和激活都是），self-attn 和 linear-attn 是 FP8。导出写成 `quant_algo=MIXED_PRECISION`，并带上 `quantized_layers`。均匀 W4A4 是另一张图，选中的线性层全部是 NVFP4 block 16。NVFP4 推理要 Blackwell；校准可以在 Hopper 上多卡或 offload 完成。
 
