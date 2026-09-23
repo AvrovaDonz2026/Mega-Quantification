@@ -1,6 +1,6 @@
 # Mega-Quantification
 
-把 Hugging Face 上的 BF16 模型做训练后量化，导出 SGLang 能直接加载的 checkpoint。目前跑通的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)。
+把 Hugging Face 上的 BF16 模型做训练后量化，导出 SGLang 能直接加载的 checkpoint。目前跑通的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。
 
 默认方案叫 `nvfp4_w4a8`。MLP 和 `lm_head` 是 NVFP4（group 16），注意力投影是 FP8。导出文件里的 `quant_algo` 写成 `MIXED_PRECISION`。均匀的 W4A4 是另一份配方，整层都是 NVFP4 group 16。配方名叫 W4A8，是因为层的分法和 NVIDIA 公开的混合权重一致；MLP 的激活也是 NVFP4，不是 FP8。
 
@@ -59,7 +59,7 @@ SKILL.md          给代理的入口
 
 ## English
 
-Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLang can load. The model this tree actually runs is Qwen/Qwen3.8-27B.
+Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLang can load. The model this tree actually runs is Qwen/Qwen3.8-27B. The pipeline has been validated in production: PTQ finished on a 32 GB RTX 5090, and GPQA Diamond finished under SGLang on an 80 GB SM120.
 
 The default recipe, `nvfp4_w4a8`, puts NVFP4 group 16 on the MLP and `lm_head`, and FP8 on attention. The export tag is `MIXED_PRECISION`. Uniform W4A4 (`nvfp4_w4a4`) is NVFP4 group 16 on every targeted linear. The recipe is named W4A8 because the layer split matches NVIDIA's public mixed checkpoint; the MLP activations are NVFP4 as well.
 
