@@ -6,7 +6,7 @@
 
 仓库里是代码和 YAML。27B 权重和量化结果不进 git。再跑一遍量化会重新估计 scale，文件不会和旧导出逐字节相同。机器差异、测过的分数、MTP 和上传方式写在 [Qwen3.8 手册](docs/qwen3.8-27b.md)。给代理用的约定在 [SKILL.md](SKILL.md)。
 
-License: Apache-2.0。
+协议是 GNU AGPL v3，或以后的版本（`AGPL-3.0-or-later`）。Copyright 2026 Donz。全文在 `LICENSE`。
 
 ## 先看计划
 
@@ -64,6 +64,8 @@ Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLa
 The default recipe, `nvfp4_w4a8`, puts NVFP4 group 16 on the MLP and `lm_head`, and FP8 on attention. The export tag is `MIXED_PRECISION`. Uniform W4A4 (`nvfp4_w4a4`) is NVFP4 group 16 on every targeted linear. The recipe is named W4A8 because the layer split matches NVIDIA's public mixed checkpoint; the MLP activations are NVFP4 as well.
 
 Weights are not in git. A second PTQ pass estimates scales again, so the files will differ from an older export. The runbook is [docs/qwen3.8-27b.md](docs/qwen3.8-27b.md). Agents should start at [SKILL.md](SKILL.md).
+
+License: GNU AGPL version 3 or later (`AGPL-3.0-or-later`). Copyright 2026 Donz.
 
 ```bash
 pip install -e '.[dev]'

@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "Generic PTQ pipeline for NVFP4 / FP8 / mixed-precision Hugging Face checkpoints"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Donz" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",

@@ -21,6 +21,7 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
 - Re-running PTQ recomputes activation scales. It will not byte-match an existing export. Fetch a published content-hash when the bytes must match.
 - `quantize_mtp: false` means keep MTP in BF16 inside `mtp.safetensors`. It does not mean delete the tensors.
+- License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
 
 ## Schemes
 

@@ -7,11 +7,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 
 
-def test_apache_license_is_at_repo_root() -> None:
+def test_agpl_license_is_at_repo_root() -> None:
     text = (REPO / "LICENSE").read_text(encoding="utf-8")
-    assert text.startswith("                                 Apache License")
-    assert "Version 2.0, January 2004" in text
-    assert "Copyright 2026 Donz" in text
+    assert text.startswith("                    GNU AFFERO GENERAL PUBLIC LICENSE")
+    assert "Version 3, 19 November 2007" in text
+    assert "changing it is not allowed" in text
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert "AGPL-3.0-or-later" in readme
+    assert "Copyright 2026 Donz" in readme
+    project = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'license = "AGPL-3.0-or-later"' in project
 
 
 def test_recipe_index_names_every_yaml() -> None:
