@@ -12,9 +12,8 @@ Mega-Quantification is Apache-2.0. See `LICENSE`.
   SSH material, bucket names, and tenant DNS addresses.
 - Weights, Hub caches, and GPQA journals belong in `outputs/`, `.cache/`,
   `models/`, or `data/`, which are gitignored.
-- Quantization behavior and SGLang serve flags are documented in
-  `docs/qwen3.8-27b.md` (English and Chinese). Update both when the public
-  protocol changes.
+- Human notes live in `docs/qwen3.8-27b.md`. Agent constraints live in
+  `SKILL.md`. Update both when the public protocol changes.
 
 ## 中文
 
@@ -25,5 +24,4 @@ Mega-Quantification is Apache-2.0. See `LICENSE`.
   SSH、桶名、租户 DNS。
 - 权重、Hub 缓存和 GPQA journal 放在 `outputs/`、`.cache/`、`models/` 或
   `data/`，这些目录已被忽略。
-- 量化格式和 SGLang 推理标志写在 `docs/qwen3.8-27b.md`。公开协议变了，
-  中英文一起改。
+- 给人读的说明在 `docs/qwen3.8-27b.md`，给代理的约定在 `SKILL.md`。公开协议变了，两处一起改。
