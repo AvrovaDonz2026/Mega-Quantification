@@ -76,6 +76,7 @@ include = [
   "LICENSE",
   "CONTRIBUTING.md",
   "README.md",
+  "SKILL.md",
 ]
 
 [tool.pytest.ini_options]

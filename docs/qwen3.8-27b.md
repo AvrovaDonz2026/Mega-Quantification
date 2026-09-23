@@ -1,66 +1,16 @@
-# Qwen3.8-27B NVFP4 runbook
+# Qwen3.8-27B
 
-End-to-end notes for quantizing **Qwen/Qwen3.8-27B** (BF16) with Mega-Quantification.
+[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) 是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration`，`model_type=qwen3_5`）。量化打在语言模型的线性层上。视觉塔、embedding、MTP，以及 GDN 的 `conv1d` / `in_proj_a` / `in_proj_b` 留在 BF16。MTP 写进 `mtp.safetensors`。投机解码时，把 `--speculative-draft-model-path` 指到旁边那个 1 层的 `*-draft` 目录。`megaquant serve` 不会替你加上这个参数。
 
-## 中文要点
+默认方案 `nvfp4_w4a8` 和 `nvfp4_mixed` 是同一张层图，跟 NVIDIA 公开的 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) 对齐：MLP 和 `lm_head` 是 NVFP4 group 16（权重和激活都是），self-attn 和 linear-attn 是 FP8。导出写成 `quant_algo=MIXED_PRECISION`，并带上 `quantized_layers`。均匀 W4A4 是另一张图，选中的线性层全部是 NVFP4 block 16。NVFP4 推理要 Blackwell；校准可以在 Hopper 上多卡或 offload 完成。
 
-这是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`）。
-默认量化语言模型线性层；视觉、MTP、embedding、GDN 的 `conv1d` / `in_proj_a` /
-`in_proj_b` 留 BF16。MTP **会写进导出**（`mtp.safetensors`），只是不量化。
-SGLang speculative 把 `--speculative-draft-model-path` 指到旁边的 1-layer
-`*-draft` 目录。
+32 GB 5090 上跑完的配方是 [`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)：ModelOpt 0.46.1（PyPI 上的版本；公开卡写的是 0.48.0）、算法 `max`（记下激活 amax，再 round-to-nearest）、`HuggingFaceH4/ultrachat_200k` 256×1024、batch 4。`outputs/Qwen3.8-27B-NVFP4-W4A8` 就是这次导出。那次 `quantized_layers` 有 401 项，193 个 NVFP4、208 个 FP8。`max` 动的是校准，层的比特布局和 Hessian 那版相同，只是没有 Local-Hessian 重建，也没有 FP8 scale sweep。想贴近公开卡，用 [`recipes/qwen3.8-27b-nvfp4-mixed.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.yaml)：Local-Hessian（`fp8_scale_sweep`，Hessian `block_size` 16）、`nvidia/Nemotron-Post-Training-Dataset-v3`、2048×2048、batch 1。32 GB 放不下这次校准。公开卡在 GB300 的 vLLM 上报 GPQA Diamond 88.92（BF16）/ 88.01（NVFP4），`max_new_tokens=65536`。Qwen 自己的 thinking 分是 89.2。
 
-NVIDIA 公开 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4)
-是 **混合 NVFP4/FP8**：MLP + `lm_head` 为 **NVFP4 group_size 16**，self-attn +
-linear-attn 为 **FP8**。它 **不是** 均匀 W4A8，也 **不是** NVFP4 block 32。
-模型卡：Local-Hessian（`fp8_scale_sweep`）、2048 条 × 2048、
-`Nemotron-Post-Training-Dataset-v3`、`nvidia-modelopt` v0.48.0；GPQA Diamond
-**88.92** BF16 / **88.01** NVFP4（GB300 上 **vLLM**）。Qwen 卡片 thinking 分
-**89.2**。
+DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NVFP4 激活，注意力和 KV 是 FP8。普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s，再快靠这上面的 MTP 投机解码。`nvfp4_w4a16_mixed` 是 32 GB 机器上的可选 Marlin 导出，MLP 激活留 BF16。
 
-本仓库默认 W4A8（`nvfp4_w4a8`）对齐这套**层图**，导出
-`quant_algo=MIXED_PRECISION` + `quantized_layers`，好让 SGLang 推理。
-**层图相同 ≠ 校准相同。** 32 GB RTX 5090 实际跑的是
-`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`：ModelOpt **0.46.1**（PyPI 上没有
-0.48）、算法 **`max`**（amax / RTN，不是 Hessian）、
-`HuggingFaceH4/ultrachat_200k` **256×1024** batch 4。W4A8 导出目录就是这份
-mixed checkpoint。Local-Hessian 2048 需要更大卡：
-`recipes/qwen3.8-27b-nvfp4-mixed.yaml`。
+代理从仓库根目录的 [SKILL.md](../SKILL.md) 读硬约定。
 
-均匀 W4A4 是 `NVFP4_DEFAULT_CFG`（权重和激活均为 NVFP4 block 16）。
-本仓库不实现 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`（NVFP4 block 32）。
-NVFP4 推理需要 Blackwell；校准可以在 Hopper 上用多卡 / offload 做。
-
-5090 GPQA：`recipes/eval-gpqa-diamond.5090.yaml`，**24 路**，HiCache **64 GiB**
-（按 GPU KV / GDN 池比例切主机内存），GDN **bf16**、96 个 mamba slot，Triton
-+ Marlin，CUDA graph 关掉（32 GB 抓 graph 会 OOM）。80 GB 级 SM120
-（RTX PRO 6000 / 6000D）用 `recipes/eval-gpqa-diamond.6000d.yaml`：**64 路**，
-KV 留在 GPU，CUDA graph 开着，并关掉 SiLU+FP4 融合（CUDA 12.8 的 FlashInfer
-JIT 编不了 SM 12.x）。float32 64-slot mamba 会把 HBM KV 吃到只剩不到 1 GB，16 路 HTTP
-会排队。journal 不满 198 行时不要报总分；eval 客户端按 `item_id` 续跑，不要
-用 `open("w")` 清空 jsonl。
-
-已完成的 GPQA Diamond（本仓库混合 checkpoint，5090 `max` + ultrachat）。
-仓库里的评测 YAML 现在发的是 temperature 0，下表不是那套配方的重跑。
-
-| 项 | 值 |
-|---|---|
-| 分数 | **178/198**（89.90%） |
-| 采样 | temperature **1.0**；其余为 Qwen thinking 卡（`top_p=0.95`，`top_k=20`，thinking 开） |
-| 截断 / 解析失败 | 0 / 0 |
-| 推理 | 80 GB SM120，SGLang，64 路，KV 在 GPU |
-| 日期 | 2026-09-22 |
-
-均匀 W4A4、temperature **0**、Marlin：**172/198**（截断 4，解析失败 6），同一天。混合权重没有跑完的 temperature 0 总分。
-
-DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
-（MLP NVFP4 gs16 含 FP4 激活，注意力 FP8，KV FP8）。普通 decode 大约
-12 tok/s，带宽上限大约 14 tok/s；再快靠这份权重上的投机解码，不靠再量化一次。
-`nvfp4_w4a16_mixed` 只是 32 GB 机器上的可选 Marlin 导出，不是 Spark 快路径。
-
-### 量化格式
-
-生产权重和默认方案 `nvfp4_w4a8` 是同一张混合图。`nvfp4_mixed` 也是这张图。配方名叫 W4A8，是因为它对齐 NVIDIA 的混合产品名；MLP 本身是 NVFP4 权重加 NVFP4 激活。
+## Quantization format
 
 | 张量 | 权重 | 激活 | `quantized_layers` |
 |---|---|---|---|
@@ -69,21 +19,28 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
-| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入 `quantized_layers`；MTP 张量留在 `mtp.safetensors` |
-| 推理时 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
+| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入；MTP 张量在 `mtp.safetensors` |
+| 推理时的 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
-`hf_quant_config.json` 顶层 `quant_algo` 为 `MIXED_PRECISION`，并带非空 `quantized_layers`。SGLang 0.5.20 以 `modelopt_mixed` 加载。导出若仍是裸 `NVFP4` 或 `W4A8_NVFP4_FP8`，先 `megaquant rewrite-sglang <export_dir>`。
+`hf_quant_config.json` 顶层是 `MIXED_PRECISION`，`quantized_layers` 非空。SGLang 0.5.20 按 `modelopt_mixed` 加载。导出如果还是裸的 `NVFP4`，先跑 `megaquant rewrite-sglang <export_dir>`。本仓库的方案停在 group 16 的混合图和均匀 W4A4；ModelOpt 那个 block 32 的 `W4A8_NVFP4_FP8` 标签 SGLang 不收，这里也不量化成它。
 
-| 方案 | 与上表的差别 | 导出 | 运行时 |
+| 方案 | 和上表的差别 | 导出 | 运行时 |
 |---|---|---|---|
-| `nvfp4_w4a4` | 被选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
+| `nvfp4_w4a4` | 选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head` 为 NVFP4 group 16 权重、BF16 激活；注意力仍是 FP8 | MLP 条目 `quant_algo: W4A16_NVFP4` | 可选 Marlin 导出 |
 
-5090 生产运行：ModelOpt **0.46.1**，算法 **`max`**，ultrachat **256×1024**，batch 4，配方 `qwen3.8-27b-nvfp4-mixed.5090.yaml`。目录 `outputs/Qwen3.8-27B-NVFP4-W4A8` 就是这份导出。NVIDIA 公开权重是同一层图，校准为 Local-Hessian（`mixed.yaml`，modelopt 0.48.0，Nemotron v3，2048×2048）。
+## SGLang inference and GPQA
 
-### SGLang 推理与 GPQA
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩下的 262144 上下文，`continue_on_length` 一直续到 EOS，最多 8 次续写。HTTP 超时 21600 秒。完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，按 `item_id` 续写。198 行都在、并且 `summary.json` 也在时，分数才是 `correct/198`。截断和解析失败算错。
 
-推理和 GPQA 都走 **SGLang**。评测客户端是打到 `http://127.0.0.1:30000/v1` 的 OpenAI chat。采样是 Qwen thinking 卡，但 **temperature=0**（公开发表的 Qwen / NVIDIA 卡是 1.0）。其余为 `top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` + `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩余 262144 上下文，`continue_on_length` 一直续到 EOS。HTTP 超时 **21600** 秒。完整轨迹写在模型目录里的 `gpqa_diamond/gpqa_diamond.jsonl`（和 `summary.json`），按 `item_id` 续跑。198 行都在 journal 里之后，分数才是 `correct/198`。已完成的混合权重量测是 **178/198**，temperature **1.0**（截断 0，解析失败 0）。均匀 W4A4、temperature **0**、Marlin 是 **172/198**（截断 4，解析失败 6）。两份都是 2026-09-22。评测 YAML 现在发 temperature 0，混合权重没有跑完的 temperature 0 总分。`megaquant serve` 不会自动加 `--speculative-draft-model-path`。
+跑完的两次：
+
+| 权重 | 采样 | 分数 | 机器 | 日期 |
+|---|---|---|---|---|
+| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0，其余同 thinking 卡 | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
+| 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
+
+混合权重还没有跑完的 temperature 0 总分。第一行是 temperature 1 的测量，当前 YAML 发的是 0。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -91,15 +48,15 @@ DGX Spark（GB10，约 273 GB/s）上该用的就是这份混合 W4A4 checkpoint
 | 注意力 | FlashInfer | Triton | Triton |
 | NVFP4 GEMM | FlashInfer（CUDA ≥ 12.9） | Marlin | Marlin |
 | FP8 GEMM | FlashInfer | Triton，`SGLANG_FORCE_FP8_MARLIN=1` | CUTLASS，`SGLANG_FORCE_FP8_MARLIN=1` |
-| CUDA graph | 关 | 关 | 开 |
-| KV | HiCache，主机 12 GiB | HiCache，主机 64 GiB | 只在 GPU |
+| CUDA graph | 关 | 关（32 GB 上抓 graph 会 OOM） | 开 |
+| KV | HiCache，主机 12 GiB | HiCache，主机 64 GiB，按 GPU 上 KV / GDN 池的比例切 | 只在 GPU |
 | 并发 | 1 | 24（bf16 GDN，96 slot） | 64（bf16 GDN，256 slot） |
 | `mem-fraction-static` | 0.85 | 0.95 | 0.90 |
 | chunked prefill | 2048 | 2048 | 4096 |
 | 额外环境变量 | | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`，`SGLANG_IS_FLASHINFER_AVAILABLE=0`，`SGLANG_ENABLE_JIT_DEEPGEMM=0` |
 | Radix cache | 开 | 开 | 关 |
 
-CUDA 12.8 编不了 SM 12.x 的 FlashInfer JIT。80 GB 配方还关掉 SiLU+FP4 融合，因为即使用 Marlin 做 GEMM，那条融合仍会去 import FlashInfer。
+CUDA 12.8 编不了 SM 12.x 的 FlashInfer JIT。80 GB 配方把 SiLU+FP4 融合关掉，因为那条路径即使 GEMM 走 Marlin，import 时仍会拉 FlashInfer。float32、64 个 mamba slot 大约占 9.3 GB HBM，GPU 上的 KV 剩不到 1 GB，16 路 HTTP 会排在 3 到 4 个 decode slot 后面。
 
 ```bash
 # 80 GB SM120，CUDA 12.8
@@ -115,100 +72,7 @@ python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml \
   --base-url http://127.0.0.1:30000/v1
 ```
 
-`megaquant serve` 会先导出配方里的环境变量，再执行 `sglang serve`。`--dry-run` 只打印 argv，不会下载 `Qwen/Qwen3.8-27B`。vLLM 用 `--engine vllm`，留给和 GB300 卡片对照；默认评测路径是 SGLang。
-
-## Quantization format
-
-The production checkpoint, default scheme `nvfp4_w4a8`, and scheme `nvfp4_mixed` are one mixed map. The recipe name says W4A8 because it matches NVIDIA's mixed product name. MLP layers in that map are NVFP4 weights and NVFP4 activations.
-
-| Tensor | Weights | Activations | `quantized_layers` entry |
-|---|---|---|---|
-| `mlp.{gate,up,down}_proj` | NVFP4 E2M1, group_size 16, FP8 E4M3 scales | NVFP4, group_size 16 | `quant_algo: NVFP4`, `group_size: 16` |
-| `lm_head` | same | same | same |
-| `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
-| `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
-| `linear_attn.conv1d`, `in_proj_a`, `in_proj_b` | BF16 | BF16 | omitted |
-| vision, MTP, embeddings, norms | BF16 | BF16 | omitted from `quantized_layers`; MTP tensors stay in `mtp.safetensors` |
-| KV cache at serve time | | fp8_e4m3 | recipe `kv_cache: fp8` |
-
-`hf_quant_config.json` has top-level `quant_algo: MIXED_PRECISION` and a non-empty `quantized_layers` map. SGLang 0.5.20 loads that as `modelopt_mixed`. If an export is still a bare `NVFP4` tag or `W4A8_NVFP4_FP8`, run `megaquant rewrite-sglang <export_dir>` before serve.
-
-| Scheme | How it differs from the table | Export | Runtime |
-|---|---|---|---|
-| `nvfp4_w4a4` | every targeted LM linear is NVFP4 W4A4 group 16, including attention | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
-| `nvfp4_w4a16_mixed` | MLP + `lm_head` are NVFP4 group 16 weights with BF16 activations; attention stays FP8 | MLP entry `quant_algo: W4A16_NVFP4` | optional Marlin export |
-
-The 5090 production run is ModelOpt **0.46.1**, algorithm **`max`**, ultrachat **256×1024**, batch 4, recipe `qwen3.8-27b-nvfp4-mixed.5090.yaml`. The directory `outputs/Qwen3.8-27B-NVFP4-W4A8` is that export. NVIDIA's public checkpoint uses the same layer map with Local-Hessian (`mixed.yaml`, modelopt 0.48.0, Nemotron v3, 2048×2048).
-
-DGX Spark serves this mixed map (NVFP4 activations on the MLP). `nvfp4_w4a16_mixed` is the optional Marlin export.
-
-## SGLang inference and GPQA
-
-Inference and GPQA both use **SGLang**. The eval client is an OpenAI chat client against `http://127.0.0.1:30000/v1`. Sampling follows the Qwen thinking card except **temperature=0** (the published Qwen / NVIDIA cards use 1.0). The rest is `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1`, `enable_thinking` and `preserve_thinking`, `reasoning_effort=xhigh`. `max_new_tokens: 0` fills the remaining 262144-token context. `continue_on_length` continues until EOS. The HTTP timeout is **21600** seconds. Full traces are written inside the model directory at `<model>/gpqa_diamond/gpqa_diamond.jsonl` (plus `summary.json`) and resume by `item_id`. The score is `correct/198` once all 198 Diamond rows are in the journal. The finished mixed-checkpoint measurement is **178/198** at temperature **1.0** (truncated 0, unparsed 0). Uniform W4A4 at temperature **0** on Marlin is **172/198** (truncated 4, unparsed 6). Both are 2026-09-22. Eval YAML now sends temperature 0; there is no finished mixed score at temperature 0. `megaquant serve` does not add `--speculative-draft-model-path`.
-
-| | Default | 32 GB SM120 (5090) | 80 GB SM120 (6000D) |
-|---|---|---|---|
-| Recipe | `eval-gpqa-diamond.yaml` | `eval-gpqa-diamond.5090.yaml` | `eval-gpqa-diamond.6000d.yaml` |
-| Attention | FlashInfer | Triton | Triton |
-| NVFP4 GEMM | FlashInfer (CUDA ≥ 12.9) | Marlin | Marlin |
-| FP8 GEMM | FlashInfer | Triton, `SGLANG_FORCE_FP8_MARLIN=1` | CUTLASS, `SGLANG_FORCE_FP8_MARLIN=1` |
-| CUDA graph | off | off | on |
-| KV | HiCache, 12 GiB host | HiCache, 64 GiB host | GPU only |
-| Concurrency | 1 | 24 (bf16 GDN, 96 slots) | 64 (bf16 GDN, 256 slots) |
-| `mem-fraction-static` | 0.85 | 0.95 | 0.90 |
-| chunked prefill | 2048 | 2048 | 4096 |
-| Extra env | | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`, `SGLANG_IS_FLASHINFER_AVAILABLE=0`, `SGLANG_ENABLE_JIT_DEEPGEMM=0` |
-| Radix cache | on | on | off |
-
-CUDA 12.8 cannot JIT FlashInfer for SM 12.x. The 80 GB recipe also disables fused SiLU+FP4 quant, which imports FlashInfer even when the GEMM backend is Marlin.
-
-```bash
-# 80 GB SM120, CUDA 12.8
-python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.6000d.yaml \
-  --model outputs/Qwen3.8-27B-NVFP4-W4A8
-python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.6000d.yaml \
-  --base-url http://127.0.0.1:30000/v1
-
-# 32 GB 5090
-python -m megaquant.cli serve -c recipes/eval-gpqa-diamond.5090.yaml \
-  --model outputs/Qwen3.8-27B-NVFP4-W4A8
-python -m megaquant.cli eval -c recipes/eval-gpqa-diamond.5090.yaml \
-  --base-url http://127.0.0.1:30000/v1
-```
-
-`megaquant serve` exports the recipe environment, then execs `sglang serve`. `--dry-run` prints the argv and does not download `Qwen/Qwen3.8-27B`. `--engine vllm` remains available for a GB300-card comparison. The default eval path is SGLang.
-
-## What this repo actually quantized (5090)
-
-The 32 GB RTX 5090 PTQ used
-[`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml).
-That is the production checkpoint. Default `nvfp4_w4a8` is the **same mixed
-encoding**; the W4A8 directory is this mixed export, not a second PTQ.
-
-| Knob | 5090 production | NVIDIA public `nvidia/Qwen3.8-27B-NVFP4` |
-|---|---|---|
-| Layer map | NVFP4 gs16 MLP + `lm_head`, FP8 self-attn + linear-attn | Same |
-| PTQ | ModelOpt **`max`** (per-tensor amax / round-to-nearest) | **Local-Hessian**, layerwise, `fp8_scale_sweep: true`, Hessian `block_size` 16 |
-| nvidia-modelopt | **0.46.1** (`docker/requirements-gpu.txt`; 0.48 is not on PyPI) | **0.48.0** |
-| Calib | `HuggingFaceH4/ultrachat_200k`, **256** samples × **1024** tokens, batch **4** | `nvidia/Nemotron-Post-Training-Dataset-v3`, **2048** × **2048**, batch **1** |
-| Recipe | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `qwen3.8-27b-nvfp4-mixed.yaml` (not run on the 5090) |
-| Export | `MIXED_PRECISION` + `quantized_layers` (401 entries on the 5090 run: 193 NVFP4 + 208 FP8) | Same mixed HF layout |
-| Serve / GPQA | SGLang. Finished score **178/198** at temperature **1.0** on an 80 GB SM120 (64-way). 5090 recipe is 24-way Triton + Marlin | Card: vLLM on GB300, temperature 1.0, `top_p=0.95`, `max_new_tokens=65536`. GPQA Diamond **88.01** NVFP4 |
-
-`max` is not a weaker *format*. It is a weaker *calibrator*: it records
-activation amax and quantizes, with no Local-Hessian reconstruction or
-FP8 scale sweep. A 32 GB 5090 cannot hold Hessian 2048 with 27B BF16
-offload. Quality requant is `mixed.yaml` on Hopper / larger Blackwell.
-
-Do **not** treat an in-flight GPQA journal as a 198-row score. Truncated or
-unparsed answers count as wrong; resume appends by `item_id`. The finished
-mixed checkpoint (this 5090 `max` + ultrachat export) scored **178/198**
-GPQA Diamond at temperature **1.0** on an 80 GB SM120 with SGLang, 64-way
-(2026-09-22; truncated 0, unparsed 0). Uniform W4A4 at temperature **0** on
-Marlin scored **172/198** (truncated 4, unparsed 6) the same day. Eval YAML
-in this tree now sends temperature 0, so the mixed number is the
-temperature-1 measurement. There is no finished 198-row mixed score at
-temperature 0.
+`megaquant serve` 先把配方里的环境变量导出，再执行 `sglang serve`。`--dry-run` 只打印 argv，不会下载 `Qwen/Qwen3.8-27B`。要和 GB300 上的 vLLM 卡片对照时，加 `--engine vllm`。
 
 ## Model facts
 
@@ -269,24 +133,18 @@ Norms are not `Linear` and stay unquantized automatically.
 
 ## Mixed vs SGLang W4A8 vs uniform W4A4
 
-Default `nvfp4_w4a8` is the same encoding as the public NVIDIA checkpoint
-(and as `nvfp4_mixed`). That is what SGLang can serve. This repo does not
-ship a recipe for ModelOpt uniform `W4A8_NVFP4_FP8` (NVFP4 block 32); SGLang
-rejects that tag.
+三列是三份配方，比特布局见 [Quantization format](#quantization-format)。`nvfp4_w4a8` 和 `nvfp4_mixed` 导出同一张混合图；质量配方把校准换成 Local-Hessian。
 
 | | SGLang W4A8 (default) | Uniform W4A4 | Mixed quality |
 |---|---|---|---|
 | Scheme | `nvfp4_w4a8` | `nvfp4_w4a4` | `nvfp4_mixed` |
 | ModelOpt | mixed overrides + `MIXED_PRECISION` rewrite | `mtq.NVFP4_DEFAULT_CFG` / `nvfp4` | same mixed cfg as W4A8; Local-Hessian |
-| NVFP4 group / block | **16** on MLP + `lm_head` | **16** uniform | **16** on MLP + `lm_head` |
-| Weights / activations | NVFP4 gs16 on MLP + `lm_head`; **FP8** on self-attn + linear-attn | NVFP4 weights **and** activations (block 16) | same map as SGLang W4A8 |
+| NVFP4 group / block | 16 on MLP + `lm_head` | 16 uniform | 16 on MLP + `lm_head` |
+| Weights / activations | NVFP4 gs16 on MLP + `lm_head`; FP8 on self-attn + linear-attn | NVFP4 weights and activations (block 16) | same map as SGLang W4A8 |
 | SGLang | `modelopt_mixed` (`MIXED_PRECISION`) | `modelopt_fp4` (`NVFP4`) | `modelopt_mixed` |
 | Public HF id | — | — | [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) |
 
-`nvidia/Qwen3.8-27B-NVFP4` is mixed NVFP4/FP8. It is **not**
-`W4A8_NVFP4_FP8` and **not** NVFP4 block 32.
-
-Accuracy on NVIDIA's card (vLLM, 262k context, mixed checkpoint):
+NVIDIA 公开卡上的其他基准（vLLM，262k，混合权重）：
 
 | Benchmark | BF16 | NVFP4 mixed |
 |---|---|---|
@@ -297,19 +155,7 @@ Accuracy on NVIDIA's card (vLLM, 262k context, mixed checkpoint):
 | SciCode | 47.93 | 48.41 |
 | IFBench | 80.07 | 78.93 |
 
-Measured GPQA Diamond on **this** mixed checkpoint (5090 `max` + ultrachat,
-same map as `nvfp4_w4a8`). Temperature **1.0**. The eval YAML in this tree
-now sends temperature 0, so this row is not a rerun of those recipes.
-
-| | This run |
-|---|---|
-| GPQA Diamond | **178/198** (89.90%) |
-| Sampling | temperature **1.0**; other fields match the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on) |
-| Truncated / unparsed | 0 / 0 |
-| Serve | 80 GB SM120, SGLang, 64-way, KV on GPU |
-| Date | 2026-09-22 |
-
-Uniform W4A4, temperature **0**, Marlin: **172/198** (truncated 4, unparsed 6), same day. No finished mixed score at temperature 0.
+本仓库自己的 GPQA 在 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。
 
 ## Calibration
 
@@ -321,13 +167,7 @@ Uniform W4A4, temperature **0**, Marlin: **172/198** (truncated 4, unparsed 6), 
 | Dataset | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v3` | `HuggingFaceH4/ultrachat_200k` |
 | Images | `with_images: false` (text-only; vision is ignored) | same | same | same |
 
-`max` is cheaper and is the default for SGLang W4A8, uniform W4A4, and the
-5090 mixed profile. It records activation amax and round-to-nearest
-quantizes (RTN). Local-Hessian is the quality knob NVIDIA used for mixed
-NVFP4 (`fp8_scale_sweep: true`, Hessian `block_size` 16); it is slower and
-does not fit a 32 GB 5090 at 2048 samples. The 5090 production run **is**
-`mixed.5090.yaml` (`max` + ultrachat 256), not `mixed.yaml`. You can
-override without editing YAML:
+`max` 记下激活的 amax，再 round-to-nearest。它是 SGLang W4A8、均匀 W4A4，以及 5090 混合配方的默认算法。Local-Hessian（`fp8_scale_sweep: true`，Hessian `block_size` 16）是 NVIDIA 混合卡用的质量档，2048 条在 32 GB 上放不下。5090 上跑完的是 `mixed.5090.yaml`（`max` + ultrachat 256）。`mixed.yaml` 留给更大的卡。不改 YAML 也可以临时换算法：
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
@@ -367,10 +207,7 @@ megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-mixed
 ```
 
-Do this **before SGLang serve** when `hf_quant_config.json` is still a
-bare `NVFP4` tag without `quantized_layers` (ModelOpt 0.46 often writes
-that). Do not rewrite a `W4A8_NVFP4_FP8` export and call it SGLang-loadable.
-This repo does not quantize to that tag.
+ModelOpt 0.46 经常只写一个裸的 `NVFP4` 标签、没有 `quantized_layers`。这种目录在 `sglang serve` 之前先 rewrite。要加载的是 `MIXED_PRECISION` 那份导出。
 
 27B BF16 ≈ 54 GiB of weights plus activations. Set `model.device_map` (`auto`
 by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
@@ -457,11 +294,7 @@ sglang serve --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
   ...
 ```
 
-Do not pass the 64-layer export as `--speculative-draft-model-path`.
-`megaquant serve` / `megaquant eval` do not add these speculative flags;
-pass them on the `sglang serve` command line. Do not publish the `*-draft`
-directory as scheme `w4a8` / `w4a4` / `mixed`.
-Set `model.quantize_mtp: true` only if you want a quantized draft.
+`--speculative-draft-model-path` 指 `*-draft`。64 层那个目录是 target。`megaquant serve` 和 `megaquant eval` 不加投机参数，要在 `sglang serve` 的命令行上自己写。`w4a8` / `w4a4` / `mixed` 上传的是完整导出，`*-draft` 只是旁边的 1 层助手。`model.quantize_mtp: true` 会把 draft 量化，而不是拷回 BF16。
 
 ## OSS publish
 
@@ -472,10 +305,7 @@ Bucket and endpoint come from `OSS_BUCKET` / `OSS_ENDPOINT` or `--bucket` /
 `--endpoint` (optional gitignored `.oss.env`). Objects larger than 5 GiB use
 multipart upload.
 
-Mixed encoding **is** the default W4A8. A finished mixed export can be
-published twice (`--scheme mixed` and `--scheme w4a8`) under the **same
-content-hash** — do not run a second PTQ. Do not publish a
-`W4A8_NVFP4_FP8` export as SGLang-loadable `w4a8`.
+混合导出就是默认 W4A8。同一份目录用 `--scheme mixed` 和 `--scheme w4a8` 各发一次，content-hash 相同，不用再跑一遍 PTQ。`w4a8` 对应的是 `MIXED_PRECISION` 导出。
 
 ```bash
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
@@ -563,12 +393,9 @@ vLLM support for that combo is limited.
 
 ## GPQA Diamond (official card protocol)
 
-The bit layout and the three SGLang recipes are in [Quantization format](#quantization-format) and [SGLang inference and GPQA](#sglang-inference-and-gpqa). This section keeps the sampling locks and the launch notes.
+比特布局和三份机器配方在 [Quantization format](#quantization-format) 和 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。这里是采样锁和启动时容易踩的地方。
 
-Evaluate each NVFP4 export on a **SGLang** server (NVIDIA Qwen3.8 cookbook
-flags). This eval sends **temperature 0**. The other sampling fields match
-the Qwen thinking card. Published cards stay at temperature 1.0. Do not cap
-generation at 512/2048 tokens.
+每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。生成长度保持 262144 的剩余窗口，512 或 2048 的截断不是这张卡的协议。
 
 | Knob | Value |
 |---|---|
@@ -581,28 +408,9 @@ generation at 512/2048 tokens.
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
 | Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); CUDA 12.8 SM120: Triton attn + Marlin NVFP4 + `SGLANG_FORCE_FP8_MARLIN`. 32 GB recipe also disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). 80 GB recipe keeps CUDA graph, leaves KV on GPU, uses CUTLASS FP8, and sets `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION` (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
-| Headline | `correct/198` on GPQA Diamond (full denominator; truncated/unparsed count as wrong). Do not quote a partial journal as the score. |
+| Headline | `correct/198` once `summary.json` exists and the journal has every row. Truncated and unparsed rows count as wrong. |
 
-Measured on this repo's mixed checkpoint (5090 `max` + ultrachat, same map
-as `nvfp4_w4a8`): **178/198** GPQA Diamond at temperature **1.0** (80 GB
-SM120, SGLang 64-way, 2026-09-22; truncated 0, unparsed 0). Other sampling
-matched the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on).
-Recipes in this tree now send temperature 0; do not read 178/198 as that
-setting.
-
-NVIDIA's mixed card reports GPQA Diamond **88.92 BF16 / 88.01 NVFP4** on
-GB300 **vLLM** (`temp=1.0 top_p=0.95`, `max_new_tokens=65536`). The Qwen
-card reports **89.2** (thinking, `top_k=20`). Those numbers are not greedy.
-Our 178/198 run is also temperature 1.0, on a different PTQ (`max` +
-ultrachat) and a different stack (SGLang on an 80 GB SM120).
-
-On a 32 GB 5090 the 262k window does not fit in HBM. **Offload KV into host
-RAM** rather than shrinking `max_new_tokens`. Qwen GPQA traces can run tens
-of thousands of tokens; a short cap is not an official-card eval. Host
-`docker-compose.override.yml` (not in git) that hardcodes `sglang` argv must
-match the recipe (`--hicache-size 64`, `--max-mamba-cache-size 96`,
-`--mamba-ssm-dtype bfloat16`) or the YAML never reaches the server. Journals
-resume by `item_id`; do not truncate `gpqa_diamond.jsonl`.
+分数见上面的 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。32 GB 上 262k 窗口放不进 HBM，用 HiCache 把 KV 放到主机内存，保持 `max_new_tokens`。Qwen 的 GPQA 轨迹会到几万 token。宿主机上的 `docker-compose.override.yml`（不进 git）如果写死了 `sglang` argv，要和配方一致：`--hicache-size 64`、`--max-mamba-cache-size 96`、`--mamba-ssm-dtype bfloat16`，否则 YAML 到不了进程。journal 按 `item_id` 续写，保留 `gpqa_diamond.jsonl` 里已有的行。
 
 ```bash
 # Terminal 1 — serve (SGLang HiCache KV → RAM)
@@ -642,11 +450,5 @@ CSV with the Hub columns (`Question`, `Correct Answer`,
   (the CLI pipeline loads plugins lazily; adapters register on that import).
 - Plan tries to download `config.json`: set `family: qwen3_5` in the YAML
   (already set) so resolve() skips Hub lookup.
-- Do not pass vanilla `qwen3` as `family` for this checkpoint — GDN extras
-  would not be ignored.
-- Block size 16 vs 32: default SGLang W4A8 (`nvfp4_w4a8`) is NVFP4
-  **group_size 16** on MLP + `lm_head` with FP8 attention
-  (`MIXED_PRECISION`). Uniform W4A4 is NVFP4 **16** (`NVFP4_DEFAULT_CFG`).
-  This repo does not implement ModelOpt uniform `W4A8_NVFP4_FP8`
-  (NVFP4 block **32**). SGLang rejects that tag. Using block 32 for mixed
-  will not match `nvidia/Qwen3.8-27B-NVFP4`.
+- 这个 checkpoint 的 `family` 用 `qwen3_5`。写成 vanilla `qwen3` 时，GDN 那些额外模块不会进忽略列表。
+- group size 见 [Quantization format](#quantization-format)。混合图和均匀 W4A4 都是 16。
