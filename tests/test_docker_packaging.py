@@ -48,10 +48,22 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "gpu" in (services["eval-gpqa"].get("profiles") or [])
     assert "gpu" in (services["serve-sglang"].get("profiles") or [])
     assert "gpu" in (services["serve-vllm"].get("profiles") or [])
+    # .env.example sets RECIPE for plan/quantize; mixed and w4a4 must not inherit it.
     mixed_cmd = " ".join(str(x) for x in (services["mixed"].get("command") or []))
-    assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml}" in mixed_cmd
+    assert "${MIXED_RECIPE:-recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml}" in mixed_cmd
+    assert "${RECIPE" not in mixed_cmd
     w4a4_cmd = " ".join(str(x) for x in (services["w4a4"].get("command") or []))
-    assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml}" in w4a4_cmd
+    assert "${W4A4_RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml}" in w4a4_cmd
+    assert "${RECIPE" not in w4a4_cmd
+    env_example = (repo_root / ".env.example").read_text()
+    assert "RECIPE=recipes/qwen3.8-27b-nvfp4-w4a8.yaml" in env_example.splitlines()
+    for doc in ("docker/README.md", "docs/qwen3.8-27b.md", "docs/ARCHITECTURE.md"):
+        doc_text = (repo_root / doc).read_text()
+        for line in doc_text.splitlines():
+            if "run --rm mixed" in line and "recipes/" in line:
+                assert "MIXED_RECIPE=" in line, (doc, line)
+            if "run --rm w4a4" in line and "recipes/" in line:
+                assert "W4A4_RECIPE=" in line, (doc, line)
     quantize_cmd = " ".join(str(x) for x in (services["quantize"].get("command") or []))
     assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}" in quantize_cmd
     eval_cmd = " ".join(str(x) for x in (services["eval-gpqa"].get("command") or []))

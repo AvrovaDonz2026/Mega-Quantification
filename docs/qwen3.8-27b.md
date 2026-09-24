@@ -254,7 +254,7 @@ The `mixed` Compose service uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`
 (max, ultrachat 256×1024, batch 4). NVIDIA quality Local-Hessian:
 
 ```bash
-RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
 Install GDN fused kernels for the next run (`kernels` + `flash-linear-attention`);

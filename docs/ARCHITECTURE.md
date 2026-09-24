@@ -239,7 +239,7 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
   `w4a4`, and `mixed` are behind `--profile gpu`. `mixed` defaults to
   `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` (**production**: `max` +
   ultrachat 256); NVIDIA quality Local-Hessian is
-  `RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`. 5090 GPQA is
+  `MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml`. 5090 GPQA is
   `recipes/eval-gpqa-diamond.5090.yaml` (24-way, HiCache 64 GiB, bf16 GDN).
 - GPU pod (no Docker): `bash scripts/gpu-pod.sh plan|quantize|publish|rewrite-sglang|serve|eval [w4a8|w4a4|mixed]`
   (starts a job; does not mean W4A4 / mixed PTQ or OSS upload has already finished).
