@@ -37,6 +37,7 @@ import hashlib
 import json
 import random
 import re
+import sys
 import threading
 import time
 import urllib.error
@@ -73,6 +74,7 @@ QWEN_THINKING_SAMPLING: dict[str, Any] = {
 DEFAULT_SGLANG_PORT = 30000
 DEFAULT_VLLM_PORT = 8000
 DEFAULT_EVAL_BASE_URL = f"http://127.0.0.1:{DEFAULT_SGLANG_PORT}/v1"
+DEFAULT_EVAL_RECIPE = "recipes/eval-gpqa-diamond.yaml"
 
 NVIDIA_VLLM_SERVE: dict[str, Any] = {
     "kv_cache_dtype": "fp8_e4m3",
@@ -300,10 +302,40 @@ def auto_kv_offload_gib(
     return max(4, usable // 2)
 
 
+def checkout_root() -> Path | None:
+    """Git checkout that ships ``recipes/`` next to this package (src layout)."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "recipes").is_dir():
+            return parent
+    return None
+
+
+def resolve_eval_recipe_path(path: str | Path) -> Path:
+    """Prefer the given path; fall back to the same relative path in the checkout."""
+    recipe_path = Path(path)
+    if recipe_path.is_file():
+        return recipe_path
+    if not recipe_path.is_absolute():
+        root = checkout_root()
+        if root is not None:
+            candidate = root / recipe_path
+            if candidate.is_file():
+                return candidate
+    return recipe_path
+
+
 def load_eval_recipe(path: str | Path, overrides: dict[str, Any] | None = None) -> EvalRecipe:
-    payload = yaml.safe_load(Path(path).read_text())
+    recipe_path = resolve_eval_recipe_path(path)
+    if not recipe_path.exists():
+        raise EvalError(f"Eval recipe not found: {recipe_path}")
+    try:
+        payload = yaml.safe_load(recipe_path.read_text())
+    except yaml.YAMLError as exc:
+        raise EvalError(f"Invalid eval recipe YAML ({recipe_path}): {exc}") from exc
+    except OSError as exc:
+        raise EvalError(f"Could not read eval recipe {recipe_path}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise EvalError(f"{path} must be a mapping")
+        raise EvalError(f"Eval recipe YAML must be a mapping: {recipe_path}")
     if overrides:
         payload = {**payload, **{k: v for k, v in overrides.items() if v is not None}}
     try:
@@ -993,23 +1025,67 @@ def score_items(
     }
 
 
-def load_gpqa_journal(path: Path) -> dict[str, ItemResult]:
-    """Replay a JSONL journal so a restarted eval does not wipe finished items."""
+def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
+    """Return ``(rows, cut_offset)``. Mid-file JSON errors abort.
+
+    ``cut_offset`` is the byte offset where a corrupt trailing line starts, or
+    ``None`` when every line parsed.
+    """
     rows: dict[str, ItemResult] = {}
     if not path.is_file():
-        return rows
+        return rows, None
     fields = ItemResult.__dataclass_fields__
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        payload = json.loads(line)
+    data = path.read_bytes()
+    spans: list[tuple[int, bytes]] = []
+    offset = 0
+    for raw in data.split(b"\n"):
+        if raw.strip():
+            spans.append((offset, raw))
+        offset += len(raw) + 1
+    for position, (start, raw) in enumerate(spans):
+        is_trailing = position == len(spans) - 1
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("row is not a JSON object")
+        except ValueError as exc:
+            line_no = data.count(b"\n", 0, start) + 1
+            if is_trailing:
+                print(
+                    f"[gpqa] warning: dropping truncated journal line {line_no} in {path}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return rows, start
+            raise EvalError(f"Corrupt GPQA journal {path} at line {line_no}: {exc}") from exc
         kwargs = {key: payload[key] for key in fields if key in payload}
         try:
             row = ItemResult(**kwargs)
         except TypeError:
             continue
         rows[row.item_id] = row
+    return rows, None
+
+
+def load_gpqa_journal(path: Path) -> dict[str, ItemResult]:
+    """Replay a JSONL journal so a restarted eval does not wipe finished items.
+
+    A truncated or corrupt trailing line (killed writer, full disk) is cut off
+    in place so the next append cannot glue onto a partial row; every earlier
+    byte is left untouched. The same corruption in the middle of the file
+    raises ``EvalError`` instead of being skipped.
+    """
+    rows, cut_offset = _parse_gpqa_journal(path)
+    if not path.is_file():
+        return rows
+    with path.open("r+b") as handle:
+        if cut_offset is not None:
+            handle.truncate(cut_offset)
+        handle.seek(0, 2)
+        if handle.tell() > 0:
+            handle.seek(-1, 2)
+            if handle.read(1) != b"\n":
+                handle.write(b"\n")
     return rows
 
 

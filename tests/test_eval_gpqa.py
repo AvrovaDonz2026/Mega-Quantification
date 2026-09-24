@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -11,11 +12,13 @@ import pytest
 from megaquant.eval_gpqa import (
     CHAT_TEMPLATE_TOKEN_RESERVE,
     DEFAULT_EVAL_BASE_URL,
+    DEFAULT_EVAL_RECIPE,
     DEFAULT_MAX_MODEL_LEN,
     NVIDIA_SGLANG_SERVE,
     QWEN_THINKING_SAMPLING,
     GenerationResult,
     GPQAItem,
+    ItemResult,
     auto_kv_offload_gib,
     build_gpqa_item,
     default_eval_base_url,
@@ -27,6 +30,7 @@ from megaquant.eval_gpqa import (
     load_eval_recipe,
     load_gpqa_journal,
     remaining_new_tokens,
+    resolve_eval_recipe_path,
     run_gpqa,
     score_items,
     serve_argv_from_recipe,
@@ -37,6 +41,7 @@ from megaquant.eval_gpqa import (
     vllm_serve_argv,
     vllm_serve_argv_from_recipe,
 )
+from megaquant.exceptions import EvalError
 
 REPO = Path(__file__).resolve().parents[1]
 RECIPE = REPO / "recipes" / "eval-gpqa-diamond.yaml"
@@ -349,8 +354,6 @@ def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
         GPQAItem("a", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A"),
         GPQAItem("b", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "B"),
     ]
-    from megaquant.eval_gpqa import ItemResult
-
     rows = [
         ItemResult("a", "A", "A", True, False, "stop", 1, 1, 0, "Answer: A", items[0].choices),
         ItemResult("b", "B", None, False, True, "length", 1, 1, 0, "incomplete", items[1].choices),
@@ -566,3 +569,171 @@ def test_serve_rejects_trtllm_w4a8_but_dry_run_does_not(
     assert "w4a8_nvfp4_fp8" not in err
     assert "rewrite-sglang" in err
     assert "nvfp4_w4a8" in err
+
+
+def _journal_item(item_id: str, gold: str = "A") -> ItemResult:
+    return ItemResult(
+        item_id=item_id,
+        gold=gold,
+        predicted=gold,
+        correct=True,
+        truncated=False,
+        finish_reason="stop",
+        prompt_tokens=8,
+        completion_tokens=4,
+        continued=0,
+        text=f"Answer: {gold}",
+        choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+    )
+
+
+def test_load_eval_recipe_missing_file_raises_eval_error(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-eval.yaml"
+    with pytest.raises(EvalError, match="Eval recipe not found") as excinfo:
+        load_eval_recipe(missing)
+    assert str(missing) in str(excinfo.value)
+
+
+def test_load_eval_recipe_invalid_yaml_raises_eval_error(tmp_path: Path) -> None:
+    bad = tmp_path / "broken.yaml"
+    bad.write_text(":\n  {", encoding="utf-8")
+    with pytest.raises(EvalError, match="Invalid eval recipe YAML"):
+        load_eval_recipe(bad)
+
+
+def test_load_eval_recipe_non_mapping_raises_eval_error(tmp_path: Path) -> None:
+    listed = tmp_path / "list.yaml"
+    listed.write_text("- not a mapping\n", encoding="utf-8")
+    with pytest.raises(EvalError, match="must be a mapping"):
+        load_eval_recipe(listed)
+
+
+def test_default_eval_recipe_resolves_from_checkout_when_cwd_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    resolved = resolve_eval_recipe_path(DEFAULT_EVAL_RECIPE)
+    assert resolved.is_file()
+    assert resolved == RECIPE
+    recipe = load_eval_recipe(DEFAULT_EVAL_RECIPE)
+    assert recipe.benchmark == "gpqa_diamond"
+
+
+def test_cli_eval_and_serve_missing_recipe_prints_error_not_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    from megaquant.cli import main
+
+    missing = str(tmp_path / "no-such-eval.yaml")
+    for command in ("eval", "serve"):
+        code = main([command, "-c", missing, "--dry-run"])
+        captured = capsys.readouterr()
+        assert code == 1
+        assert captured.err.startswith("error:")
+        assert "Eval recipe not found" in captured.err
+        assert missing in captured.err
+        assert "Traceback" not in captured.err
+        assert "Traceback" not in captured.out
+
+
+def test_cli_eval_default_recipe_works_outside_repo_root(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from megaquant.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    code = main(["eval", "--dry-run"])
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "remaining context" in out
+    assert '"engine": "sglang"' in out
+
+
+def test_load_gpqa_journal_skips_truncated_last_line(tmp_path: Path, capsys) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    good = json.dumps(asdict(_journal_item("done")), ensure_ascii=False)
+    path.write_text(good + "\n{\"item_id\": \"pending\", \"gold\":", encoding="utf-8")
+    rows = load_gpqa_journal(path)
+    err = capsys.readouterr().err
+    assert "done" in rows
+    assert "pending" not in rows
+    assert "warning" in err
+    assert "dropping truncated journal line" in err
+    assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+def test_load_gpqa_journal_truncate_keeps_earlier_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    first = json.dumps(asdict(_journal_item("a")), ensure_ascii=False)
+    retry = json.dumps(asdict(_journal_item("a")))
+    legacy = json.dumps({"item_id": "old", "note": "missing fields"})
+    kept = f"{first}\n\n{retry}\n{legacy}\n"
+    path.write_bytes(kept.encode("utf-8") + b'{"item_id": "b", "text": "\xe4\xb8')
+    rows = load_gpqa_journal(path)
+    assert set(rows) == {"a"}
+    assert path.read_bytes() == kept.encode("utf-8")
+
+
+def test_load_gpqa_journal_terminates_unterminated_valid_row(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    good = json.dumps(asdict(_journal_item("done")), ensure_ascii=False)
+    path.write_text(good, encoding="utf-8")
+    assert "done" in load_gpqa_journal(path)
+    assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+def test_load_gpqa_journal_raises_on_corrupt_middle_line(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    first = json.dumps(asdict(_journal_item("a")), ensure_ascii=False)
+    last = json.dumps(asdict(_journal_item("c")), ensure_ascii=False)
+    path.write_text(f"{first}\n{{not json}}\n{last}\n", encoding="utf-8")
+    with pytest.raises(EvalError, match="Corrupt GPQA journal") as excinfo:
+        load_gpqa_journal(path)
+    assert "line 2" in str(excinfo.value)
+    # Middle corruption must not be rewritten away.
+    assert "{not json}" in path.read_text(encoding="utf-8")
+
+
+def test_run_gpqa_resumes_after_truncated_last_line(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    journal = tmp_path / "gpqa_diamond.jsonl"
+    done = json.dumps(asdict(_journal_item("done")), ensure_ascii=False)
+    journal.write_text(done + "\n{\"item_id\": \"pending\"", encoding="utf-8")
+    pending = GPQAItem(
+        item_id="pending",
+        question="Q2?",
+        choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+        gold="B",
+    )
+    already = GPQAItem(
+        item_id="done",
+        question="Q1?",
+        choices={"A": "a", "B": "b", "C": "c", "D": "d"},
+        gold="A",
+    )
+    calls: list[str] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["messages"][0]["content"])
+        return GenerationResult(
+            text="Answer: B",
+            finish_reason="stop",
+            prompt_tokens=8,
+            completion_tokens=4,
+        )
+
+    summary = run_gpqa(
+        recipe,
+        items=[already, pending],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 8,
+    )
+    assert calls
+    assert all("Q1?" not in text for text in calls)
+    assert summary["scores"]["headline"] == "2/2"
+    lines = [ln for ln in journal.read_text(encoding="utf-8").splitlines() if ln]
+    assert len(lines) == 2
+    for line in lines:
+        json.loads(line)
+    ids = [json.loads(line)["item_id"] for line in lines]
+    assert ids == ["done", "pending"]

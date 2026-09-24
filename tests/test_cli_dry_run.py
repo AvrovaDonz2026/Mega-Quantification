@@ -251,3 +251,57 @@ def test_cli_eval_serve_dry_run_subprocess_offline(
             payload = (proc.stdout or "")[(proc.stdout or "").find("{") :]
             data = json.loads(payload)
             assert "--seed" not in data["argv"]
+
+
+def test_cli_eval_serve_missing_recipe_is_clean_error(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    if not _cli_available():
+        pytest.skip("megaquant.cli not implemented yet")
+
+    env = _offline_env(repo_root, tmp_path)
+    missing = str(tmp_path / "no-such-eval.yaml")
+    for command in ("eval", "serve"):
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "megaquant.cli",
+                command,
+                "-c",
+                missing,
+                "--dry-run",
+            ],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        err = proc.stderr or ""
+        assert proc.returncode == 1, (proc.stdout or "") + err
+        assert err.startswith("error:")
+        assert "Eval recipe not found" in err
+        assert missing in err
+        assert "Traceback" not in err
+        assert "Traceback" not in (proc.stdout or "")
+
+
+def test_cli_eval_default_recipe_from_other_cwd(repo_root: Path, tmp_path: Path) -> None:
+    if not _cli_available():
+        pytest.skip("megaquant.cli not implemented yet")
+
+    env = _offline_env(repo_root, tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-m", "megaquant.cli", "eval", "--dry-run"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    assert proc.returncode == 0, combined
+    assert HUB_BF16 not in combined
+    assert LOCAL_EXPORT in (proc.stdout or "")
+    assert "Traceback" not in combined
