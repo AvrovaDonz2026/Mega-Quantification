@@ -16,8 +16,8 @@ change when a hardware profile is added. Groups below are the public index.
 | `qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | Uniform W4A4 packed for 32 GB. |
 | `qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | Uniform W4A4, anonymous ultrachat. |
 | `qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | Same layer map as `nvfp4_w4a8`. Local-Hessian + Nemotron v3. Needs a larger GPU than 32 GB. |
-| `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB production PTQ: algorithm `max`, ultrachat 256×1024. |
-| `qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | Local-Hessian with anonymous ultrachat. |
+| `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB production PTQ: algorithm `max`, ultrachat 256×1024. Writes `outputs/Qwen3.8-27B-NVFP4-W4A8`. |
+| `qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | Same map, algorithm `max`, anonymous ultrachat 512. |
 | `qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | Optional Marlin export (BF16 MLP activations). Not the DGX Spark fast path. |
 
 ## GPQA (SGLang)

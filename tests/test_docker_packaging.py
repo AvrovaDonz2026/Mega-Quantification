@@ -49,9 +49,11 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     assert "gpu" in (services["serve-sglang"].get("profiles") or [])
     assert "gpu" in (services["serve-vllm"].get("profiles") or [])
     mixed_cmd = " ".join(str(x) for x in (services["mixed"].get("command") or []))
-    assert "mixed.5090.yaml" in mixed_cmd
+    assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml}" in mixed_cmd
     w4a4_cmd = " ".join(str(x) for x in (services["w4a4"].get("command") or []))
-    assert "w4a4.5090.yaml" in w4a4_cmd
+    assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml}" in w4a4_cmd
+    quantize_cmd = " ".join(str(x) for x in (services["quantize"].get("command") or []))
+    assert "${RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a8.yaml}" in quantize_cmd
     eval_cmd = " ".join(str(x) for x in (services["eval-gpqa"].get("command") or []))
     assert "eval-gpqa-diamond.yaml" in eval_cmd
     serve_cmd = " ".join(str(x) for x in (services["serve-sglang"].get("command") or []))
@@ -112,6 +114,8 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert packed in script or "qwen3.8-27b-nvfp4-w4a4.pod.yaml" in script
     assert "nvfp4_mixed" in script
     assert "nvfp4_w4a4" in script
+    assert "Qwen3.8-27B-NVFP4-mixed" not in script
+    assert "Qwen3.8-27B-NVFP4-W4A8" in script
     assert 'MEGAQUANT_GPU_HEADROOM_GIB:-1' in script or 'MEGAQUANT_GPU_HEADROOM_GIB:-"1"' in script
     assert "eval-gpqa-diamond.yaml" in script
     assert "serve|eval" in script

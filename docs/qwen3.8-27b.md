@@ -101,8 +101,8 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
-| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | same; **5090 production PTQ** |
-| `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `local_hessian` | ultrachat 2048 (anonymous Hub) | same |
+| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A8`; **5090 production PTQ** |
+| `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `max` | ultrachat 512 (anonymous Hub) | `outputs/Qwen3.8-27B-NVFP4-mixed` |
 | `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A16-mixed`; optional Marlin export, not the Spark fast path |
 
 All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
@@ -309,13 +309,15 @@ multipart upload.
 
 ```bash
 python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
-python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme mixed
-python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-mixed --scheme w4a8
+python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A8 --scheme mixed
+python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A8 --scheme w4a8
 # intended gpu-pod wrapper (same env / prefix):
 bash scripts/gpu-pod.sh publish w4a4
 bash scripts/gpu-pod.sh publish mixed
 bash scripts/gpu-pod.sh publish w4a8
 ```
+
+Local-Hessian `mixed.yaml` still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. Publish that directory the same way if that is the export you ran.
 
 ## Serve (SGLang / vLLM / TensorRT-LLM)
 

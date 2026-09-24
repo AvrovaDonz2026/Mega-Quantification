@@ -8,6 +8,8 @@
 # with the 27B LM. Use a local snapshot, not UPFS /model.
 #
 # Quality Local-Hessian + gated Nemotron v3: qwen3.8-27b-nvfp4-mixed.yaml.
+# Export uses the W4A8 directory: this is the production mixed checkpoint
+# that restore-mtp / eval / serve already follow (same layer map as nvfp4_w4a8).
 
 name: qwen3.8-27b-nvfp4-mixed-5090
 backend: modelopt
@@ -34,6 +36,6 @@ calibration:
   with_images: false
 
 export:
-  output_dir: outputs/Qwen3.8-27B-NVFP4-mixed
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A8
   format: hf
   pack: true

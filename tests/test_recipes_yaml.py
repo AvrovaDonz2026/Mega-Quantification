@@ -136,7 +136,7 @@ def test_5090_and_public_calib_recipes() -> None:
     assert mixed_5090["calibration"]["num_samples"] == 256
     assert mixed_5090["calibration"]["max_seq_length"] == 1024
     assert mixed_5090["calibration"]["batch_size"] == 4
-    assert mixed_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-mixed"
+    assert mixed_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A8"
 
     w4a4_pub = _load(W4A4_PUBLIC)
     assert w4a4_pub["scheme"] == "nvfp4_w4a4"
@@ -160,6 +160,39 @@ def test_5090_and_public_calib_recipes() -> None:
     assert mixed_pub["calibration"]["num_samples"] == 512
     assert mixed_pub["calibration"]["max_seq_length"] == 2048
     assert mixed_pub["calibration"]["batch_size"] == 1
+    assert mixed_pub["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-mixed"
+
+
+def test_mixed_public_calib_docs_match_max_512() -> None:
+    """Runbook and recipe index must describe public-calib as max / 512, not Hessian 2048."""
+    index = (RECIPES / "README.md").read_text()
+    runbook = (REPO_ROOT / "docs" / "qwen3.8-27b.md").read_text()
+    for blob, label in (
+        (index, "recipes/README.md"),
+        (runbook, "docs/qwen3.8-27b.md"),
+    ):
+        rows = [line for line in blob.splitlines() if "mixed.public-calib.yaml" in line]
+        assert rows, f"{label} must mention mixed.public-calib.yaml"
+        for line in rows:
+            lowered = line.lower()
+            assert "local_hessian" not in lowered, label
+            assert "local-hessian" not in lowered, label
+            assert "max" in lowered, label
+            assert "512" in line, label
+            assert "2048" not in line, label
+
+
+def test_mixed_5090_docs_agree_on_w4a8_output() -> None:
+    """Production mixed.5090 export is the W4A8 directory used by restore-mtp / eval."""
+    runbook = (REPO_ROOT / "docs" / "qwen3.8-27b.md").read_text()
+    index = (RECIPES / "README.md").read_text()
+    rows = [line for line in runbook.splitlines() if "mixed.5090.yaml" in line]
+    assert rows
+    assert any("Qwen3.8-27B-NVFP4-W4A8" in line for line in rows)
+    assert "Qwen3.8-27B-NVFP4-W4A8" in index
+    skill = (REPO_ROOT / "SKILL.md").read_text()
+    assert "qwen3.8-27b-nvfp4-mixed.5090.yaml" in skill
+    assert "outputs/Qwen3.8-27B-NVFP4-W4A8" in skill
 
 
 def _assert_gpqa_official_cards(
