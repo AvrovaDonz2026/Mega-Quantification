@@ -226,6 +226,25 @@ instead of leaving headroom idle:
 | PCIe | Idle 5090 reports **gen1 x16**. PTQ runs a pinned H2D/D2H warmup so the link trains to **gen5 x16** (~50 GiB/s DMA). CPU-resident weights are pinned; accelerate copies use `non_blocking=True`; calib prefetches the next batch on a CUDA copy stream. `CUDA_DEVICE_MAX_CONNECTIONS=16`. |
 | Calib | 5090 recipes use `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
 
+`batch_size: 4` is what produced `outputs/Qwen3.8-27B-NVFP4-W4A8` on our
+5090. Cards that report less free VRAM, or a desktop session holding some of it,
+can run out at the calib forward through `lm_head`:
+
+```
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.62 GiB.
+...
+logits = self.lm_head(hidden_states[:, slice_indices, :])
+```
+
+Rerun with `MEGAQUANT_BATCH_SIZE=1`. It calibrates the same 256 samples one at
+a time, so calib takes several times longer, and the scales can differ from the
+batch-4 export in the last bits. Compose passes the variable through:
+
+```bash
+MEGAQUANT_BATCH_SIZE=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+MEGAQUANT_BATCH_SIZE=1 docker compose --profile gpu run --rm mixed
+```
+
 K8s GPU pod (already a container). Scheme argument selects the
 5090-packed recipe (`w4a8` default):
 
