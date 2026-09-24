@@ -19,7 +19,7 @@ DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NV
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
-| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入；MTP 张量在 `mtp.safetensors` |
+| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入；视觉塔和 MTP 分别在 `vision.safetensors`、`mtp.safetensors` |
 | 推理时的 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
 `hf_quant_config.json` 顶层是 `MIXED_PRECISION`，`quantized_layers` 非空。SGLang 0.5.20 按 `modelopt_mixed` 加载。导出如果还是裸的 `NVFP4`，先跑 `megaquant rewrite-sglang <export_dir>`。本仓库的方案停在 group 16 的混合图和均匀 W4A4；ModelOpt 那个 block 32 的 `W4A8_NVFP4_FP8` 标签 SGLang 不收，这里也不量化成它。
@@ -165,7 +165,7 @@ NVIDIA 公开卡上的其他基准（vLLM，262k，混合权重）：
 | Algorithm | `max` | `max` | `local_hessian` (`fp8_scale_sweep: true` in ModelOpt) | `max` |
 | Samples | 512 | 512 | 2048 | 256 × 1024, **batch 1** |
 | Dataset | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v3` | `HuggingFaceH4/ultrachat_200k` |
-| Images | `with_images: false` (text-only; vision is ignored) | same | same | same |
+| Images | `with_images: false` (text-only calibration; BF16 vision weights restored after export) | same | same | same |
 
 `max` 记下激活的 amax，再 round-to-nearest。它是 SGLang W4A8、均匀 W4A4，以及 5090 混合配方的默认算法。Local-Hessian（`fp8_scale_sweep: true`，Hessian `block_size` 16）是 NVIDIA 混合卡用的质量档，2048 条在 32 GB 上放不下。5090 上跑完的是 `mixed.5090.yaml`（`max` + ultrachat 256）。`mixed.yaml` 留给更大的卡。不改 YAML 也可以临时换算法：
 
@@ -284,6 +284,15 @@ Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 `MEGAQUANT_NUM_THREADS`, `MEGAQUANT_BATCH_SIZE`, `MEGAQUANT_GPU_HEADROOM_GIB`.
 
 ## MTP export
+
+Language-only PTQ skips constructing the Qwen3.5 vision tower. After export,
+the backend restores all BF16 `model.visual.*` tensors from the source into
+`vision.safetensors` and adds them to the HF index. For an older export that
+lost the vision tower, run:
+
+```bash
+megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
+```
 
 `quantize_mtp: false` keeps MTP in BF16. ModelOpt `export_hf_checkpoint`
 often drops CPU-pinned `mtp.*`, so the backend copies them back after

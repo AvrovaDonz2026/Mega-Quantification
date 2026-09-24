@@ -34,9 +34,10 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 
 有 Docker 的机器看 [docker/README.md](docker/README.md)。镜像把 ModelOpt 钉在 0.46.1，和这次 5090 量化用的版本相同。
 
-已经导出、但目录里没有 MTP 的 checkpoint，不必重跑量化：
+已经导出、但目录里没有视觉塔或 MTP 的 checkpoint，不必重跑量化：
 
 ```bash
+megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ```
 

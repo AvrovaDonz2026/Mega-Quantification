@@ -64,6 +64,7 @@ After export, `megaquant.mtp_export` copies BF16 `mtp.*` from the in-memory modu
 Language-only Qwen3.5 PTQ skips constructing the vision tower. `megaquant.vision_export` copies the source BF16 `model.visual.*` tensors into `vision.safetensors` and adds them to the HF index. Existing exports missing vision can run `megaquant restore-vision <export> --source <BF16 checkpoint>`.
 
 ```bash
+megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ```
 
