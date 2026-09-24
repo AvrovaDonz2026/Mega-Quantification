@@ -12,6 +12,7 @@ from megaquant.backends.modelopt import (
     ModelOptBackend,
     _call_export_hf,
     _clear_partial_export,
+    _has_accelerate_offload,
     _is_cuda_oom,
     _prepare_export_memory,
     _weight_input_attrs,
@@ -317,6 +318,27 @@ def test_prepare_export_memory_is_noop_without_cuda() -> None:
     assert _is_cuda_oom(RuntimeError("CUDA out of memory. Tried to allocate 4.74 GiB"))
     assert _is_cuda_oom(MemoryError("torch.OutOfMemoryError"))
     assert not _is_cuda_oom(ValueError("bad export_dir"))
+
+
+def test_prepare_export_memory_preserves_accelerate_offload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    torch = pytest.importorskip("torch")
+
+    class OffloadedModel:
+        def named_parameters(self):
+            device = type("Device", (), {"type": "meta"})()
+            yield "layer.weight", type("Param", (), {"device": device})()
+
+        def to(self, _device):
+            raise AssertionError("offloaded model must not be moved")
+
+    model = OffloadedModel()
+    assert _has_accelerate_offload(model)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+    assert _prepare_export_memory(model) == "preserve-offload"
 
 
 def test_clear_partial_export_removes_shard_parts(tmp_path: Path) -> None:

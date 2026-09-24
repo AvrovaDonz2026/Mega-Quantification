@@ -83,6 +83,7 @@ import copy
 import inspect
 import json
 from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -849,12 +850,73 @@ def _module_to_cpu(module: Any) -> bool:
     return moved
 
 
+def _has_accelerate_offload(model: Any) -> bool:
+    named_parameters = getattr(model, "named_parameters", None)
+    if callable(named_parameters):
+        for _name, param in named_parameters():
+            if getattr(getattr(param, "device", None), "type", None) == "meta":
+                return True
+    named_modules = getattr(model, "named_modules", None)
+    if callable(named_modules):
+        for _name, module in named_modules():
+            hook = getattr(module, "_hf_hook", None)
+            if getattr(hook, "offload", False):
+                return True
+            if any(getattr(item, "offload", False) for item in getattr(hook, "hooks", ())):
+                return True
+    return False
+
+
+def _prepare_qwen35_export(model: Any) -> bool:
+    if type(model).__name__ != "Qwen3_5ForConditionalGeneration":
+        return False
+    from transformers.models.qwen3_5 import modeling_qwen3_5 as qwen35
+
+    inner = getattr(model, "model", None)
+    for module in (model, inner, getattr(inner, "language_model", None)):
+        config = getattr(module, "config", None)
+        if config is not None and getattr(config, "architectures", None) is None:
+            config.architectures = [type(module).__name__]
+    for module in model.modules():
+        if not isinstance(module, qwen35.Qwen3_5GatedDeltaNet):
+            continue
+        module.chunk_gated_delta_rule = qwen35.torch_chunk_gated_delta_rule
+        module.recurrent_gated_delta_rule = qwen35.torch_recurrent_gated_delta_rule
+        module.causal_conv1d_fn = None
+        module.causal_conv1d_update = None
+    return True
+
+
+@contextmanager
+def _qwen35_export_l2norm(enabled: bool):
+    if not enabled:
+        yield
+        return
+    try:
+        import torch.nn.functional as functional
+        import fla.modules.l2norm as l2norm
+    except ImportError:
+        yield
+        return
+
+    original = l2norm.l2norm_fwd
+
+    def torch_l2norm(x: Any, eps: float = 1e-6, output_dtype: Any = None) -> Any:
+        result = functional.normalize(x, p=2, dim=-1, eps=eps)
+        return result.to(output_dtype) if output_dtype is not None else result
+
+    l2norm.l2norm_fwd = torch_l2norm
+    try:
+        yield
+    finally:
+        l2norm.l2norm_fwd = original
+
+
 def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) -> str:
     """Free GPU workspace so NVFP4 pack (``_cast_fp4``) can allocate ~5 GiB.
 
-    After 5090 PTQ the LM already fills VRAM−1 GiB. Mixed export then OOMs in
-    ``torch.searchsorted``. Offload GPU-resident modules until ``min_free_gib``
-    is free; do not gather the whole 27B onto RAM.
+    Preserve Accelerate's offload hooks: its streaming exporter materializes
+    layers on demand, while moving those modules to CPU breaks dummy forward.
     """
     import gc
 
@@ -874,6 +936,8 @@ def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) 
     except Exception:
         return "cpu-only"
     gc.collect()
+    if _has_accelerate_offload(model) or type(model).__name__ == "Qwen3_5ForConditionalGeneration":
+        return "preserve-offload"
     free = _cuda_free_bytes()
     need = max(1, int(min_free_gib)) * 1024**3
     if free is None or free >= need:
@@ -1002,22 +1066,30 @@ class ModelOptBackend:
 
         output_dir = _output_dir(recipe)
         output_dir.mkdir(parents=True, exist_ok=True)
+        qwen35 = _prepare_qwen35_export(model)
         _prepare_export_memory(model)
+        import torch
+
         try:
-            _call_export_hf(export_hf_checkpoint, model, output_dir)
+            with _qwen35_export_l2norm(qwen35), torch.inference_mode():
+                _call_export_hf(export_hf_checkpoint, model, output_dir)
         except Exception as exc:
             if not _is_cuda_oom(exc):
                 raise
             _clear_partial_export(output_dir)
             _prepare_export_memory(model, min_free_gib=max(EXPORT_MIN_FREE_GIB, 12))
-            _call_export_hf(export_hf_checkpoint, model, output_dir)
+            with _qwen35_export_l2norm(qwen35), torch.inference_mode():
+                _call_export_hf(export_hf_checkpoint, model, output_dir)
 
         if tokenizer is not None:
             save = getattr(tokenizer, "save_pretrained", None)
             if callable(save):
                 save(str(output_dir))
 
-        _restore_mtp_export(output_dir, model, recipe)
+        from megaquant.vision_export import restore_vision_from_recipe
+
+        vision_note = restore_vision_from_recipe(output_dir, recipe)
+        mtp_note = _restore_mtp_export(output_dir, model, recipe)
         canonical = canonicalize_scheme(str(_attr(recipe, "scheme", "") or ""))
         sglang_layers = _rewrite_sglang_export(output_dir, canonical)
         meta = {
@@ -1031,6 +1103,10 @@ class ModelOptBackend:
         if sglang_layers is not None:
             meta["sglang_quant_algo"] = "MIXED_PRECISION"
             meta["sglang_quantized_layers"] = len(sglang_layers)
+        if vision_note is not None:
+            meta["vision_tensors"] = vision_note["vision_tensors"]
+        if mtp_note is not None:
+            meta["mtp_tensors"] = mtp_note["mtp_tensors"]
         (output_dir / "backend_meta.json").write_text(
             json.dumps(meta, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

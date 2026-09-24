@@ -141,6 +141,16 @@ def cmd_restore_mtp(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore_vision(args: argparse.Namespace) -> int:
+    import json
+
+    from megaquant.vision_export import restore_vision
+
+    note = restore_vision(args.export_dir, args.source)
+    print(json.dumps(note, indent=2))
+    return 0
+
+
 def cmd_write_mtp_draft(args: argparse.Namespace) -> int:
     from megaquant.mtp_export import write_mtp_draft
 
@@ -299,6 +309,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not write the sibling 1-layer SGLang draft directory",
     )
     restore_mtp.set_defaults(func=cmd_restore_mtp)
+
+    restore_vision = sub.add_parser(
+        "restore-vision",
+        help="Copy unquantized vision weights into a language-only HF export",
+    )
+    restore_vision.add_argument("export_dir", type=Path)
+    restore_vision.add_argument(
+        "--source",
+        required=True,
+        help="Original HF id or local BF16 checkpoint",
+    )
+    restore_vision.set_defaults(func=cmd_restore_vision)
 
     mtp_draft = sub.add_parser(
         "write-mtp-draft",
