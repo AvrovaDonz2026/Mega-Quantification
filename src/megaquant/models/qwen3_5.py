@@ -58,9 +58,9 @@ class Qwen35Family(BaseFamily):
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
         kwargs = super().load_kwargs(recipe)
         kwargs["trust_remote_code"] = True
-        kwargs["torch_dtype"] = "bfloat16"
         # Transformers 5.8 (required by Qwen3.8) prefers ``dtype``; keep both.
-        kwargs["dtype"] = "bfloat16"
+        # Honor recipe.model.dtype via BaseFamily (default remains bfloat16).
+        kwargs.setdefault("dtype", kwargs.get("torch_dtype", "bfloat16"))
         # ConditionalGeneration VLM, not AutoModelForCausalLM / Qwen3-8B.
         kwargs.setdefault("model_cls", "AutoModelForImageTextToText")
         # Language-model W4A8 does not need the ViT in VRAM/RAM. Skipping it
