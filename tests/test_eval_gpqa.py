@@ -658,11 +658,28 @@ def test_load_gpqa_journal_skips_truncated_last_line(tmp_path: Path, capsys) -> 
     assert "done" in rows
     assert "pending" not in rows
     assert "warning" in err
-    assert "skipping truncated journal line" in err
-    rewritten = path.read_text(encoding="utf-8")
-    assert rewritten.endswith("\n")
-    assert json.loads(rewritten.splitlines()[0])["item_id"] == "done"
-    assert "pending" not in rewritten
+    assert "dropping truncated journal line" in err
+    assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+def test_load_gpqa_journal_truncate_keeps_earlier_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    first = json.dumps(asdict(_journal_item("a")), ensure_ascii=False)
+    retry = json.dumps(asdict(_journal_item("a")))
+    legacy = json.dumps({"item_id": "old", "note": "missing fields"})
+    kept = f"{first}\n\n{retry}\n{legacy}\n"
+    path.write_bytes(kept.encode("utf-8") + b'{"item_id": "b", "text": "\xe4\xb8')
+    rows = load_gpqa_journal(path)
+    assert set(rows) == {"a"}
+    assert path.read_bytes() == kept.encode("utf-8")
+
+
+def test_load_gpqa_journal_terminates_unterminated_valid_row(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    good = json.dumps(asdict(_journal_item("done")), ensure_ascii=False)
+    path.write_text(good, encoding="utf-8")
+    assert "done" in load_gpqa_journal(path)
+    assert path.read_text(encoding="utf-8") == good + "\n"
 
 
 def test_load_gpqa_journal_raises_on_corrupt_middle_line(tmp_path: Path) -> None:

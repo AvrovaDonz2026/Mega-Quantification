@@ -1025,69 +1025,67 @@ def score_items(
     }
 
 
-def _rewrite_gpqa_journal(path: Path, rows: dict[str, ItemResult]) -> None:
-    text = "".join(json.dumps(asdict(row), ensure_ascii=False) + "\n" for row in rows.values())
-    path.write_text(text, encoding="utf-8")
+def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
+    """Return ``(rows, cut_offset)``. Mid-file JSON errors abort.
 
-
-def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], bool]:
-    """Return ``(rows, skipped_trailing)``. Mid-file JSON errors abort."""
+    ``cut_offset`` is the byte offset where a corrupt trailing line starts, or
+    ``None`` when every line parsed.
+    """
     rows: dict[str, ItemResult] = {}
     if not path.is_file():
-        return rows, False
+        return rows, None
     fields = ItemResult.__dataclass_fields__
-    raw_lines = path.read_text(encoding="utf-8").splitlines()
-    nonempty = [index for index, line in enumerate(raw_lines) if line.strip()]
-    last_idx = nonempty[-1] if nonempty else None
-    skipped_trailing = False
-    for index, raw in enumerate(raw_lines):
-        line = raw.strip()
-        if not line:
-            continue
-        is_trailing = index == last_idx
+    data = path.read_bytes()
+    spans: list[tuple[int, bytes]] = []
+    offset = 0
+    for raw in data.split(b"\n"):
+        if raw.strip():
+            spans.append((offset, raw))
+        offset += len(raw) + 1
+    for position, (start, raw) in enumerate(spans):
+        is_trailing = position == len(spans) - 1
         try:
-            payload = json.loads(line)
-        except (json.JSONDecodeError, ValueError) as exc:
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("row is not a JSON object")
+        except ValueError as exc:
+            line_no = data.count(b"\n", 0, start) + 1
             if is_trailing:
                 print(
-                    f"[gpqa] warning: skipping truncated journal line in {path}: {exc}",
+                    f"[gpqa] warning: dropping truncated journal line {line_no} in {path}: {exc}",
                     file=sys.stderr,
                     flush=True,
                 )
-                skipped_trailing = True
-                continue
-            raise EvalError(f"Corrupt GPQA journal {path} at line {index + 1}: {exc}") from exc
-        if not isinstance(payload, dict):
-            message = "row is not a JSON object"
-            if is_trailing:
-                print(
-                    f"[gpqa] warning: skipping truncated journal line in {path}: {message}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                skipped_trailing = True
-                continue
-            raise EvalError(f"Corrupt GPQA journal {path} at line {index + 1}: {message}")
+                return rows, start
+            raise EvalError(f"Corrupt GPQA journal {path} at line {line_no}: {exc}") from exc
         kwargs = {key: payload[key] for key in fields if key in payload}
         try:
             row = ItemResult(**kwargs)
         except TypeError:
             continue
         rows[row.item_id] = row
-    return rows, skipped_trailing
+    return rows, None
 
 
 def load_gpqa_journal(path: Path) -> dict[str, ItemResult]:
     """Replay a JSONL journal so a restarted eval does not wipe finished items.
 
-    A truncated or corrupt trailing line (killed writer, full disk) is skipped
-    with a warning and dropped from the file so the next append cannot glue
-    onto a partial row. The same corruption in the middle of the file raises
-    ``EvalError`` instead of being skipped.
+    A truncated or corrupt trailing line (killed writer, full disk) is cut off
+    in place so the next append cannot glue onto a partial row; every earlier
+    byte is left untouched. The same corruption in the middle of the file
+    raises ``EvalError`` instead of being skipped.
     """
-    rows, skipped_trailing = _parse_gpqa_journal(path)
-    if skipped_trailing and path.is_file():
-        _rewrite_gpqa_journal(path, rows)
+    rows, cut_offset = _parse_gpqa_journal(path)
+    if not path.is_file():
+        return rows
+    with path.open("r+b") as handle:
+        if cut_offset is not None:
+            handle.truncate(cut_offset)
+        handle.seek(0, 2)
+        if handle.tell() > 0:
+            handle.seek(-1, 2)
+            if handle.read(1) != b"\n":
+                handle.write(b"\n")
     return rows
 
 
