@@ -1,6 +1,7 @@
 # Comparison recipe: uniform NVFP4 W4A4 (weights + activations both NVFP4).
 #
-# Block size: stock NVFP4 uses group_size / block size 16, unlike W4A8's 32.
+# Uniform W4A4 is NVFP4 group 16 on every targeted linear. Default nvfp4_w4a8
+# is mixed gs16 MLP + FP8 attention, not NVFP4 block 32.
 # Single 32 GB 5090 / k8s GPU pod: use qwen3.8-27b-nvfp4-w4a4.5090.yaml
 # (or `bash scripts/gpu-pod.sh plan|quantize w4a4`), not this quality YAML.
 
