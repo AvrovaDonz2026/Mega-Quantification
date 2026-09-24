@@ -97,6 +97,22 @@ def test_fetch_dry_run_prints_public_url(tmp_path: Path) -> None:
         )
 
 
+def test_missing_oss2_explains_the_oss_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    oss = _load()
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "oss2":
+            raise ImportError("No module named 'oss2'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    with pytest.raises(ImportError, match=r"megaquant\[oss\]"):
+        oss._require_oss2()
+
+
 def test_publish_requires_bucket_and_endpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

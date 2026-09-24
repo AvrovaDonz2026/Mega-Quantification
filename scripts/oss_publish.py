@@ -12,6 +12,9 @@ multipart ``resumable_upload``. Bucket and endpoint come from ``--bucket`` /
 ``.oss.env``). Anonymous auth unless ``OSS_ACCESS_KEY_ID`` and
 ``OSS_ACCESS_KEY_SECRET`` are set.
 
+Uploads require ``oss2`` (``pip install megaquant[oss]`` or ``pip install oss2``).
+``--dry-run`` does not.
+
 Usage after PTQ::
 
     python scripts/oss_publish.py outputs/Qwen3.8-27B-NVFP4-W4A4 --scheme w4a4
@@ -163,8 +166,19 @@ def public_base_url(bucket: str, endpoint: str, key_prefix: str) -> str:
     return f"https://{bucket}.{host}/{key_prefix.rstrip('/')}"
 
 
+def _require_oss2():
+    try:
+        import oss2
+    except ImportError as exc:
+        raise ImportError(
+            "oss2 is required to upload. Install with: pip install megaquant[oss] "
+            "(or pip install oss2)"
+        ) from exc
+    return oss2
+
+
 def _auth():
-    import oss2
+    oss2 = _require_oss2()
 
     key_id = os.environ.get("OSS_ACCESS_KEY_ID", "")
     secret = os.environ.get("OSS_ACCESS_KEY_SECRET", "")
@@ -174,7 +188,7 @@ def _auth():
 
 
 def _bucket(endpoint: str, bucket_name: str):
-    import oss2
+    oss2 = _require_oss2()
 
     return oss2.Bucket(_auth(), endpoint, bucket_name)
 
@@ -195,7 +209,7 @@ def _object_exists(bucket, key: str, size: int) -> bool:
 
 
 def _upload_one(bucket, key: str, path: Path, *, force: bool) -> str:
-    import oss2
+    oss2 = _require_oss2()
 
     size = path.stat().st_size
     if not force and _object_exists(bucket, key, size):
