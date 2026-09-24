@@ -893,8 +893,8 @@ def _qwen35_export_l2norm(enabled: bool):
         yield
         return
     try:
-        import torch.nn.functional as functional
         import fla.modules.l2norm as l2norm
+        import torch.nn.functional as functional
     except ImportError:
         yield
         return

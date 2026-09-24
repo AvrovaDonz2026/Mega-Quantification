@@ -69,8 +69,8 @@ def test_load_5090_packed_recipes() -> None:
     assert w4a4.algorithm == "max"
     assert mixed.algorithm == "max"
     assert mixed.export.output_dir == "outputs/Qwen3.8-27B-NVFP4-W4A8"
-    assert w4a4.calibration.batch_size == 4
-    assert mixed.calibration.batch_size == 4
+    assert w4a4.calibration.batch_size == 1
+    assert mixed.calibration.batch_size == 1
     assert w4a4.calibration.dataset == "HuggingFaceH4/ultrachat_200k"
     assert mixed.calibration.dataset == "HuggingFaceH4/ultrachat_200k"
 

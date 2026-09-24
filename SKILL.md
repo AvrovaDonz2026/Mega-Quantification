@@ -33,7 +33,7 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 | `nvfp4_w4a4` | Uniform NVFP4 block 16, weights and activations, including attention | `NVFP4` | `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | Optional Marlin export. MLP activations stay BF16 | MLP entry `W4A16_NVFP4` | not the Spark fast path |
 
-5090 production PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 4. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` (401 `quantized_layers` entries: 193 NVFP4 + 208 FP8), which restore-mtp / eval / serve already use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. DGX Spark serves this mixed map at about 12 tok/s decode (bandwidth ceiling about 14); speculative MTP is the faster path.
+5090 PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 1. Batch 4 can OOM at `lm_head` on a 32 GB instance. The export restores BF16 vision tensors into `vision.safetensors` and BF16 MTP tensors into `mtp.safetensors`; the HF index includes both. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` with 401 `quantized_layers` entries (193 NVFP4 + 208 FP8), which eval / serve use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. DGX Spark serves this mixed map at about 12 tok/s decode (bandwidth ceiling about 14); speculative MTP is the faster path.
 
 Pinned in `pyproject.toml` and `docker/requirements-gpu.txt`: `nvidia-modelopt[hf]==0.46.1`. Serve image pins `sglang==0.5.20`.
 
@@ -61,6 +61,8 @@ Compose default image is CUDA **12.8.1**. That build does not include a CUDA 13 
 
 After export, `megaquant.mtp_export` copies BF16 `mtp.*` from the in-memory module or from the original HF source. Only shards whose index entries are `mtp.*` are read. The shard is `mtp.safetensors`. A sibling `<export>-draft` directory is the 1-layer SGLang draft (`--speculative-algorithm NEXTN`). Do not point the draft path at the 64-layer export.
 
+Language-only Qwen3.5 PTQ skips constructing the vision tower. `megaquant.vision_export` copies the source BF16 `model.visual.*` tensors into `vision.safetensors` and adds them to the HF index. Existing exports missing vision can run `megaquant restore-vision <export> --source <BF16 checkpoint>`.
+
 ```bash
 megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ```
@@ -73,7 +75,7 @@ Layout: `<prefix>/<scheme>/<content-hash>/`, prefix `Mega-Quantification`. Conte
 
 ```bash
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 megaquant rewrite-sglang outputs/Qwen3.8-27B-NVFP4-W4A8
 megaquant serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run

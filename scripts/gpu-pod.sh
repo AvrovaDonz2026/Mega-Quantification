@@ -29,7 +29,7 @@ export MEGAQUANT_OFFLOAD_DIR="${MEGAQUANT_OFFLOAD_DIR:-$ROOT/offload_folder}"
 # (VRAM − 1 GiB, MemTotal − 6 GiB). Override explicitly if you need a cap.
 export MEGAQUANT_GPU_HEADROOM_GIB="${MEGAQUANT_GPU_HEADROOM_GIB:-1}"
 export MEGAQUANT_CPU_RESERVE_GIB="${MEGAQUANT_CPU_RESERVE_GIB:-6}"
-export MEGAQUANT_BATCH_SIZE="${MEGAQUANT_BATCH_SIZE:-4}"
+export MEGAQUANT_BATCH_SIZE="${MEGAQUANT_BATCH_SIZE:-}"
 export MEGAQUANT_PIN_MEMORY="${MEGAQUANT_PIN_MEMORY:-1}"
 NPROC="$(nproc)"
 export MEGAQUANT_NUM_THREADS="${MEGAQUANT_NUM_THREADS:-$NPROC}"
@@ -149,7 +149,7 @@ calibration:
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
-  batch_size: 4
+  batch_size: 1
   seed: 42
   with_images: false
 export:
@@ -161,7 +161,7 @@ fi
 
 log() { printf '[gpu-pod] %s\n' "$*"; }
 
-log "python=${PY} threads=${MEGAQUANT_NUM_THREADS} gpu_headroom=${MEGAQUANT_GPU_HEADROOM_GIB}GiB cpu_reserve=${MEGAQUANT_CPU_RESERVE_GIB}GiB batch=${MEGAQUANT_BATCH_SIZE}"
+log "python=${PY} threads=${MEGAQUANT_NUM_THREADS} gpu_headroom=${MEGAQUANT_GPU_HEADROOM_GIB}GiB cpu_reserve=${MEGAQUANT_CPU_RESERVE_GIB}GiB batch=${MEGAQUANT_BATCH_SIZE:-recipe}"
 log "recipe=${RECIPE} scheme=${SCHEME}"
 case "${CMD}" in
   publish|rewrite-sglang|schemes|families)

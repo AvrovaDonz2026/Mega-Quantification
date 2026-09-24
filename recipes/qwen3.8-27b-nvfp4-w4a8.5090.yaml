@@ -4,8 +4,8 @@
 # MIXED_PRECISION export). Not W4A8_NVFP4_FP8 block 32.
 #
 # Packs VRAM−1GiB of weights, keeps the rest in RAM (MemTotal−6GiB, not disk),
-# uses every CPU thread, and runs max-calib at 256×1024 with batch_size 4 so
-# CPU↔GPU offload is amortized. Skip the vision constructor so auto device_map
+# uses every CPU thread, and runs max-calib at 256×1024 with batch_size 1 to
+# keep lm_head within 32 GB VRAM. Skip the vision constructor so auto device_map
 # fills the GPU with the 27B LM. Use a local snapshot, not UPFS /model.
 
 name: qwen3.8-27b-nvfp4-w4a8-5090
@@ -28,7 +28,7 @@ calibration:
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
-  batch_size: 4
+  batch_size: 1
   seed: 42
   with_images: false
 
