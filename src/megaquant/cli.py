@@ -9,6 +9,7 @@ from typing import Any
 
 from megaquant.config import CLI_OVERRIDE_MAP, load_recipe
 from megaquant.eval_gpqa import (
+    DEFAULT_EVAL_RECIPE,
     default_eval_base_url,
     default_serve_port,
     describe_eval,
@@ -316,11 +317,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument(
         "-c",
         "--config",
-        default="recipes/eval-gpqa-diamond.yaml",
+        default=DEFAULT_EVAL_RECIPE,
         help=(
             "Eval recipe. Default FlashInfer; CUDA 12.8 / 32 GB SM120 uses "
             "recipes/eval-gpqa-diamond.5090.yaml; 80 GB SM120 uses "
-            "recipes/eval-gpqa-diamond.6000d.yaml."
+            "recipes/eval-gpqa-diamond.6000d.yaml. "
+            "Relative defaults resolve from the current directory, then the checkout."
         ),
     )
     evaluate.add_argument(
@@ -359,11 +361,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument(
         "-c",
         "--config",
-        default="recipes/eval-gpqa-diamond.yaml",
+        default=DEFAULT_EVAL_RECIPE,
         help=(
             "Serve recipe. Default FlashInfer; CUDA 12.8 / 32 GB SM120 uses "
             "recipes/eval-gpqa-diamond.5090.yaml; 80 GB SM120 uses "
-            "recipes/eval-gpqa-diamond.6000d.yaml."
+            "recipes/eval-gpqa-diamond.6000d.yaml. "
+            "Relative defaults resolve from the current directory, then the checkout."
         ),
     )
     serve.add_argument(
