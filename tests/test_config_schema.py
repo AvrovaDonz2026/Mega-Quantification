@@ -96,3 +96,66 @@ def test_load_public_calib_recipes_if_present() -> None:
         loaded += 1
     if loaded == 0:
         pytest.skip("public-calib recipes not shipped")
+
+
+def _minimal_recipe_payload(**overrides) -> dict:
+    payload: dict = {
+        "name": "generic-lm-head",
+        "scheme": "nvfp4_w4a8",
+        "family": "generic",
+        "model": {"source": "dummy/model"},
+        "calibration": {},
+        "export": {"output_dir": "outputs/x"},
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_ignore_lm_head_accepted_on_recipe_and_model_spec() -> None:
+    from pydantic import ValidationError
+
+    from megaquant.config import ModelSpec, Recipe
+
+    recipe = Recipe.model_validate(_minimal_recipe_payload(ignore_lm_head=False))
+    assert recipe.ignore_lm_head is False
+    assert recipe.model.ignore_lm_head is None
+
+    nested = _minimal_recipe_payload()
+    nested["model"] = {"source": "dummy/model", "ignore_lm_head": False}
+    recipe = Recipe.model_validate(nested)
+    assert recipe.ignore_lm_head is None
+    assert recipe.model.ignore_lm_head is False
+
+    spec = ModelSpec.model_validate({"source": "dummy/model", "ignore_lm_head": True})
+    assert spec.ignore_lm_head is True
+
+    default = Recipe.model_validate(_minimal_recipe_payload())
+    assert default.ignore_lm_head is None
+    assert default.model.ignore_lm_head is None
+
+    with pytest.raises(ValidationError):
+        Recipe.model_validate(_minimal_recipe_payload(not_a_real_field=True))
+    with pytest.raises(ValidationError):
+        ModelSpec.model_validate({"source": "x", "not_a_real_field": True})
+
+
+def test_load_recipe_yaml_honors_ignore_lm_head(tmp_path: Path) -> None:
+    load_recipe = _load_recipe_fn()
+    if load_recipe is None:
+        pytest.skip("megaquant.config.load_recipe not available")
+    import yaml
+
+    top_level = tmp_path / "ignore-lm-head-top.yaml"
+    top_level.write_text(
+        yaml.safe_dump(_minimal_recipe_payload(ignore_lm_head=False)),
+        encoding="utf-8",
+    )
+    recipe = load_recipe(top_level)
+    assert recipe.ignore_lm_head is False
+
+    nested = _minimal_recipe_payload()
+    nested["model"] = {"source": "dummy/model", "ignore_lm_head": False}
+    nested_path = tmp_path / "ignore-lm-head-model.yaml"
+    nested_path.write_text(yaml.safe_dump(nested), encoding="utf-8")
+    recipe = load_recipe(nested_path)
+    assert recipe.model.ignore_lm_head is False

@@ -99,9 +99,62 @@ def test_qwen35_load_kwargs_no_torch() -> None:
     assert kwargs["trust_remote_code"] is True
     assert kwargs["device_map"] == "cpu"
     assert "bfloat16" in str(kwargs["torch_dtype"]).lower()
+    assert kwargs["dtype"] == "bfloat16"
     assert kwargs["language_model_only"] is True
     assert "visual" in kwargs["pin_to_cpu"]
     assert "mtp" in kwargs["pin_to_cpu"]
+
+
+def test_qwen35_load_kwargs_honors_recipe_dtype() -> None:
+    family = Qwen35Family()
+    default = family.load_kwargs({"model": {"device_map": "cpu"}})
+    assert default["torch_dtype"] == "bfloat16"
+    assert default["dtype"] == "bfloat16"
+
+    fp16 = family.load_kwargs({"model": {"device_map": "cpu", "dtype": "float16"}})
+    assert fp16["torch_dtype"] == "float16"
+    assert fp16["dtype"] == "float16"
+
+    alias = family.load_kwargs({"model": {"dtype": "fp16"}})
+    assert alias["torch_dtype"] == "float16"
+    assert alias["dtype"] == "float16"
+
+    from megaquant.config import Recipe
+
+    recipe = Recipe.model_validate(
+        {
+            "name": "qwen-dtype",
+            "scheme": "nvfp4_w4a8",
+            "family": "qwen3_5",
+            "model": {
+                "source": "Qwen/Qwen3.8-27B",
+                "dtype": "float16",
+                "device_map": "cpu",
+            },
+            "calibration": {},
+            "export": {"output_dir": "outputs/x"},
+        }
+    )
+    validated = family.load_kwargs(recipe)
+    assert validated["torch_dtype"] == "float16"
+    assert validated["dtype"] == "float16"
+    assert validated["trust_remote_code"] is True
+    assert validated["language_model_only"] is True
+
+    unset = Recipe.model_validate(
+        {
+            "name": "qwen-dtype-default",
+            "scheme": "nvfp4_w4a8",
+            "family": "qwen3_5",
+            "model": {"source": "Qwen/Qwen3.8-27B", "device_map": "cpu"},
+            "calibration": {},
+            "export": {"output_dir": "outputs/x"},
+        }
+    )
+    assert unset.model.dtype == "bfloat16"
+    fallback = family.load_kwargs(unset)
+    assert fallback["torch_dtype"] == "bfloat16"
+    assert fallback["dtype"] == "bfloat16"
 
 
 def test_qwen35_keeps_vision_when_opted_in() -> None:
@@ -124,9 +177,62 @@ def test_generic_and_llama_adapters() -> None:
     generic = GenericFamily().default_ignore(_DEFAULT_RECIPE)
     assert any("visual" in p for p in generic)
     assert any("embed_tokens" in p for p in generic)
+    assert any("lm_head" in p for p in generic)
     llama = LlamaFamily()
     assert llama.name == "llama"
     assert "llama" in llama.model_types
+
+
+def test_generic_ignore_lm_head_from_validated_recipe() -> None:
+    from megaquant.config import Recipe
+
+    payload: dict[str, Any] = {
+        "name": "generic-lm-head",
+        "scheme": "nvfp4_w4a8",
+        "family": "generic",
+        "model": {"source": "dummy/model"},
+        "calibration": {},
+        "export": {"output_dir": "outputs/x"},
+    }
+    family = GenericFamily()
+
+    default = Recipe.model_validate(payload)
+    assert any("lm_head" in p for p in family.default_ignore(default))
+
+    payload["ignore_lm_head"] = False
+    opted_out = Recipe.model_validate(payload)
+    assert not any("lm_head" in p for p in family.default_ignore(opted_out))
+
+    payload.pop("ignore_lm_head")
+    payload["model"] = {"source": "dummy/model", "ignore_lm_head": False}
+    nested = Recipe.model_validate(payload)
+    assert not any("lm_head" in p for p in family.default_ignore(nested))
+
+    payload["model"]["ignore_lm_head"] = True
+    forced = Recipe.model_validate(payload)
+    assert any("lm_head" in p for p in family.default_ignore(forced))
+
+
+def test_qwen35_keeps_lm_head_unless_recipe_ignores_it() -> None:
+    from megaquant.config import Recipe
+
+    payload: dict[str, Any] = {
+        "name": "qwen-lm-head",
+        "scheme": "nvfp4_w4a8",
+        "family": "qwen3_5",
+        "model": {"source": "Qwen/Qwen3.8-27B"},
+        "calibration": {},
+        "export": {"output_dir": "outputs/x"},
+    }
+    family = Qwen35Family()
+    assert not any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload["ignore_lm_head"] = False
+    assert not any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload["ignore_lm_head"] = True
+    assert any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload.pop("ignore_lm_head")
+    payload["model"]["ignore_lm_head"] = True
+    assert any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
 
 
 def test_registry_lists_qwen3_5_when_available() -> None:

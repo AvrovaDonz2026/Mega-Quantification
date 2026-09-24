@@ -13,14 +13,15 @@ Language-model W4A8 keeps vision, MTP, embeddings, and GDN extras
 (``linear_attn.conv1d`` / ``in_proj_a`` / ``in_proj_b``) in BF16 by default.
 MTP tensors are still written into the Hugging Face export as
 ``mtp.safetensors``; they are not listed in ``quantized_layers``.
-``lm_head`` is **not** ignored (NVIDIA mixed NVFP4 quantizes it).
+``lm_head`` is **not** ignored (NVIDIA mixed NVFP4 quantizes it) unless the
+recipe sets ``ignore_lm_head: true`` for BF16 logits.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from megaquant.models.base import BaseFamily, glob_to_ignore, recipe_flag
+from megaquant.models.base import BaseFamily, get_field, glob_to_ignore, recipe_flag, recipe_model
 
 __all__ = ["Qwen35Family"]
 
@@ -52,15 +53,20 @@ class Qwen35Family(BaseFamily):
             patterns.extend(QWEN35_VISION_IGNORE)
         if not recipe_flag(recipe, "model", "quantize_mtp", default=False):
             patterns.extend(QWEN35_MTP_IGNORE)
-        # Intentionally no *mlp* / *lm_head* — mixed NVFP4 targets those GEMMs.
+        # No *mlp* / *lm_head* by default — mixed NVFP4 targets those GEMMs.
+        ignore_lm_head = get_field(recipe, "ignore_lm_head", None)
+        if ignore_lm_head is None:
+            ignore_lm_head = get_field(recipe_model(recipe), "ignore_lm_head", None)
+        if ignore_lm_head:
+            patterns.append("*lm_head*")
         return glob_to_ignore(patterns)
 
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
         kwargs = super().load_kwargs(recipe)
         kwargs["trust_remote_code"] = True
-        kwargs["torch_dtype"] = "bfloat16"
         # Transformers 5.8 (required by Qwen3.8) prefers ``dtype``; keep both.
-        kwargs["dtype"] = "bfloat16"
+        # Honor recipe.model.dtype via BaseFamily (default remains bfloat16).
+        kwargs.setdefault("dtype", kwargs.get("torch_dtype", "bfloat16"))
         # ConditionalGeneration VLM, not AutoModelForCausalLM / Qwen3-8B.
         kwargs.setdefault("model_cls", "AutoModelForImageTextToText")
         # Language-model W4A8 does not need the ViT in VRAM/RAM. Skipping it

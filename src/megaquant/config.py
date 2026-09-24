@@ -68,6 +68,7 @@ class ModelSpec(StrictModel):
     device_map: str = "auto"
     quantize_vision: bool = False
     quantize_mtp: bool = False
+    ignore_lm_head: bool | None = None
 
 
 class Recipe(StrictModel):
@@ -80,6 +81,7 @@ class Recipe(StrictModel):
     kv_cache: str | None = "fp8"
     family: str | None = None
     extra_ignore: list[str] = Field(default_factory=list)
+    ignore_lm_head: bool | None = None
     calibration: CalibrationSpec
     export: ExportSpec
 
