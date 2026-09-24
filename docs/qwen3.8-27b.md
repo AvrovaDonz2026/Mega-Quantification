@@ -303,7 +303,8 @@ After a scheme finishes, upload the export as
 `<content-hash>` is SHA256 of sorted `{safetensors-name} {sha256}\\n` lines.
 Bucket and endpoint come from `OSS_BUCKET` / `OSS_ENDPOINT` or `--bucket` /
 `--endpoint` (optional gitignored `.oss.env`). Objects larger than 5 GiB use
-multipart upload.
+multipart upload. Real uploads need `oss2`: `pip install oss2` or
+`pip install megaquant[oss]`. `--dry-run` does not.
 
 混合导出就是默认 W4A8。同一份目录用 `--scheme mixed` 和 `--scheme w4a8` 各发一次，content-hash 相同，不用再跑一遍 PTQ。`w4a8` 对应的是 `MIXED_PRECISION` 导出。
 

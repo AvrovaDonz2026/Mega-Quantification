@@ -48,6 +48,9 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.9",
 ]
+oss = [
+  "oss2",
+]
 
 [project.urls]
 Homepage = "https://github.com/AvrovaDonz2026/Mega-Quantification"
