@@ -328,10 +328,15 @@ your export dir or at `nvidia/Qwen3.8-27B-NVFP4`.
 
 ### SGLang
 
-Needs a recent `sglang` / `lmsysorg/sglang:dev` that routes
-`MIXED_PRECISION` + NVFP4 `quantized_layers` to `modelopt_mixed`
-(SGLang PR #28099). Older builds treated non-NemotronH `MIXED_PRECISION`
-as `w4afp8` and will not run this checkpoint.
+Use the pinned `sglang==0.5.20` (`docker/requirements-sglang.txt`). It
+routes `MIXED_PRECISION` + NVFP4 `quantized_layers` to `modelopt_mixed`
+through [sgl-project/sglang#27906](https://github.com/sgl-project/sglang/pull/27906)
+(Qwen3.6 ModelOpt mixed NVFP4) and
+[#30443](https://github.com/sgl-project/sglang/pull/30443) (`modelopt_mixed`
+with the flashinfer_cutedsl MoE runner). Both are in the `v0.5.20` tag.
+#28099 and #29769 were closed without merging, so do not bisect against them.
+Older builds treated non-NemotronH `MIXED_PRECISION` as `w4afp8` and will
+not run this checkpoint.
 
 ```sh
 # Recipe-built argv (adds HiCache so 262k fits a 32 GB card):
