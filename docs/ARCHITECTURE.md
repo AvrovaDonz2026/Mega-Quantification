@@ -215,7 +215,10 @@ groups matching the NVIDIA mixed map. This backend does not build ModelOpt
 - ignore: family ignore list + `lm_head` when the recipe says so
 - save: `model.save_pretrained(dir, save_compressed=True)`
 
-Prefer ModelOpt for SGLang-serving mixed NVFP4 (`MIXED_PRECISION` rewrite).
+The output is a compressed-tensors checkpoint (`quant_method: compressed-tensors`).
+It is not the ModelOpt `MIXED_PRECISION` checkpoint that SGLang `modelopt_mixed`
+loads, and `megaquant rewrite-sglang` refuses it. Use ModelOpt for the SGLang
+serving path; the published scores all come from ModelOpt exports.
 
 ## Pipeline steps
 

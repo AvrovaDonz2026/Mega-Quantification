@@ -39,6 +39,7 @@ from megaquant.runtime import (
     pin_keys_to_cpu,
     warmup_pcie_link,
 )
+from megaquant.sglang_export import is_sglang_mixed_scheme
 
 
 @dataclass
@@ -254,6 +255,12 @@ def _pick_backend(recipe: Recipe, notes: list[str]) -> str:
     if "modelopt" in registered and supports("modelopt"):
         return "modelopt"
     if "llmcompressor" in registered and supports("llmcompressor"):
+        if is_sglang_mixed_scheme(recipe.scheme):
+            notes.append(
+                "auto picked llmcompressor: the export is compressed-tensors, not a "
+                "ModelOpt MIXED_PRECISION checkpoint for SGLang modelopt_mixed; "
+                "install megaquant[modelopt] or set backend: modelopt for that"
+            )
         return "llmcompressor"
     if "modelopt" in registered:
         return "modelopt"
