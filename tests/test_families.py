@@ -213,6 +213,28 @@ def test_generic_ignore_lm_head_from_validated_recipe() -> None:
     assert any("lm_head" in p for p in family.default_ignore(forced))
 
 
+def test_qwen35_keeps_lm_head_unless_recipe_ignores_it() -> None:
+    from megaquant.config import Recipe
+
+    payload: dict[str, Any] = {
+        "name": "qwen-lm-head",
+        "scheme": "nvfp4_w4a8",
+        "family": "qwen3_5",
+        "model": {"source": "Qwen/Qwen3.8-27B"},
+        "calibration": {},
+        "export": {"output_dir": "outputs/x"},
+    }
+    family = Qwen35Family()
+    assert not any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload["ignore_lm_head"] = False
+    assert not any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload["ignore_lm_head"] = True
+    assert any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+    payload.pop("ignore_lm_head")
+    payload["model"]["ignore_lm_head"] = True
+    assert any("lm_head" in p for p in family.default_ignore(Recipe.model_validate(payload)))
+
+
 def test_registry_lists_qwen3_5_when_available() -> None:
     pytest.importorskip("megaquant.registry")
     import megaquant.models  # noqa: F401
