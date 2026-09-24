@@ -51,7 +51,7 @@ docker compose --profile gpu run --rm eval-gpqa
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
 ```bash
-RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 ```
 
 等价的 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`、`make serve-sglang`、`make eval-gpqa`。默认推理是 SGLang `:30000`。
@@ -130,11 +130,11 @@ SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serv
 ```bash
 # 均匀 W4A4
 docker compose --profile gpu run --rm w4a4
-RECIPE=recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml docker compose --profile gpu run --rm w4a4
+W4A4_RECIPE=recipes/qwen3.8-27b-nvfp4-w4a4.yaml docker compose --profile gpu run --rm w4a4
 
 # 混合：5090 打包（服务默认）vs NVIDIA 质量 Hessian
 docker compose --profile gpu run --rm mixed
-RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
+MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
 
 # GPQA：先 serve（SGLang 服务名 `serve-sglang:30000`），再 eval
 make fetch-gpqa

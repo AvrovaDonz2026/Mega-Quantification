@@ -125,7 +125,7 @@ services:
       [
         "quantize",
         "-c",
-        "recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml",
+        "${MIXED_RECIPE:-recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml}",
       ]
 
   w4a4:
@@ -135,7 +135,7 @@ services:
       [
         "quantize",
         "-c",
-        "recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml",
+        "${W4A4_RECIPE:-recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml}",
       ]
 
   serve-sglang:

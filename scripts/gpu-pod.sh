@@ -121,7 +121,7 @@ if [[ ! -f "${RECIPE}" ]]; then
       ;;
     mixed)
       NV_SCHEME="nvfp4_mixed"
-      OUT_NAME="Qwen3.8-27B-NVFP4-mixed"
+      OUT_NAME="Qwen3.8-27B-NVFP4-W4A8"
       ;;
     *)
       SCHEME="w4a8"
@@ -226,7 +226,7 @@ case "${CMD}" in
     EVAL_RECIPE="${EVAL_RECIPE:-$ROOT/recipes/eval-gpqa-diamond.yaml}"
     case "${SCHEME}" in
       w4a4) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A4" ;;
-      mixed) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-mixed" ;;
+      # mixed.5090.yaml writes the production mixed export to the W4A8 path.
       *) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A8" ;;
     esac
     EVAL_OUT="${EVAL_MODEL}/gpqa_diamond"
@@ -242,7 +242,7 @@ case "${CMD}" in
   publish|rewrite-sglang)
     case "${SCHEME}" in
       w4a4) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A4" ;;
-      mixed) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-mixed" ;;
+      # mixed.5090.yaml writes the production mixed export to the W4A8 path.
       *) EVAL_MODEL="$ROOT/outputs/Qwen3.8-27B-NVFP4-W4A8" ;;
     esac
     if [[ "${CMD}" == "publish" ]]; then
