@@ -14,8 +14,10 @@ vLLM native support is strongest for:
 
 Default **``nvfp4_w4a8``** is the SGLang-serving mixed map (same as
 ``nvfp4_mixed``): NVFP4 ``group_size=16`` on MLP + ``lm_head``, FP8 on
-attention. Prefer ``backend=modelopt``; export rewrites
-``quant_algo=MIXED_PRECISION``.
+attention. The export is a compressed-tensors checkpoint
+(``quant_method: compressed-tensors``), not the ModelOpt ``MIXED_PRECISION``
+checkpoint that SGLang ``modelopt_mixed`` loads, so no ModelOpt rewrite runs
+here. Use ``backend=modelopt`` for the SGLang serving path.
 
 There is **no** stock ``NVFP4A8`` preset. This backend does not build
 ModelOpt ``W4A8_NVFP4_FP8`` (NVFP4 block 32 + FP8 activations). SGLang
@@ -589,7 +591,7 @@ class LLMCompressorBackend:
         return _call_oneshot(oneshot, call)
 
     def export(self, model: Any, recipe: Any, tokenizer: Any = None) -> Path:
-        """Save a compressed HuggingFace checkpoint (``save_compressed=True``)."""
+        """Save a compressed-tensors checkpoint (``save_compressed=True``)."""
         output_dir = Path(_output_dir(recipe))
         output_dir.mkdir(parents=True, exist_ok=True)
         save = getattr(model, "save_pretrained", None)

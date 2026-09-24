@@ -110,7 +110,10 @@ def cmd_rewrite_sglang(args: argparse.Namespace) -> int:
 
     from megaquant.sglang_export import rewrite_sglang_mixed_export
 
-    layers = rewrite_sglang_mixed_export(args.export_dir)
+    try:
+        layers = rewrite_sglang_mixed_export(args.export_dir)
+    except (FileNotFoundError, ValueError) as exc:
+        raise MegaQuantError(str(exc)) from exc
     print(
         json.dumps(
             {

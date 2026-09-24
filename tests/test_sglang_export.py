@@ -115,6 +115,63 @@ def test_rewrite_sglang_cli(tmp_path: Path) -> None:
     assert hf["quantization"]["quant_algo"] == "MIXED_PRECISION"
 
 
+def _write_compressed_tensors_export(root: Path) -> dict[str, bytes]:
+    prefix = "model.language_model.layers.0"
+    weight_map = {
+        f"{prefix}.mlp.down_proj.weight_packed": "a.safetensors",
+        f"{prefix}.mlp.down_proj.weight_global_scale": "a.safetensors",
+        f"{prefix}.self_attn.o_proj.weight": "a.safetensors",
+        f"{prefix}.self_attn.o_proj.weight_scale": "a.safetensors",
+        "lm_head.weight_packed": "a.safetensors",
+    }
+    files = {
+        "model.safetensors.index.json": json.dumps({"weight_map": weight_map}),
+        "config.json": json.dumps(
+            {"quantization_config": {"quant_method": "compressed-tensors", "config_groups": {}}}
+        ),
+    }
+    for name, text in files.items():
+        (root / name).write_text(text, encoding="utf-8")
+    return {name: (root / name).read_bytes() for name in files}
+
+
+def test_rewrite_refuses_compressed_tensors_export(tmp_path: Path) -> None:
+    before = _write_compressed_tensors_export(tmp_path)
+    with pytest.raises(ValueError, match="compressed-tensors"):
+        rewrite_sglang_mixed_export(tmp_path)
+    assert {name: (tmp_path / name).read_bytes() for name in before} == before
+    assert not (tmp_path / "hf_quant_config.json").exists()
+
+
+def test_rewrite_sglang_cli_reports_compressed_tensors_cleanly(tmp_path: Path, capsys) -> None:
+    _write_compressed_tensors_export(tmp_path)
+    from megaquant.cli import main
+
+    assert main(["rewrite-sglang", str(tmp_path)]) == 1
+    assert "compressed-tensors" in capsys.readouterr().err
+
+
+def test_auto_llmcompressor_fallback_notes_mixed_export(monkeypatch) -> None:
+    from megaquant import pipeline
+    from megaquant.config import Recipe
+
+    recipe = Recipe.model_validate(
+        {
+            "name": "auto-mixed",
+            "scheme": "nvfp4_w4a8",
+            "model": {"source": "dummy/model"},
+            "calibration": {},
+            "export": {"output_dir": "outputs/x"},
+        }
+    )
+    monkeypatch.setattr(pipeline, "list_backends", lambda: ["llmcompressor"])
+    monkeypatch.setattr(pipeline, "get_backend", lambda name: object())
+    monkeypatch.setattr(pipeline, "_backend_supports", lambda backend, scheme: True)
+    notes: list[str] = []
+    assert pipeline._pick_backend(recipe, notes) == "llmcompressor"
+    assert any("compressed-tensors" in note for note in notes)
+
+
 def _write_hf_quant(tmp_path: Path, quantization: dict) -> None:
     (tmp_path / "hf_quant_config.json").write_text(
         json.dumps({"quantization": quantization}),

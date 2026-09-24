@@ -285,6 +285,18 @@ def rewrite_sglang_mixed_export(
     weight_map = load_weight_map(root)
     if not weight_map:
         raise FileNotFoundError(f"No safetensors weight map under {root}")
+    config_quant = _read_json(root / "config.json").get("quantization_config")
+    if isinstance(config_quant, dict):
+        method = str(config_quant.get("quant_method") or "").replace("_", "-").lower()
+        if method == "compressed-tensors":
+            # Compressed-tensors stores NVFP4 as ``weight_packed``; a ModelOpt
+            # layer map would drop every NVFP4 layer and relabel the loader.
+            raise ValueError(
+                f"{root} is a compressed-tensors export (llm-compressor). "
+                "It is not a ModelOpt checkpoint and cannot be rewritten to "
+                "MIXED_PRECISION. Re-quantize with backend: modelopt for SGLang "
+                "modelopt_mixed."
+            )
 
     existing = _read_json(root / "hf_quant_config.json")
     producer = {}
