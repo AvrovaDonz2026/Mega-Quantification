@@ -4,8 +4,8 @@
 # self_attn/linear_attn. Algorithm is **max**, not local_hessian — a 32 GB 5090
 # cannot hold Hessian 2048. Packs VRAM−1GiB of weights, keeps the rest in RAM
 # (MemTotal−6GiB), uses every CPU thread, and runs max-calib at 256×1024 with
-# batch_size 4. Skip the vision constructor so auto device_map fills the GPU
-# with the 27B LM. Use a local snapshot, not UPFS /model.
+# batch_size 1 for the public UltraChat data on a 32 GB card. Skip the vision
+# constructor during PTQ; export restores the BF16 vision weights from source.
 #
 # Quality Local-Hessian + gated Nemotron v3: qwen3.8-27b-nvfp4-mixed.yaml.
 # Export uses the W4A8 directory: this is the production mixed checkpoint
@@ -31,7 +31,7 @@ calibration:
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
-  batch_size: 4
+  batch_size: 1
   seed: 42
   with_images: false
 

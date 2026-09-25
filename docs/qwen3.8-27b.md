@@ -4,7 +4,7 @@
 
 默认方案 `nvfp4_w4a8` 和 `nvfp4_mixed` 是同一张层图，跟 NVIDIA 公开的 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) 对齐：MLP 和 `lm_head` 是 NVFP4 group 16（权重和激活都是），self-attn 和 linear-attn 是 FP8。导出写成 `quant_algo=MIXED_PRECISION`，并带上 `quantized_layers`。均匀 W4A4 是另一张图，选中的线性层全部是 NVFP4 block 16。NVFP4 推理要 Blackwell；校准可以在 Hopper 上多卡或 offload 完成。
 
-32 GB 5090 上跑完的配方是 [`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)：ModelOpt 0.46.1（PyPI 上的版本；公开卡写的是 0.48.0）、算法 `max`（记下激活 amax，再 round-to-nearest）、`HuggingFaceH4/ultrachat_200k` 256×1024、batch 4。`outputs/Qwen3.8-27B-NVFP4-W4A8` 就是这次导出。那次 `quantized_layers` 有 401 项，193 个 NVFP4、208 个 FP8。`max` 动的是校准，层的比特布局和 Hessian 那版相同，只是没有 Local-Hessian 重建，也没有 FP8 scale sweep。想贴近公开卡，用 [`recipes/qwen3.8-27b-nvfp4-mixed.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.yaml)：Local-Hessian（`fp8_scale_sweep`，Hessian `block_size` 16）、`nvidia/Nemotron-Post-Training-Dataset-v3`、2048×2048、batch 1。32 GB 放不下这次校准。公开卡在 GB300 的 vLLM 上报 GPQA Diamond 88.92（BF16）/ 88.01（NVFP4），`max_new_tokens=65536`。Qwen 自己的 thinking 分是 89.2。
+32 GB 5090 上使用 [`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)：ModelOpt 0.46.1、算法 `max`、`HuggingFaceH4/ultrachat_200k` 256×1024、batch 1。batch 4 在部分 5090 实例会在 `lm_head` 前向申请约 1.62 GiB 时 OOM，因此配方默认 batch 1。导出会把跳过量化的 BF16 视觉塔恢复到 `vision.safetensors`，并把 BF16 MTP 恢复到 `mtp.safetensors`，两者都写入 HF index。`outputs/Qwen3.8-27B-NVFP4-W4A8` 是历史 batch 4 产物，不代表当前默认配置。当前导出仍应有 401 个 `quantized_layers`（193 个 NVFP4、208 个 FP8）。想贴近公开卡，用 [`recipes/qwen3.8-27b-nvfp4-mixed.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.yaml)：Local-Hessian（`fp8_scale_sweep`，Hessian `block_size` 16）、`nvidia/Nemotron-Post-Training-Dataset-v3`、2048×2048、batch 1。32 GB 放不下这次校准。公开卡在 GB300 的 vLLM 上报 GPQA Diamond 88.92（BF16）/ 88.01（NVFP4），`max_new_tokens=65536`。Qwen 自己的 thinking 分是 89.2。
 
 DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NVFP4 激活，注意力和 KV 是 FP8。普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s，再快靠这上面的 MTP 投机解码。`nvfp4_w4a16_mixed` 是 32 GB 机器上的可选 Marlin 导出，MLP 激活留 BF16。
 
@@ -19,7 +19,7 @@ DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NV
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
-| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入；MTP 张量在 `mtp.safetensors` |
+| 视觉塔、MTP、embedding、norm | BF16 | BF16 | 不写入；视觉塔和 MTP 分别在 `vision.safetensors`、`mtp.safetensors` |
 | 推理时的 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
 `hf_quant_config.json` 顶层是 `MIXED_PRECISION`，`quantized_layers` 非空。SGLang 0.5.20 按 `modelopt_mixed` 加载。导出如果还是裸的 `NVFP4`，先跑 `megaquant rewrite-sglang <export_dir>`。本仓库的方案停在 group 16 的混合图和均匀 W4A4；ModelOpt 那个 block 32 的 `W4A8_NVFP4_FP8` 标签 SGLang 不收，这里也不量化成它。
@@ -95,15 +95,15 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | File | Scheme | Algorithm | Calib | Output |
 |---|---|---|---|---|
 | `recipes/qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8` |
-| `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | ultrachat 256×1024, **batch 1** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml` | `nvfp4_w4a8` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A4` |
-| `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 4** | same, packed for 32 GB + 64 GB RAM |
+| `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 1** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
-| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A8`; **5090 production PTQ** |
+| `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 1** | `outputs/Qwen3.8-27B-NVFP4-W4A8`; restores BF16 vision + MTP |
 | `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `max` | ultrachat 512 (anonymous Hub) | `outputs/Qwen3.8-27B-NVFP4-mixed` |
-| `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | `max` | ultrachat 256×1024, **batch 4** | `outputs/Qwen3.8-27B-NVFP4-W4A16-mixed`; optional Marlin export, not the Spark fast path |
+| `recipes/qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | `max` | ultrachat 256×1024, **batch 1** | `outputs/Qwen3.8-27B-NVFP4-W4A16-mixed`; optional Marlin export, not the Spark fast path |
 
 All of these set `backend: modelopt`, `kv_cache: fp8`, `family: qwen3_5`,
 `model.quantize_vision: false`, and `model.quantize_mtp: false`.
@@ -163,9 +163,9 @@ NVIDIA 公开卡上的其他基准（vLLM，262k，混合权重）：
 |---|---|---|---|---|
 | Recipe | `qwen3.8-27b-nvfp4-w4a8.yaml` | `qwen3.8-27b-nvfp4-w4a4.yaml` | `qwen3.8-27b-nvfp4-mixed.yaml` | `*.5090.yaml` for `w4a8` / `w4a4` / `mixed` |
 | Algorithm | `max` | `max` | `local_hessian` (`fp8_scale_sweep: true` in ModelOpt) | `max` |
-| Samples | 512 | 512 | 2048 | 256 × 1024, **batch 4** |
+| Samples | 512 | 512 | 2048 | 256 × 1024, **batch 1** |
 | Dataset | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v3` | `HuggingFaceH4/ultrachat_200k` |
-| Images | `with_images: false` (text-only; vision is ignored) | same | same | same |
+| Images | `with_images: false` (text-only calibration; BF16 vision weights restored after export) | same | same | same |
 
 `max` 记下激活的 amax，再 round-to-nearest。它是 SGLang W4A8、均匀 W4A4，以及 5090 混合配方的默认算法。Local-Hessian（`fp8_scale_sweep: true`，Hessian `block_size` 16）是 NVIDIA 混合卡用的质量档，2048 条在 32 GB 上放不下。5090 上跑完的是 `mixed.5090.yaml`（`max` + ultrachat 256）。`mixed.yaml` 留给更大的卡。不改 YAML 也可以临时换算法：
 
@@ -190,7 +190,7 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 # 5090 production (max + ultrachat; not Hessian):
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
 Export is a Hugging Face unified checkpoint
@@ -224,11 +224,11 @@ instead of leaving headroom idle:
 | RAM | Weights that do not fit on GPU stay in **MemTotal − 6 GiB** (~56 GiB on a 64 GB pod). Disk `offload_folder` is spill-only. |
 | CPU | `nproc` threads via `OMP_NUM_THREADS` / `torch.set_num_threads`. Calib tensors are `pin_memory`'d. |
 | PCIe | Idle 5090 reports **gen1 x16**. PTQ runs a pinned H2D/D2H warmup so the link trains to **gen5 x16** (~50 GiB/s DMA). CPU-resident weights are pinned; accelerate copies use `non_blocking=True`; calib prefetches the next batch on a CUDA copy stream. `CUDA_DEVICE_MAX_CONNECTIONS=16`. |
-| Calib | 5090 recipes use `batch_size: 4` so one CPU↔GPU weight walk covers 4 samples. |
+| Calib | The mixed 5090 recipe uses `batch_size: 1`; batch 4 can OOM at `lm_head` on a 32 GB instance. |
 
-`batch_size: 4` is what produced `outputs/Qwen3.8-27B-NVFP4-W4A8` on our
-5090. Cards that report less free VRAM, or a desktop session holding some of it,
-can run out at the calib forward through `lm_head`:
+The earlier batch-4 run produced `outputs/Qwen3.8-27B-NVFP4-W4A8` on one
+5090, but cards that report less free VRAM, or a desktop session holding some of
+it, can run out at the calib forward through `lm_head`:
 
 ```
 torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.62 GiB.
@@ -236,12 +236,12 @@ torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.62 GiB.
 logits = self.lm_head(hidden_states[:, slice_indices, :])
 ```
 
-Rerun with `MEGAQUANT_BATCH_SIZE=1`. It calibrates the same 256 samples one at
-a time, so calib takes several times longer, and the scales can differ from the
-batch-4 export in the last bits. Compose passes the variable through:
+Batch 1 calibrates the same 256 samples one at a time, so calib takes several
+times longer, and the scales can differ from the batch-4 export in the last
+bits. Compose passes the variable through:
 
 ```bash
-MEGAQUANT_BATCH_SIZE=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 MEGAQUANT_BATCH_SIZE=1 docker compose --profile gpu run --rm mixed
 ```
 
@@ -270,7 +270,7 @@ docker compose --profile gpu run --rm mixed
 ```
 
 The `mixed` Compose service uses `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`
-(max, ultrachat 256×1024, batch 4). NVIDIA quality Local-Hessian:
+(max, ultrachat 256×1024, batch 1). NVIDIA quality Local-Hessian:
 
 ```bash
 MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu run --rm mixed
@@ -284,6 +284,15 @@ Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 `MEGAQUANT_NUM_THREADS`, `MEGAQUANT_BATCH_SIZE`, `MEGAQUANT_GPU_HEADROOM_GIB`.
 
 ## MTP export
+
+Language-only PTQ skips constructing the Qwen3.5 vision tower. After export,
+the backend restores all BF16 `model.visual.*` tensors from the source into
+`vision.safetensors` and adds them to the HF index. For an older export that
+lost the vision tower, run:
+
+```bash
+megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
+```
 
 `quantize_mtp: false` keeps MTP in BF16. ModelOpt `export_hf_checkpoint`
 often drops CPU-pinned `mtp.*`, so the backend copies them back after

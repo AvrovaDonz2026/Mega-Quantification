@@ -117,7 +117,7 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "OMP_NUM_THREADS" in script
     assert "nproc" in script
     assert "0:26GiB,cpu:40GiB" not in script
-    assert "batch_size: 4" in script
+    assert "batch_size: 1" in script
     assert "CUDA_DEVICE_MAX_CONNECTIONS" in script
     assert "w4a4" in script
     assert "mixed" in script

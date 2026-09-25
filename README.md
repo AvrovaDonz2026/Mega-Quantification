@@ -22,8 +22,8 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
 ```bash
 pip install -e '.[hf,modelopt]'
 
-# 32 GB 5090 上实际用过的配方：算法 max，ultrachat 256×1024
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+# 32 GB 5090 上实际用过的配方：算法 max，ultrachat 256×1024，batch 1
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 
 # 均匀 W4A4
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
@@ -34,9 +34,10 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 
 有 Docker 的机器看 [docker/README.md](docker/README.md)。镜像把 ModelOpt 钉在 0.46.1，和这次 5090 量化用的版本相同。
 
-已经导出、但目录里没有 MTP 的 checkpoint，不必重跑量化：
+已经导出、但目录里没有视觉塔或 MTP 的 checkpoint，不必重跑量化：
 
 ```bash
+megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ```
 
@@ -71,7 +72,7 @@ License: GNU AGPL version 3 or later (`AGPL-3.0-or-later`). Copyright 2026 Donz.
 pip install -e '.[dev]'
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
 pip install -e '.[hf,modelopt]'
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
 Dry-run does not download the 27B. The 5090 recipe above is what fit in 32 GB (`max`, ultrachat). `recipes/qwen3.8-27b-nvfp4-mixed.yaml` is the Local-Hessian run for a larger GPU. Docker notes are in [docker/README.md](docker/README.md).

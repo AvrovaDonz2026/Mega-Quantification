@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -299,7 +300,9 @@ def collect_mtp_from_source(source: str | Path) -> dict[str, RawTensor]:
     return dict(sorted(out.items()))
 
 
-def _update_index(export_dir: Path, shard_name: str, tensors: dict[str, RawTensor]) -> None:
+def update_export_index(
+    export_dir: Path, shard_name: str, tensor_sizes: Mapping[str, int]
+) -> None:
     index_path = export_dir / INDEX_NAME
     if index_path.is_file():
         index = _read_json(index_path)
@@ -313,13 +316,13 @@ def _update_index(export_dir: Path, shard_name: str, tensors: dict[str, RawTenso
     if not isinstance(weight_map, dict):
         weight_map = {}
         index["weight_map"] = weight_map
-    for name in tensors:
+    added = sum(size for name, size in tensor_sizes.items() if name not in weight_map)
+    for name in tensor_sizes:
         weight_map[name] = shard_name
     metadata = index.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
         index["metadata"] = metadata
-    added = sum(t.nbytes for t in tensors.values())
     if "total_size" in metadata:
         try:
             metadata["total_size"] = int(metadata["total_size"]) + added
@@ -499,7 +502,7 @@ def restore_bf16_mtp(
 
     shard = root / MTP_SHARD_NAME
     write_safetensors(shard, tensors)
-    _update_index(root, MTP_SHARD_NAME, tensors)
+    update_export_index(root, MTP_SHARD_NAME, {name: t.nbytes for name, t in tensors.items()})
     note["method"] = method
     note["mtp_tensors"] = len(tensors)
     note["mtp_dtype"] = next(iter(tensors.values())).dtype

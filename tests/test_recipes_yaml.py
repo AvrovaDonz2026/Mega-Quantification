@@ -126,7 +126,7 @@ def test_5090_and_public_calib_recipes() -> None:
     assert w4a4_5090["scheme"] == "nvfp4_w4a4"
     assert w4a4_5090["calibration"]["num_samples"] == 256
     assert w4a4_5090["calibration"]["max_seq_length"] == 1024
-    assert w4a4_5090["calibration"]["batch_size"] == 4
+    assert w4a4_5090["calibration"]["batch_size"] == 1
     assert w4a4_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A4"
 
     mixed_5090 = _load(MIXED_5090)
@@ -135,7 +135,7 @@ def test_5090_and_public_calib_recipes() -> None:
     assert mixed_5090["algorithm"] != "local_hessian"
     assert mixed_5090["calibration"]["num_samples"] == 256
     assert mixed_5090["calibration"]["max_seq_length"] == 1024
-    assert mixed_5090["calibration"]["batch_size"] == 4
+    assert mixed_5090["calibration"]["batch_size"] == 1
     assert mixed_5090["export"]["output_dir"] == "outputs/Qwen3.8-27B-NVFP4-W4A8"
 
     w4a4_pub = _load(W4A4_PUBLIC)
@@ -282,4 +282,3 @@ def test_gpqa_5090_recipe_stays_distinct_from_default() -> None:
     assert default["serve"]["attention_backend"] != fivek["serve"]["attention_backend"]
     assert default["serve"]["engine"] == fivek["serve"]["engine"] == "sglang"
     assert GPQA.read_text() != GPQA_5090.read_text()
-

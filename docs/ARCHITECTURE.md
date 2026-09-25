@@ -138,10 +138,13 @@ Default ignore for `qwen3_5` (language-model W4A8):
 - lm_head: **do not ignore** for mixed NVIDIA recipe; ignore only if recipe says so
 - norms stay unquantized automatically (not Linear)
 
-After `export_hf_checkpoint`, `megaquant.mtp_export.restore_bf16_mtp` copies
-ignored `mtp.*` weights back from the in-memory module or from the original
-HF source (MTP shards only). A sibling `<export>-draft` directory is a
-1-layer SGLang speculative draft (`--speculative-draft-model-path`).
+After `export_hf_checkpoint`, `megaquant.vision_export.restore_vision` copies
+the skipped Qwen3.5 `model.visual.*` BF16 weights from the original HF source
+into `vision.safetensors`. `megaquant.mtp_export.restore_bf16_mtp` copies
+ignored `mtp.*` weights back from the in-memory module or original HF source.
+Both shards are indexed in `model.safetensors.index.json`. A sibling
+`<export>-draft` directory is a 1-layer SGLang speculative draft
+(`--speculative-draft-model-path`).
 
 ## Qwen3.8-27B facts
 
@@ -153,8 +156,8 @@ HF source (MTP shards only). A sibling `<export>-draft` directory is a
 - Native context 262,144; MTP present; vision encoder present
 - NVIDIA mixed NVFP4 (`nvidia/Qwen3.8-27B-NVFP4`): Local-Hessian, 2048 samples,
   `Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0
-- 5090 production mixed: ModelOpt 0.46.1, algorithm `max`, ultrachat 256×1024
-  batch 4 (`qwen3.8-27b-nvfp4-mixed.5090.yaml`). Same layer map; weaker
+- 5090 mixed: ModelOpt 0.46.1, algorithm `max`, ultrachat 256×1024,
+  batch 1 (`qwen3.8-27b-nvfp4-mixed.5090.yaml`). Same layer map; weaker
   calibrator. 32 GB cannot hold Hessian 2048.
 - Mixed encoding: NVFP4 **group_size 16** on MLP + `lm_head`; FP8 on self-attn +
   linear-attn. Default `nvfp4_w4a8` matches this for SGLang. Not

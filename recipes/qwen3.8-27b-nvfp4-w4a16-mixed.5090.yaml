@@ -8,7 +8,7 @@
 # Marlin reintroduces a BF16 activation read once native FP4 GEMM works.
 #
 # Kept so a 32 GB box can still emit MIXED_PRECISION layers tagged W4A16_NVFP4
-# (max, 256x1024, batch 4). Do not start it while the mixed W4A8 eval is the job.
+# (max, 256x1024, batch 1). Do not start it while the mixed W4A8 eval is the job.
 
 name: qwen3.8-27b-nvfp4-w4a16-mixed-5090
 backend: modelopt
@@ -30,7 +30,7 @@ calibration:
   dataset: HuggingFaceH4/ultrachat_200k
   num_samples: 256
   max_seq_length: 1024
-  batch_size: 4
+  batch_size: 1
   seed: 42
   with_images: false
 
