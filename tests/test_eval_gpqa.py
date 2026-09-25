@@ -110,6 +110,7 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert recipe.serve.fp8_gemm_backend == "triton"
     assert recipe.serve.fp4_gemm_backend == "marlin"
     assert recipe.serve.force_fp8_marlin is True
+    assert recipe.serve.disable_silu_fp4_quant_fusion is True
     assert recipe.serve.disable_cuda_graph is True
     assert recipe.serve.kv_offloading_size_gb == 64
     assert recipe.concurrency == 24
@@ -131,7 +132,10 @@ def test_5090_recipe_uses_triton_when_flashinfer_cannot_see_sm120() -> None:
     assert "--mamba-ssm-dtype bfloat16" in joined
     assert "--max-running-requests 24" in joined
     assert "--mem-fraction-static 0.95" in joined
-    assert sglang_serve_environ(recipe) == {"SGLANG_FORCE_FP8_MARLIN": "1"}
+    assert sglang_serve_environ(recipe) == {
+        "SGLANG_FORCE_FP8_MARLIN": "1",
+        "SGLANG_DISABLE_SILU_FP4_QUANT_FUSION": "1",
+    }
 
 
 def test_6000d_recipe_keeps_cuda_graph_and_skips_flashinfer_fusion() -> None:

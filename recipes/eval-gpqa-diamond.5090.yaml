@@ -69,6 +69,7 @@ serve:
   fp8_gemm_backend: triton
   fp4_gemm_backend: marlin
   force_fp8_marlin: true
+  disable_silu_fp4_quant_fusion: true
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
   mamba_ssm_dtype: bfloat16

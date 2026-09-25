@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,29 @@ from megaquant.mtp_export import _open_source_shard, _source_index, update_expor
 from megaquant.sglang_export import load_weight_map
 
 VISION_SHARD_NAME = "vision.safetensors"
+_PROCESSOR_FILES = ("preprocessor_config.json", "video_preprocessor_config.json")
+
+
+def _restore_processor_files(root: Path, source_root: Path | str) -> None:
+    for filename in _PROCESSOR_FILES:
+        dest = root / filename
+        if dest.is_file():
+            continue
+        if isinstance(source_root, Path):
+            src = source_root / filename
+            if not src.is_file():
+                continue
+        else:
+            from huggingface_hub.errors import EntryNotFoundError
+
+            try:
+                src = _open_source_shard(source_root, filename)
+            except EntryNotFoundError:
+                continue
+        shutil.copyfile(src, dest)
+
+    if not (root / "preprocessor_config.json").is_file():
+        raise BackendError("Vision export requires preprocessor_config.json in model.source")
 
 
 def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any] | None:
@@ -30,6 +54,7 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
     expected = {key: shard for key, shard in source_map.items() if key.startswith("model.visual.")}
     if not expected:
         raise BackendError(f"Source checkpoint has no model.visual.* tensors: {source}")
+    _restore_processor_files(root, source_root)
 
     exported = load_weight_map(root)
     missing = {
@@ -69,6 +94,13 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
             VISION_SHARD_NAME,
             {key: tensor.numel() * tensor.element_size() for key, tensor in tensors.items()},
         )
+
+    # The PTQ loader intentionally creates Qwen3.5 with the vision tower
+    # disabled. Once the original vision tensors are restored, the exported
+    # config must opt back into constructing that tower at inference time.
+    if config.get("language_model_only") is True:
+        config["language_model_only"] = False
+        config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     note = {
         "vision_tensors": len(expected),

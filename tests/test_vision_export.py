@@ -26,10 +26,18 @@ def test_restores_source_vision_and_preserves_index(tmp_path: Path) -> None:
         "model.visual.patch_embed.proj.weight": torch.arange(4, dtype=torch.bfloat16),
     }
     save_file(weights, str(source / "source.safetensors"))
+    (source / "preprocessor_config.json").write_text(
+        '{"image_processor_type":"Qwen3_5ImageProcessor"}'
+    )
+    (source / "video_preprocessor_config.json").write_text(
+        '{"video_processor_type":"Qwen3_5VideoProcessor"}'
+    )
     (source / "model.safetensors.index.json").write_text(
         json.dumps({"weight_map": {key: "source.safetensors" for key in weights}})
     )
-    (export / "config.json").write_text(json.dumps({"model_type": "qwen3_5", "vision_config": {}}))
+    (export / "config.json").write_text(
+        json.dumps({"model_type": "qwen3_5", "vision_config": {}, "language_model_only": True})
+    )
     (export / "model.safetensors.index.json").write_text(
         json.dumps(
             {"metadata": {"total_size": 16}, "weight_map": {"mtp.weight": "mtp.safetensors"}}
@@ -39,6 +47,9 @@ def test_restores_source_vision_and_preserves_index(tmp_path: Path) -> None:
 
     note = restore_vision_from_recipe(export, recipe)
     assert note == {"vision_tensors": 2, "restored_tensors": 2, "method": "hf-source"}
+    assert json.loads((export / "config.json").read_text())["language_model_only"] is False
+    for filename in ("preprocessor_config.json", "video_preprocessor_config.json"):
+        assert (export / filename).read_bytes() == (source / filename).read_bytes()
     index = json.loads((export / "model.safetensors.index.json").read_text())
     assert index["weight_map"]["mtp.weight"] == "mtp.safetensors"
     assert all(index["weight_map"][key] == VISION_SHARD_NAME for key in weights)
@@ -52,6 +63,7 @@ def test_restores_source_vision_and_preserves_index(tmp_path: Path) -> None:
 
     again = restore_vision_from_recipe(export, recipe)
     assert again == {"vision_tensors": 2, "restored_tensors": 0, "method": "already-present"}
+    assert json.loads((export / "config.json").read_text())["language_model_only"] is False
     assert json.loads((export / "model.safetensors.index.json").read_text()) == index
     assert restore_vision(export, source) == again
     assert main(["restore-vision", str(export), "--source", str(source)]) == 0
@@ -68,6 +80,28 @@ def test_missing_vision_in_source_fails(tmp_path: Path) -> None:
 
     with pytest.raises(BackendError, match="no model.visual"):
         restore_vision_from_recipe(export, {"model": {"source": str(source)}})
+
+
+def test_missing_image_processor_fails(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    from safetensors.torch import save_file
+
+    source = tmp_path / "source"
+    export = tmp_path / "export"
+    source.mkdir()
+    export.mkdir()
+    key = "model.visual.patch_embed.proj.weight"
+    save_file({key: torch.ones(2, dtype=torch.bfloat16)}, str(source / "source.safetensors"))
+    (source / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {key: "source.safetensors"}})
+    )
+    (export / "config.json").write_text(
+        json.dumps({"model_type": "qwen3_5", "vision_config": {}, "language_model_only": True})
+    )
+
+    with pytest.raises(BackendError, match="preprocessor_config.json"):
+        restore_vision(export, source)
+    assert json.loads((export / "config.json").read_text())["language_model_only"] is True
 
 
 def test_other_models_and_quantized_vision_are_unchanged(tmp_path: Path) -> None:

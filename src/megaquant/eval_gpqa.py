@@ -164,7 +164,7 @@ class EvalServe(StrictModel):
     # 5090 recipes set this and cmd_serve exports SGLANG_FORCE_FP8_MARLIN=1.
     force_fp8_marlin: bool = False
     # Fused SiLU+FP4 quant imports FlashInfer even when the FP4 GEMM backend
-    # is Marlin. SM120 + CUDA 12.8 then dies in the SM120f JIT. 80 GB recipes
+    # is Marlin. SM120 + CUDA 12.8 then dies in the SM120f JIT. SM120 recipes
     # set this; cmd_serve exports SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1.
     disable_silu_fp4_quant_fusion: bool = False
     # None leaves the process env alone. False exports the SM120 workaround.
