@@ -53,10 +53,10 @@ DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NV
 | 并发 | 1 | 24（bf16 GDN，96 slot） | 64（bf16 GDN，256 slot） |
 | `mem-fraction-static` | 0.85 | 0.95 | 0.90 |
 | chunked prefill | 2048 | 2048 | 4096 |
-| 额外环境变量 | | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`，`SGLANG_IS_FLASHINFER_AVAILABLE=0`，`SGLANG_ENABLE_JIT_DEEPGEMM=0` |
+| 额外环境变量 | | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1` | `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`，`SGLANG_IS_FLASHINFER_AVAILABLE=0`，`SGLANG_ENABLE_JIT_DEEPGEMM=0` |
 | Radix cache | 开 | 开 | 关 |
 
-CUDA 12.8 编不了 SM 12.x 的 FlashInfer JIT。80 GB 配方把 SiLU+FP4 融合关掉，因为那条路径即使 GEMM 走 Marlin，import 时仍会拉 FlashInfer。float32、64 个 mamba slot 大约占 9.3 GB HBM，GPU 上的 KV 剩不到 1 GB，16 路 HTTP 会排在 3 到 4 个 decode slot 后面。
+CUDA 12.8 编不了 SM 12.x 的 FlashInfer JIT。5090 和 80 GB 配方都把 SiLU+FP4 融合关掉，因为那条路径即使 GEMM 走 Marlin，import 时仍会拉 FlashInfer。float32、64 个 mamba slot 大约占 9.3 GB HBM，GPU 上的 KV 剩不到 1 GB，16 路 HTTP 会排在 3 到 4 个 decode slot 后面。
 
 ```bash
 # 80 GB SM120，CUDA 12.8
@@ -287,8 +287,9 @@ Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 
 Language-only PTQ skips constructing the Qwen3.5 vision tower. After export,
 the backend restores all BF16 `model.visual.*` tensors from the source into
-`vision.safetensors` and adds them to the HF index. For an older export that
-lost the vision tower, run:
+`vision.safetensors`, adds them to the HF index, copies the image/video processor
+configs, and sets `language_model_only: false`. For an older export that lost
+the vision tower, run:
 
 ```bash
 megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
@@ -316,13 +317,25 @@ megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 # or just the draft helper:
 megaquant write-mtp-draft outputs/Qwen3.8-27B-NVFP4-W4A8
 
+# 32 GB 5090 上的文本和图片功能冒烟测试（2048 token 上下文）:
+export SGLANG_FORCE_FP8_MARLIN=1
+export SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1
 sglang serve --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
   --speculative-algorithm NEXTN \
   --speculative-draft-model-path outputs/Qwen3.8-27B-NVFP4-W4A8-draft \
-  ...
+  --speculative-draft-model-quantization unquant \
+  --speculative-num-steps 1 --speculative-eagle-topk 1 \
+  --speculative-num-draft-tokens 2 \
+  --quantization modelopt --context-length 2048 --mem-fraction-static 0.94 \
+  --kv-cache-dtype fp8_e4m3 --chunked-prefill-size 512 \
+  --attention-backend triton --linear-attn-backend triton \
+  --sampling-backend pytorch --fp4-gemm-backend marlin --fp8-gemm-backend triton \
+  --mamba-full-memory-ratio 4.59 --mamba-ssm-dtype bfloat16 \
+  --mamba-radix-cache-strategy extra_buffer_lazy --max-mamba-cache-size 8 \
+  --max-running-requests 1 --disable-cuda-graph --disable-flashinfer-autotune
 ```
 
-`--speculative-draft-model-path` 指 `*-draft`。64 层那个目录是 target。`megaquant serve` 和 `megaquant eval` 不加投机参数，要在 `sglang serve` 的命令行上自己写。`w4a8` / `w4a4` / `mixed` 上传的是完整导出，`*-draft` 只是旁边的 1 层助手。`model.quantize_mtp: true` 会把 draft 量化，而不是拷回 BF16。
+`--speculative-draft-model-path` 指 `*-draft`。64 层那个目录是 target。BF16 draft 要明确指定 `--speculative-draft-model-quantization unquant`，否则 SGLang 会继承 target 的 ModelOpt 量化设置。上面的 2048 token 配置只用于功能冒烟测试，不是 GPQA 的长上下文配置。`megaquant serve` 和 `megaquant eval` 不加投机参数，要在 `sglang serve` 的命令行上自己写。`w4a8` / `w4a4` / `mixed` 上传的是完整导出，`*-draft` 只是旁边的 1 层助手。`model.quantize_mtp: true` 会把 draft 量化，而不是拷回 BF16。
 
 ## OSS publish
 

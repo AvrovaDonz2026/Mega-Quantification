@@ -165,6 +165,25 @@ def test_restore_is_idempotent(tmp_path: Path) -> None:
     assert (export / MTP_SHARD_NAME).stat().st_mtime_ns == first
 
 
+def test_restore_repairs_missing_indexed_mtp_shard(tmp_path: Path) -> None:
+    src = _source_dir(tmp_path)
+    export = _export_dir(tmp_path)
+    index_path = export / "model.safetensors.index.json"
+    index = json.loads(index_path.read_text())
+    index["weight_map"].update({_MTP_A: MTP_SHARD_NAME, _MTP_B: MTP_SHARD_NAME})
+    index["metadata"]["total_size"] += 16
+    index_path.write_text(json.dumps(index), encoding="utf-8")
+
+    with pytest.raises(BackendError, match="indexed MTP shard.*missing"):
+        restore_bf16_mtp(export, write_draft=False)
+
+    note = restore_bf16_mtp(export, source=src, write_draft=False)
+    assert note["method"] == "hf-source"
+    assert (export / MTP_SHARD_NAME).is_file()
+    assert json.loads(index_path.read_text()) == index
+    assert restore_bf16_mtp(export, source=src, write_draft=False)["method"] == "already-present"
+
+
 def test_quantize_mtp_skips_bf16_graft(tmp_path: Path) -> None:
     src = _source_dir(tmp_path)
     export = _export_dir(tmp_path)

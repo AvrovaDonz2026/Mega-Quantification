@@ -457,6 +457,11 @@ def restore_bf16_mtp(
     n_layers = config_mtp_layers(config)
     weight_map = load_weight_map(root)
     existing = weight_map_mtp_keys(weight_map)
+    missing_shards = {
+        str(weight_map[name])
+        for name in existing
+        if not (root / str(weight_map[name])).is_file()
+    }
 
     note: dict[str, Any] = {
         "mtp_quantized": bool(quantize_mtp),
@@ -472,7 +477,7 @@ def restore_bf16_mtp(
         _write_json(root / NOTE_NAME, note)
         return note
 
-    if existing:
+    if existing and not missing_shards:
         note["method"] = "already-present"
         if write_draft:
             dest = write_mtp_draft(root)
@@ -491,6 +496,11 @@ def restore_bf16_mtp(
         method = "hf-source"
 
     if not tensors:
+        if missing_shards:
+            raise BackendError(
+                f"indexed MTP shard(s) missing in {root.name}: "
+                f"{', '.join(sorted(missing_shards))}. Pass the original HF source to restore them."
+            )
         if n_layers <= 0:
             note["method"] = "skipped-no-mtp"
             return note
@@ -498,6 +508,12 @@ def restore_bf16_mtp(
             f"{root.name} config has mtp_num_hidden_layers={n_layers} but the "
             "export has no mtp.* tensors. Pass the in-memory model or the "
             "original HF source (only the MTP shard is read, not the full 27B)."
+        )
+    if missing_shards and not set(existing).issubset(tensors):
+        missing = sorted(set(existing) - tensors.keys())
+        raise BackendError(
+            f"cannot repair indexed MTP shard(s): {len(missing)} tensor(s) "
+            f"missing from the source (first {missing[0]})"
         )
 
     shard = root / MTP_SHARD_NAME

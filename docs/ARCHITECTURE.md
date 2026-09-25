@@ -140,8 +140,10 @@ Default ignore for `qwen3_5` (language-model W4A8):
 
 After `export_hf_checkpoint`, `megaquant.vision_export.restore_vision` copies
 the skipped Qwen3.5 `model.visual.*` BF16 weights from the original HF source
-into `vision.safetensors`. `megaquant.mtp_export.restore_bf16_mtp` copies
-ignored `mtp.*` weights back from the in-memory module or original HF source.
+into `vision.safetensors`, restores the image/video processor configs, and
+sets `language_model_only: false` in the exported config.
+`megaquant.mtp_export.restore_bf16_mtp` copies ignored `mtp.*` weights back
+from the in-memory module or original HF source.
 Both shards are indexed in `model.safetensors.index.json`. A sibling
 `<export>-draft` directory is a 1-layer SGLang speculative draft
 (`--speculative-draft-model-path`).
