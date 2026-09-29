@@ -52,10 +52,20 @@ Finished journals:
 | CUDA ≥ 12.9 | `recipes/eval-gpqa-diamond.yaml` (FlashInfer, HiCache 12 GiB, concurrency 1) |
 | 32 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.5090.yaml` (Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off) |
 | 80 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.6000d.yaml` (Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off) |
+| DGX Spark ARM64 / SM121 / CUDA 13 | `recipes/eval-gpqa-diamond.spark.yaml` (32k context, vision, 4 requests, 0.70 memory, no HiCache/CUDA graphs; optional embedded EAGLE MTP) |
 
 Compose default image is CUDA **12.8.1**. That build does not include a CUDA 13 FlashInfer toolchain. Optional rebuild: `SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04`. Leave the 12.8 default in place unless asked.
 
 `megaquant serve` does not add `--speculative-draft-model-path`.
+
+Spark serving uses `Dockerfile.sglang.spark` and the `serve-sglang-spark` Compose
+service, independently of the PTQ image. The base is pinned by digest; the
+version-specific loader patch must fail on unrecognized sources. Do not claim
+vision or quantized MTP serving from export coverage or an import check alone.
+Spark CPU and GPU share RAM: do not enable automatic host HiCache allocation.
+The Spark recipe is TP1; a two-node TP2 deployment needs explicit distributed
+configuration. Optional `serve.speculative_*` fields enable embedded MTP, without
+adding an external draft path.
 
 ## MTP
 

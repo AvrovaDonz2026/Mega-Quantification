@@ -168,6 +168,64 @@ def test_6000d_recipe_keeps_cuda_graph_and_skips_flashinfer_fusion() -> None:
     }
 
 
+def test_spark_recipe_serves_images_without_double_budgeting_unified_memory(monkeypatch) -> None:
+    recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.spark.yaml")
+
+    def reject_host_memory_budget(*_args, **_kwargs):
+        pytest.fail("HiCache must not budget Spark CPU/GPU shared memory twice")
+
+    monkeypatch.setattr("megaquant.eval_gpqa.auto_kv_offload_gib", reject_host_memory_budget)
+    argv = serve_argv_from_recipe(recipe)
+    assert argv[:2] == ["sglang", "serve"]
+    assert argv[argv.index("--model-path") + 1] == recipe.model
+    assert argv[argv.index("--tp-size") + 1] == "1"
+    assert argv[argv.index("--mem-fraction-static") + 1] == "0.7"
+    assert argv[argv.index("--context-length") + 1] == "32768"
+    assert argv[argv.index("--max-running-requests") + 1] == "4"
+    assert argv[argv.index("--attention-backend") + 1] == "flashinfer"
+    assert argv[argv.index("--linear-attn-backend") + 1] == "triton"
+    assert argv[argv.index("--quantization") + 1] == "modelopt"
+    assert "--enable-multimodal" in argv
+    assert "--disable-cuda-graph" in argv
+    assert "--enable-hierarchical-cache" not in argv
+    assert "--hicache-size" not in argv
+    assert not any(arg.startswith("--speculative-") for arg in argv)
+    plan = describe_eval(recipe)
+    assert plan["kv_cpu_offload_gib"] == 0
+    assert plan["kv_offloading_backend"] == "none"
+    assert sglang_serve_environ(recipe) == {"SGLANG_ENABLE_JIT_DEEPGEMM": "0"}
+
+
+@pytest.mark.parametrize("quantization", [None, "modelopt", "modelopt_mixed"])
+def test_sglang_recipe_honors_quantization_and_multimodal_options(quantization) -> None:
+    recipe = load_eval_recipe(RECIPE)
+    recipe.serve.quantization = quantization
+    recipe.serve.enable_multimodal = False
+    argv = sglang_serve_argv_from_recipe(recipe)
+    assert "--enable-multimodal" not in argv
+    if quantization is None:
+        assert "--quantization" not in argv
+    else:
+        assert argv[argv.index("--quantization") + 1] == quantization
+    recipe.serve.enable_multimodal = True
+    assert "--enable-multimodal" in sglang_serve_argv_from_recipe(recipe)
+
+
+def test_sglang_recipe_can_opt_into_embedded_mtp() -> None:
+    recipe = load_eval_recipe(REPO / "recipes" / "eval-gpqa-diamond.spark.yaml")
+    recipe.serve.speculative_algorithm = "EAGLE"
+    recipe.serve.speculative_num_steps = 2
+    recipe.serve.speculative_eagle_topk = 1
+    recipe.serve.speculative_num_draft_tokens = 3
+    argv = sglang_serve_argv_from_recipe(recipe)
+    assert argv[argv.index("--speculative-algorithm") + 1] == "EAGLE"
+    assert argv[argv.index("--speculative-num-steps") + 1] == "2"
+    assert argv[argv.index("--speculative-eagle-topk") + 1] == "1"
+    assert argv[argv.index("--speculative-num-draft-tokens") + 1] == "3"
+    # SGLang selects the embedded Qwen MTP from the target export.
+    assert "--speculative-draft-model-path" not in argv
+
+
 def test_remaining_tokens_never_uses_small_default_cap() -> None:
     assert remaining_new_tokens(2000, 262144, 0) == 260144
     assert remaining_new_tokens(2000, 262144, None) == 260144

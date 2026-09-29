@@ -98,3 +98,23 @@ def test_serve_sglang_attaches_the_gpu() -> None:
     assert "eval-gpqa-diamond.5090.yaml" not in cmd
     assert HUB_BF16 not in cmd
     assert LOCAL_EXPORT in cmd
+
+
+def test_spark_services_share_arm64_image_but_only_serve_attaches_gpu() -> None:
+    _text, data = _load()
+    serve = data["services"]["serve-sglang-spark"]
+    client = data["services"]["eval-gpqa-spark"]
+    assert _has_gpu_attach(serve)
+    assert not _has_gpu_attach(client)
+    assert serve["image"] == client["image"]
+    for service in (serve, client):
+        assert service["platform"] == "linux/arm64"
+        assert service["profiles"] == ["spark"]
+        assert service["build"]["dockerfile"] == "Dockerfile.sglang.spark"
+        assert "v0.5.20-cu130@sha256:" in service["build"]["args"]["BASE_IMAGE"]
+        assert "eval-gpqa-diamond.spark.yaml" in " ".join(service["command"])
+        assert "Qwen3.8-27B-NVFP4-W4A8-spark" in " ".join(service["command"])
+    env = client["environment"]
+    assert env["NVIDIA_VISIBLE_DEVICES"] == ""
+    assert env["MEGAQUANT_SKIP_GPU_REPORT"] == "1"
+    assert "serve-sglang-spark:30000/v1" in env["MEGAQUANT_SGLANG_BASE_URL"]

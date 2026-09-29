@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: host-check install-host build plan quantize mixed w4a4 serve-sglang serve-vllm eval-gpqa fetch-export fetch-gpqa shell image-tar test
+.PHONY: host-check install-host build plan quantize mixed w4a4 serve-sglang serve-sglang-spark eval-gpqa-spark serve-vllm eval-gpqa fetch-export fetch-gpqa shell image-tar test
 
 test:
 	$(PYTHON) -m pytest
@@ -30,6 +30,12 @@ serve-sglang:
 	docker compose --profile gpu up serve-sglang
 
 serve-vllm: serve-sglang
+
+serve-sglang-spark:
+	docker compose --profile spark up serve-sglang-spark
+
+eval-gpqa-spark:
+	docker compose --profile spark run --rm eval-gpqa-spark
 
 eval-gpqa:
 	docker compose --profile gpu run --rm eval-gpqa

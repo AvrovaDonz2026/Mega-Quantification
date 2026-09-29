@@ -1,11 +1,13 @@
 # Docker
 
-两套镜像，换机器时先装驱动，再跑 `install-host.sh`，然后 `compose build` 或 `image load`。权重、校准数据和导出留在宿主机，不进镜像。
+量化和推理使用独立镜像，换机器时先装驱动，再跑 `install-host.sh`，然后 `compose build` 或 `image load`。权重、校准数据和导出留在宿主机，不进镜像。
 
 | 镜像 | 用途 |
 |---|---|
 | `megaquant:nvfp4` | `plan` / `quantize` / `mixed` / `w4a4`（nvidia-modelopt） |
 | `megaquant:sglang` | `serve-sglang` / `eval-gpqa` / `fetch-export` / `fetch-gpqa` |
+| `megaquant:gb10` | DGX Spark ARM64 / CUDA 13 量化 |
+| `megaquant:sglang-spark` | DGX Spark 的 `serve-sglang-spark` / `eval-gpqa-spark` |
 
 SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 把 `RECIPE` 指到 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
 
@@ -112,6 +114,41 @@ python scripts/prepare_multimodal_calibration.py \
 NVFP4 presets；Spark 镜像单独使用 `docker/requirements-gpu-spark.txt`，
 不会改变 5090 镜像的 ModelOpt 0.46.1 pin。FLA/causal-conv1d 没有 ARM64
 预编译包时，PTQ 会使用 Transformers 的 PyTorch fallback；这只影响速度。
+
+### Spark SGLang 服务
+
+`Dockerfile.sglang.spark` 使用官方 `lmsysorg/sglang:v0.5.20-cu130`，固定
+多架构镜像 digest，保留其 ARM64 PyTorch、SGLang 和 CUDA 13 内核。
+镜像内对该版本的视觉/MTP ModelOpt 加载器应用兼容补丁，构建时验证源文件；
+更换 `SGLANG_SPARK_BASE_IMAGE` 后若源码不匹配，构建会停止。
+[NVIDIA Spark SGLang 指南](https://build.nvidia.com/spark/sglang/instructions)
+也使用 CUDA 13 镜像。
+
+```bash
+docker compose --profile spark build serve-sglang-spark
+docker compose --profile spark run --rm --entrypoint python serve-sglang-spark \
+  scripts/check_sglang_spark.py
+docker compose --profile spark up -d serve-sglang-spark
+docker compose --profile spark logs -f serve-sglang-spark
+# 服务就绪后再评测；此客户端不挂 GPU
+docker compose --profile spark run --rm eval-gpqa-spark
+```
+
+默认加载 `outputs/Qwen3.8-27B-NVFP4-W4A8-spark`。通过 `OUTPUTS_DIR`
+指定宿主机的导出目录，通过 `SPARK_EVAL_MODEL` 选择目录内的 W4A4 或 W4A8
+产物。`SPARK_EVAL_RECIPE` 和 `SGLANG_SPARK_PORT` 分别覆盖配方和端口。
+也可使用 `make serve-sglang-spark` / `make eval-gpqa-spark`。
+
+Spark 配方启用视觉，初始上下文 32768、并发 4、静态内存比例 0.70，关闭
+CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存机器的
+自动主机缓存预算。该配方的上下文限制与 262144 的完整 GPQA 配方不同，
+分数不能直接视为同一评测设置。环境检查通过只表示 CUDA 和基础依赖可用；
+必须继续验证实际权重加载、文本和图片请求。
+
+单台 Spark 有一颗 GPU，配方默认 TP1。跨两台 Spark 的 TP2 还需要两端
+一致的镜像/权重、分布式初始化地址和网络配置，不能只把本配方的 TP 改成 2。
+MTP 默认为关闭；文本/图片通过后，可在配方中启用注释列出的 EAGLE 参数，
+使用完整导出里的 `mtp.*`。量化 MTP 不应指向丢失量化元数据的 BF16 draft。
 
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 

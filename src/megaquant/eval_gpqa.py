@@ -152,7 +152,14 @@ class EvalServe(StrictModel):
     enable_auto_tool_choice: bool = True
     tool_call_parser: str = "qwen3_coder"
     mm_encoder_tp_mode: str = "data"
+    enable_multimodal: bool = False
     quantization: str | None = "modelopt"
+    # Embedded Qwen MTP uses EAGLE with the target checkpoint as its draft.
+    # Leave unset until the selected runtime/checkpoint has been validated.
+    speculative_algorithm: str | None = None
+    speculative_num_steps: int | None = Field(default=None, gt=0)
+    speculative_eagle_topk: int | None = Field(default=None, gt=0)
+    speculative_num_draft_tokens: int | None = Field(default=None, gt=0)
     tensor_parallel_size: int | None = None
     attention_backend: str | None = "flashinfer"
     sampling_backend: str | None = None
@@ -375,9 +382,17 @@ def default_eval_base_url(recipe: EvalRecipe | None = None) -> str:
 
 
 def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
-    kv_backend = recipe.serve.kv_offloading_backend
+    kv_backend = (recipe.serve.kv_offloading_backend or "native").strip().lower()
+    if recipe.serve.engine == "sglang" and not recipe.serve.enable_hierarchical_cache:
+        kv_backend = "none"
     if recipe.serve.engine == "sglang" and kv_backend in {"native", "hicache", ""}:
         kv_backend = "hicache"
+    kv_ram = 0
+    if kv_backend not in {"none", "off", "false"}:
+        kv_ram = auto_kv_offload_gib(
+            recipe.serve.cpu_reserve_gib,
+            explicit_gb=recipe.serve.kv_offloading_size_gb,
+        )
     return {
         "name": recipe.name,
         "benchmark": recipe.benchmark,
@@ -399,10 +414,7 @@ def describe_eval(recipe: EvalRecipe) -> dict[str, Any]:
         "official_thinking_sampling": QWEN_THINKING_SAMPLING,
         "official_sglang_serve": NVIDIA_SGLANG_SERVE,
         "official_vllm_serve": NVIDIA_VLLM_SERVE,
-        "kv_cpu_offload_gib": auto_kv_offload_gib(
-            recipe.serve.cpu_reserve_gib,
-            explicit_gb=recipe.serve.kv_offloading_size_gb,
-        ),
+        "kv_cpu_offload_gib": kv_ram,
         "concurrency": recipe.concurrency,
         "journal_dir": str(gpqa_trace_dir(recipe.model, recipe.output_dir)),
         "kv_offloading_backend": kv_backend,
@@ -540,6 +552,12 @@ def sglang_serve_argv(
     chunked_prefill_size: int | None = None,
     reasoning_parser: str | None = None,
     tool_call_parser: str | None = None,
+    enable_multimodal: bool = False,
+    quantization: str | None = None,
+    speculative_algorithm: str | None = None,
+    speculative_num_steps: int | None = None,
+    speculative_eagle_topk: int | None = None,
+    speculative_num_draft_tokens: int | None = None,
     mamba_full_memory_ratio: float | None = None,
     mamba_radix_cache_strategy: str | None = None,
     mamba_ssm_dtype: str | None = None,
@@ -565,7 +583,6 @@ def sglang_serve_argv(
     ``--enable-hierarchical-cache`` with ``--hicache-size`` = MemTotal − reserve.
     """
     length = int(context_length or NVIDIA_SGLANG_SERVE["context_length"])
-    kv_ram = auto_kv_offload_gib(cpu_reserve_gib, explicit_gb=kv_offloading_size_gb)
     argv = [
         "sglang",
         "serve",
@@ -612,6 +629,19 @@ def sglang_serve_argv(
         "--mamba-ssm-dtype",
         str(mamba_ssm_dtype or NVIDIA_SGLANG_SERVE["mamba_ssm_dtype"]),
     ]
+    if enable_multimodal:
+        argv.append("--enable-multimodal")
+    if quantization:
+        argv.extend(["--quantization", quantization])
+    if speculative_algorithm:
+        argv.extend(["--speculative-algorithm", speculative_algorithm])
+    for flag, value in (
+        ("--speculative-num-steps", speculative_num_steps),
+        ("--speculative-eagle-topk", speculative_eagle_topk),
+        ("--speculative-num-draft-tokens", speculative_num_draft_tokens),
+    ):
+        if value is not None:
+            argv.extend([flag, str(value)])
     ratio = (
         NVIDIA_SGLANG_SERVE["mamba_full_memory_ratio"]
         if mamba_full_memory_ratio is None
@@ -642,6 +672,7 @@ def sglang_serve_argv(
         argv.extend(["--max-mamba-cache-size", str(int(max_mamba_cache_size))])
     offload = (kv_offloading_backend or "native").strip().lower()
     if enable_hierarchical_cache and offload not in {"none", "off", "false"}:
+        kv_ram = auto_kv_offload_gib(cpu_reserve_gib, explicit_gb=kv_offloading_size_gb)
         argv.extend(["--enable-hierarchical-cache", "--hicache-size", str(kv_ram)])
     if disable_cuda_graph:
         argv.append("--disable-cuda-graph")
@@ -676,6 +707,12 @@ def sglang_serve_argv_from_recipe(
         chunked_prefill_size=serve.chunked_prefill_size,
         reasoning_parser=serve.reasoning_parser,
         tool_call_parser=serve.tool_call_parser,
+        enable_multimodal=serve.enable_multimodal,
+        quantization=serve.quantization,
+        speculative_algorithm=serve.speculative_algorithm,
+        speculative_num_steps=serve.speculative_num_steps,
+        speculative_eagle_topk=serve.speculative_eagle_topk,
+        speculative_num_draft_tokens=serve.speculative_num_draft_tokens,
         mamba_full_memory_ratio=serve.mamba_full_memory_ratio,
         mamba_radix_cache_strategy=serve.mamba_radix_cache_strategy,
         mamba_ssm_dtype=serve.mamba_ssm_dtype,
