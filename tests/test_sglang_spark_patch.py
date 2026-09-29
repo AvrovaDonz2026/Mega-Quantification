@@ -185,6 +185,12 @@ def test_vision_uses_explicit_quantization_without_mutating_text_config():
     visual = helper(cfg)
     assert visual is not cfg
     assert visual.quantized_layers[key + "_proj"] == {"quant_algo": "FP8"}
+    assert visual.quantized_layers["visual.blocks.0.attn.qkv_proj"] == {
+        "quant_algo": "FP8"
+    }
+    assert visual.quantized_layers["model.visual.blocks.0.attn.qkv_proj"] == {
+        "quant_algo": "FP8"
+    }
     assert key + "_proj" not in cfg.quantized_layers
     assert helper(QuantConfig("modelopt_mixed", {"model.layers.0": {}})) is None
     assert helper(QuantConfig("gptq", {key: {}})) is None

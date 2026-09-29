@@ -56,19 +56,28 @@ def _megaquant_vision_quant_config(quant_config):
     if not any(key.startswith(("model.visual.", "visual.")) for key in layers):
         return None
     if name == "modelopt_mixed":
-        # The text loader has a different prefix map.  Keep its config intact.
+        # The text loader has a different prefix map.  Keep its config intact,
+        # while retaining both names: SGLang's loader maps checkpoint keys to
+        # ``visual.*`` but the vision module constructs layers as
+        # ``model.visual.*``.
         from copy import deepcopy
 
         quant_config = deepcopy(quant_config)
         for key, value in list(quant_config.quantized_layers.items()):
-            if key.startswith(("model.visual.", "visual.")):
-                mapped = (
-                    key[: -len(".attn.qkv")] + ".attn.qkv_proj"
-                    if key.endswith(".attn.qkv")
-                    else key
-                )
-                if mapped != key:
-                    quant_config.quantized_layers[mapped] = value
+            if not key.startswith(("model.visual.", "visual.")):
+                continue
+            mapped = (
+                key[: -len(".attn.qkv")] + ".attn.qkv_proj"
+                if key.endswith(".attn.qkv")
+                else key
+            )
+            aliases = {mapped}
+            if mapped.startswith("model.visual."):
+                aliases.add(mapped[len("model.") :])
+            elif mapped.startswith("visual."):
+                aliases.add("model." + mapped)
+            for alias in aliases:
+                quant_config.quantized_layers.setdefault(alias, value)
     return quant_config
 
 '''
