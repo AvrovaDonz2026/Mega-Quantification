@@ -473,7 +473,10 @@ def restore_bf16_mtp(
         note["source_repo"] = source_id
 
     if quantize_mtp:
-        note["method"] = "skipped-quantize-mtp"
+        # ModelOpt exports attached standalone MTP modules directly into the
+        # main HF index. Keep the legacy method for an empty export so callers
+        # can distinguish a successful quantized export from a missing block.
+        note["method"] = "modelopt-export" if existing else "skipped-quantize-mtp"
         _write_json(root / NOTE_NAME, note)
         return note
 

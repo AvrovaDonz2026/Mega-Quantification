@@ -171,6 +171,55 @@ _MIXED_ATTN_PATTERNS = ("*self_attn*", "*linear_attn*")
 _MIXED_NVFP4_PATTERNS = ("*mlp*", "*lm_head*")
 
 
+@contextmanager
+def _auxiliary_calibration_coverage(model: Any, recipe: Any):
+    """Fail closed if enabled vision/MTP activation quantizers never execute."""
+    model_spec = _attr(recipe, "model", None)
+    required = []
+    if _flag(model_spec, "quantize_vision", False):
+        required.append("vision")
+    if _flag(model_spec, "quantize_mtp", False):
+        required.append("mtp")
+    counts: dict[str, int] = {}
+    groups: dict[str, list[str]] = {name: [] for name in required}
+    handles = []
+
+    def record(name: str):
+        def hook(_module: Any, _args: Any, _output: Any) -> None:
+            counts[name] += 1
+        return hook
+
+    try:
+        if required:
+            for name, module in model.named_modules():
+                group = "mtp" if "mtp" in name else "vision" if any(
+                    part in name for part in ("visual", "vision")
+                ) else None
+                if group not in groups or not name.endswith("input_quantizer"):
+                    continue
+                if not getattr(module, "is_enabled", False):
+                    continue
+                counts[name] = 0
+                groups[group].append(name)
+                handles.append(module.register_forward_hook(record(name)))
+        yield
+        for group, names in groups.items():
+            missing = [name for name in names if counts[name] == 0]
+            if not names or missing:
+                detail = ", ".join(missing[:5]) or "no enabled input quantizers"
+                raise BackendError(f"{group} activation calibration did not run: {detail}")
+        if required:
+            report = {group: {name: counts[name] for name in names}
+                      for group, names in groups.items()}
+            model._megaquant_calibration_coverage = report
+            print("[megaquant] auxiliary calibration coverage: " + ", ".join(
+                f"{group}={len(names)}" for group, names in groups.items()
+            ), flush=True)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+
 def canonicalize_scheme(scheme_name: str) -> str:
     key = (scheme_name or "").strip().lower().replace("-", "_")
     return SCHEME_ALIASES.get(key, key)
@@ -584,13 +633,16 @@ def _apply_ignores(cfg: dict[str, Any], ignore: list[str]) -> None:
 
 
 def _apply_opt_in_enables(cfg: dict[str, Any], recipe: Any) -> None:
-    """Re-enable vision/MTP if the recipe opted in (overrides preset default disables)."""
+    """Opt in projection weights/inputs without enabling KV/output quantizers."""
     model = _attr(recipe, "model", None)
+    patterns: list[str] = []
     if _flag(model, "quantize_vision", False):
-        for pattern in ("*visual*", "*vision*", "*vision_tower*", "*vision_model*"):
-            _append_entry(cfg, {"quantizer_name": pattern, "enable": True})
+        patterns.extend(("*visual*", "*vision*", "*vision_tower*", "*vision_model*"))
     if _flag(model, "quantize_mtp", False):
-        _append_entry(cfg, {"quantizer_name": "*mtp*", "enable": True})
+        patterns.append("*mtp*")
+    for pattern in patterns:
+        for suffix in ("weight_quantizer", "input_quantizer"):
+            _append_entry(cfg, {"quantizer_name": pattern + suffix, "enable": True})
 
 
 def _reenable_lm_head(
@@ -1031,8 +1083,10 @@ class ModelOptBackend:
             _apply_mixed_w4a16(cfg)
 
         ignore = _collect_ignore(plan, recipe)
-        _apply_ignores(cfg, ignore)
         _apply_opt_in_enables(cfg, recipe)
+        # Embeddings, patch embedding convolutions and explicit user ignores
+        # must still win when the containing vision/MTP block is opted in.
+        _apply_ignores(cfg, ignore)
 
         if canonical not in _SGLANG_MIXED_EXPORT and not _lm_head_ignored(ignore):
             weight_attr, input_attr = _weight_input_attrs(cfg)
@@ -1052,7 +1106,20 @@ class ModelOptBackend:
                 "Install with: pip install megaquant[modelopt]"
             )
         cfg = copy.deepcopy(self.build_quant_cfg(plan))
-        forward_loop = forward_loop_from_iter(calib_iter)
+        recipe = _recipe_of(plan)
+        run_batches = forward_loop_from_iter(calib_iter)
+
+        def forward_loop(calibration_model: Any) -> None:
+            from contextlib import nullcontext
+
+            from megaquant.mtp_model import mtp_calibration
+
+            mtp_context = mtp_calibration(calibration_model) if _flag(
+                _attr(recipe, "model", None), "quantize_mtp", False
+            ) else nullcontext()
+            with _auxiliary_calibration_coverage(calibration_model, recipe), mtp_context:
+                run_batches(calibration_model)
+
         return mtq.quantize(model, cfg, forward_loop=forward_loop)
 
     def export(self, model: Any, recipe: Any, tokenizer: Any = None) -> Path:
@@ -1066,6 +1133,11 @@ class ModelOptBackend:
 
         output_dir = _output_dir(recipe)
         output_dir.mkdir(parents=True, exist_ok=True)
+        coverage = getattr(model, "_megaquant_calibration_coverage", None)
+        if coverage is not None:
+            (output_dir / "calibration_coverage.json").write_text(
+                json.dumps(coverage, indent=2) + "\n"
+            )
         qwen35 = _prepare_qwen35_export(model)
         _prepare_export_memory(model)
         import torch

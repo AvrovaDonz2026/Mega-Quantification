@@ -48,6 +48,71 @@ docker compose --profile gpu run --rm eval-gpqa
 
 `docker compose up` 默认只跑 `plan`，不会误触发 27B 校准。
 
+## DGX Spark / GB10
+
+DGX Spark 是 ARM64、CUDA 13、SM 12.1 的统一内存机器。用
+`Dockerfile.spark` 保留仓库的 `megaquant quantize` 流程，避免默认
+CUDA 12.8/cu128 镜像把 ARM64 的 PyTorch 替换掉：
+
+```bash
+# Spark 上已有 quant-env:gb10 时可离线构建
+DOCKER_BUILDKIT=0 docker build \
+  --build-arg BASE_IMAGE=quant-env:gb10 \
+  --build-arg INSTALL_SPARK_DEPS=0 \
+  -f Dockerfile.spark -t megaquant:gb10 .
+
+# 纯净环境可使用多架构 NGC PyTorch（需要能访问 NGC / PyPI）
+docker build \
+  --build-arg BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3 \
+  --build-arg INSTALL_SPARK_DEPS=1 \
+  -f Dockerfile.spark -t megaquant:gb10 .
+```
+
+权重和校准集挂载到容器，统一内存下建议先给 Accelerate 一个明确预算，
+避免把同一块 UMA 同时当成完整 GPU 池和完整 CPU 池：
+
+```bash
+docker run --rm --gpus all --ipc=host --shm-size=64g \
+  -e MEGAQUANT_LOW_MEMORY=1 \
+  -e MEGAQUANT_MAX_MEMORY=0:96GiB,cpu:24GiB \
+  -e MEGAQUANT_OFFLOAD_DIR=/opt/megaquant/offload \
+  -v /path/to/models:/models:ro \
+  -v /path/to/calibration:/data:ro \
+  -v "$PWD/outputs:/opt/megaquant/outputs" \
+  -v "$PWD/offload:/opt/megaquant/offload" \
+  megaquant:gb10 quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml \
+  --model /models/Qwen3.8-27B
+```
+
+混合 NVFP4/FP8 使用 `recipes/qwen3.8-27b-nvfp4-w4a8.spark.yaml`。
+两个 Spark 配方都要求图像校准：把 `calibration.jsonl` 和图片一起挂载到
+`/data`，例如一行 `{"image":"images/example.png","text":"Describe this image."}`。
+允许混入文本行。MTP 使用真实 target hidden states 和下一 token embedding
+执行校准；`calibration_coverage.json` 记录视觉/MTP 各激活量化器的调用次数。
+视觉位置嵌入与 patch embedding 保持 BF16。
+
+可从固定版本的 [COCO-Caption2017](https://huggingface.co/datasets/lmms-lab/COCO-Caption2017/tree/3bdd5827e243cc3084ac69a1111e69c3ab9193ff)
+生成 128 图像 + 128 文本的数据目录。先下载 `data/val-00000-of-00002.parquet`，
+再执行（需要 `pyarrow` 和 `Pillow`）：
+
+```bash
+python scripts/prepare_multimodal_calibration.py \
+  --parquet /path/to/coco-val-00000.parquet \
+  --output-dir /path/to/calibration \
+  --source-dataset lmms-lab/COCO-Caption2017 \
+  --source-revision 3bdd5827e243cc3084ac69a1111e69c3ab9193ff \
+  --expected-parquet-sha256 c60673a81babec10030027aafe5369d7c89955efa925f9af43501b52c51994a3 \
+  --text-jsonl /path/to/text-calibration.jsonl
+```
+
+固定种子为 42，图像最长边 448，文本最多 600 字符；manifest 包含源文件和
+每张图片的 SHA256。该数据用于验证量化流程，模型质量和 MTP 接受率需另做评测。
+
+`TORCH_CUDA_ARCH_LIST=12.1` 已写入 Spark 镜像。ModelOpt 0.47 支持仓库的
+NVFP4 presets；Spark 镜像单独使用 `docker/requirements-gpu-spark.txt`，
+不会改变 5090 镜像的 ModelOpt 0.46.1 pin。FLA/causal-conv1d 没有 ARM64
+预编译包时，PTQ 会使用 Transformers 的 PyTorch fallback；这只影响速度。
+
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
 ```bash

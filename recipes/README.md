@@ -12,8 +12,10 @@ change when a hardware profile is added. Groups below are the public index.
 | `qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | Default. SGLang mixed map: NVFP4 group 16 on MLP + `lm_head`, FP8 attention, `MIXED_PRECISION` export. |
 | `qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | Same map, packed for a 32 GB GPU (ultrachat 256×1024, batch 1). |
 | `qwen3.8-27b-nvfp4-w4a8.public-calib.yaml` | `nvfp4_w4a8` | Same map, anonymous ultrachat calibration. |
+| `qwen3.8-27b-nvfp4-w4a8.spark.yaml` | `nvfp4_w4a8` | GB10 mixed W4A8 map: NVFP4 MLP/LM head + FP8 attention, with vision and MTP opted in. |
 | `qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | Uniform NVFP4 W4A4, group 16. SGLang `modelopt_fp4`. |
 | `qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | Uniform W4A4 packed for 32 GB. |
+| `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `nvfp4_w4a4` | GB10 profile: quantizes language, vision, and MTP with ModelOpt 0.47; uses local `/models` and `/data` mounts. |
 | `qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | Uniform W4A4, anonymous ultrachat. |
 | `qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | Same layer map as `nvfp4_w4a8`. Local-Hessian + Nemotron v3. Needs a larger GPU than 32 GB. |
 | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB PTQ: algorithm `max`, ultrachat 256×1024, batch 1. Restores BF16 vision + MTP. Writes `outputs/Qwen3.8-27B-NVFP4-W4A8`. |

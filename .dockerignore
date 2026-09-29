@@ -23,5 +23,8 @@ models
 *.tar
 *.tar.gz
 offload_folder
+offload
+calibration
+logs
 docker-compose.override.yml
 .github
