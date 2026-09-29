@@ -922,18 +922,60 @@ def _has_accelerate_offload(model: Any) -> bool:
 def _prepare_qwen35_export(model: Any) -> bool:
     if type(model).__name__ != "Qwen3_5ForConditionalGeneration":
         return False
-    from transformers.models.qwen3_5 import modeling_qwen3_5 as qwen35
+    try:
+        from transformers.models.qwen3_5 import modeling_qwen3_5 as qwen35
+    except (ImportError, AttributeError) as exc:
+        raise BackendError(
+            "Qwen3.5 export requires the Transformers 5.8-5.14 Qwen3.5 API; "
+            "install 'transformers>=5.8,<5.15'"
+        ) from exc
+
+    gdn_cls = getattr(qwen35, "Qwen3_5GatedDeltaNet", None)
+    if not isinstance(gdn_cls, type):
+        raise BackendError(
+            "Qwen3.5 export cannot find Qwen3_5GatedDeltaNet in Transformers; "
+            "install 'transformers>=5.8,<5.15'"
+        )
+
+    def torch_fallback(name: str) -> Any:
+        function = getattr(qwen35, name, None)
+        if not callable(function):
+            raise BackendError(
+                f"Qwen3.5 export requires transformers.models.qwen3_5.{name}; "
+                "this Transformers version has an incompatible GDN API. "
+                "Install 'transformers>=5.8,<5.15'."
+            )
+        return function
+
+    chunk_fallback = torch_fallback("torch_chunk_gated_delta_rule")
+    recurrent_fallback = torch_fallback("torch_recurrent_gated_delta_rule")
+    gdn_modules = [module for module in model.modules() if isinstance(module, gdn_cls)]
+    for module in gdn_modules:
+        # Transformers >= 5.15 dispatches through module-level functions.
+        # Adding the old instance attributes there would silently do nothing.
+        # Validate every layer before changing any layer or config.
+        missing = [name for name in (
+            "chunk_gated_delta_rule", "recurrent_gated_delta_rule",
+            "causal_conv1d_fn", "causal_conv1d_update",
+        ) if not hasattr(module, name)]
+        if missing:
+            raise BackendError(
+                "Qwen3.5 export needs the Transformers 5.8-5.14 instance GDN API; "
+                f"{type(module).__name__} is missing {missing}. "
+                "Install 'transformers>=5.8,<5.15'."
+            )
 
     inner = getattr(model, "model", None)
     for module in (model, inner, getattr(inner, "language_model", None)):
         config = getattr(module, "config", None)
         if config is not None and getattr(config, "architectures", None) is None:
             config.architectures = [type(module).__name__]
-    for module in model.modules():
-        if not isinstance(module, qwen35.Qwen3_5GatedDeltaNet):
-            continue
-        module.chunk_gated_delta_rule = qwen35.torch_chunk_gated_delta_rule
-        module.recurrent_gated_delta_rule = qwen35.torch_recurrent_gated_delta_rule
+    for module in gdn_modules:
+        # ModelOpt's export tracing must use the deterministic PyTorch GDN
+        # path.  The default may be a FLA/Hub kernel whose API differs across
+        # Transformers releases and whose Triton kernels cannot be traced.
+        module.chunk_gated_delta_rule = chunk_fallback
+        module.recurrent_gated_delta_rule = recurrent_fallback
         module.causal_conv1d_fn = None
         module.causal_conv1d_update = None
     return True
@@ -946,7 +988,7 @@ def _qwen35_export_l2norm(enabled: bool):
         return
     try:
         import fla.modules.l2norm as l2norm
-        import torch.nn.functional as functional
+        import torch
     except ImportError:
         yield
         return
@@ -954,8 +996,15 @@ def _qwen35_export_l2norm(enabled: bool):
     original = l2norm.l2norm_fwd
 
     def torch_l2norm(x: Any, eps: float = 1e-6, output_dtype: Any = None) -> Any:
-        result = functional.normalize(x, p=2, dim=-1, eps=eps)
-        return result.to(output_dtype) if output_dtype is not None else result
+        # FLA's L2NormFunction unpacks ``(y, rstd)`` and its backward path
+        # consumes the saved reciprocal norm.  Keep the calculation in
+        # fp32, matching the Triton implementation, and restore the requested
+        # output dtype for y while retaining fp32 rstd.
+        x_float = x.float()
+        rstd = torch.rsqrt((x_float * x_float).sum(dim=-1, keepdim=True) + eps)
+        result = x_float * rstd
+        result = result.to(output_dtype) if output_dtype is not None else result.to(x.dtype)
+        return result, rstd.squeeze(-1)
 
     l2norm.l2norm_fwd = torch_l2norm
     try:
@@ -994,6 +1043,7 @@ def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) 
     need = max(1, int(min_free_gib)) * 1024**3
     if free is None or free >= need:
         return "cuda"
+    free_before = free
     named = getattr(model, "named_modules", None)
     modules: list[Any] = []
     if callable(named):
@@ -1003,11 +1053,12 @@ def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) 
             modules = []
     if not modules:
         modules = [model]
+    moved = False
     for module in reversed(modules):
         free = _cuda_free_bytes()
         if free is None or free >= need:
             break
-        _module_to_cpu(module)
+        moved = _module_to_cpu(module) or moved
         try:
             cuda.empty_cache()
         except Exception:
@@ -1016,7 +1067,9 @@ def _prepare_export_memory(model: Any, min_free_gib: int = EXPORT_MIN_FREE_GIB) 
     free = _cuda_free_bytes()
     if free is not None and free >= need:
         return "cuda-freed"
-    return "partial-cpu"
+    if moved and free is not None and free > free_before:
+        return "partial-cpu"
+    return "cuda-unchanged"
 
 
 def _restore_mtp_export(output_dir: Path, model: Any, recipe: Any) -> dict[str, Any] | None:
@@ -1139,17 +1192,42 @@ class ModelOptBackend:
                 json.dumps(coverage, indent=2) + "\n"
             )
         qwen35 = _prepare_qwen35_export(model)
-        _prepare_export_memory(model)
+        export_memory_kind = _prepare_export_memory(model)
         import torch
 
+        export_oom_message = None
         try:
             with _qwen35_export_l2norm(qwen35), torch.inference_mode():
                 _call_export_hf(export_hf_checkpoint, model, output_dir)
         except Exception as exc:
             if not _is_cuda_oom(exc):
                 raise
+            # Only retain text. Leaving the except block releases the failed
+            # export traceback and its temporary tensors before recovery.
+            export_oom_message = f"{type(exc).__name__}: {exc}"
+
+        if export_oom_message is not None:
             _clear_partial_export(output_dir)
-            _prepare_export_memory(model, min_free_gib=max(EXPORT_MIN_FREE_GIB, 12))
+            if export_memory_kind == "preserve-offload":
+                raise BackendError(
+                    "ModelOpt HF export ran out of CUDA memory while preserving "
+                    "Qwen3.5/Accelerate model placement; refusing to repeat the same export. "
+                    "Increase MEGAQUANT_GPU_HEADROOM_GIB or lower the GPU budget in "
+                    "MEGAQUANT_MAX_MEMORY before loading the model. "
+                    f"Original error: {export_oom_message}"
+                )
+
+            retry_memory_kind = _prepare_export_memory(
+                model, min_free_gib=max(EXPORT_MIN_FREE_GIB, 12)
+            )
+            if retry_memory_kind not in {"cuda-freed", "partial-cpu"}:
+                raise BackendError(
+                    "ModelOpt HF export ran out of CUDA memory and no additional GPU "
+                    f"memory could be released (preparation={retry_memory_kind}); "
+                    "refusing to repeat the same export. Increase MEGAQUANT_GPU_HEADROOM_GIB "
+                    "or lower the GPU budget in MEGAQUANT_MAX_MEMORY before loading "
+                    f"the model. Original error: {export_oom_message}"
+                )
             with _qwen35_export_l2norm(qwen35), torch.inference_mode():
                 _call_export_hf(export_hf_checkpoint, model, output_dir)
 

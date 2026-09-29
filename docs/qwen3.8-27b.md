@@ -10,6 +10,10 @@ DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NV
 
 代理从仓库根目录的 [SKILL.md](../SKILL.md) 读硬约定。
 
+Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
+5.14.1。Transformers 4.x 缺少所需的模型接口。若启动时报告 GDN API 不兼容，
+先重新安装仓库的 `.[hf,modelopt]` 依赖，再重跑；不要跳过错误继续校准。
+
 ## Quantization format
 
 | 张量 | 权重 | 激活 | `quantized_layers` |
@@ -485,7 +489,7 @@ vLLM support for that combo is limited.
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
-| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); CUDA 12.8 SM120: Triton attn + Marlin NVFP4 + `SGLANG_FORCE_FP8_MARLIN`. 32 GB recipe also disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). 80 GB recipe keeps CUDA graph, leaves KV on GPU, uses CUTLASS FP8, and sets `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION` (`eval-gpqa-diamond.6000d.yaml`). |
+| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); both CUDA 12.8 SM120 recipes use Triton attn + Marlin NVFP4, `SGLANG_FORCE_FP8_MARLIN=1`, and `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. The 32 GB recipe disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). The 80 GB recipe keeps CUDA graph, leaves KV on GPU, and uses CUTLASS FP8 (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` once `summary.json` exists and the journal has every row. Truncated and unparsed rows count as wrong. |
 

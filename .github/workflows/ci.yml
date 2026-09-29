@@ -13,8 +13,24 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        # Exercise real tensor export, image calibration, and Qwen3.5 MTP
+        # forwards on the CPU without downloading the CUDA runtime.
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.6"
+          python -m pip install -e ".[dev,test]"
+      - name: Check CPU test dependencies
+        run: |
+          python - <<'PY'
+          import PIL.Image
+          import pyarrow.parquet
+          import safetensors.torch
+          import torch
+          from transformers.models.qwen3_5 import modeling_qwen3_5
+
+          assert torch.version.cuda is None, "CI must use CPU-only PyTorch"
+          assert hasattr(modeling_qwen3_5, "Qwen3_5TextModel")
+          PY
       - name: Ruff
         run: python -m ruff check src tests scripts
       - name: Pytest
-        run: python -m pytest
+        run: python -m pytest -rs

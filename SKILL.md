@@ -37,6 +37,11 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 
 Pinned in `pyproject.toml` and `docker/requirements-gpu.txt`: `nvidia-modelopt[hf]==0.46.1`. Serve image pins `sglang==0.5.20`.
 
+Qwen3.5/3.8 PTQ supports `transformers>=5.8,<5.15`; CPU tests pin 5.14.1.
+Transformers 4.x lacks the required model API. If the GDN hook reports an
+unsupported API, install the declared range before retrying; do not bypass
+the error and continue calibration with unpatched GDN calls.
+
 ## Eval
 
 Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on, `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144 context. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, resume by `item_id`.
@@ -92,7 +97,7 @@ megaquant serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 ```
 
-Tests are CPU-only: `python -m pytest` and `python -m ruff check src tests scripts`.
+Tests are CPU-only: `python3 -m pytest` and `python3 -m ruff check src tests scripts`.
 
 ## Where code lives
 

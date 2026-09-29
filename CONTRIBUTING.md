@@ -6,6 +6,17 @@ Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
 
 ## English
 
+- Install CPU test dependencies in a Python 3.12 virtual environment. On Linux,
+  select the CPU PyTorch wheel before installing the test extra:
+
+  ```bash
+  python3 -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.6'
+  python3 -m pip install -e '.[dev,test]'
+  ```
+
+  On macOS, install `.[dev,test]` directly. This extra includes image/parquet
+  dependencies and pins Transformers 5.14.1 for the CPU MTP forwards. The
+  optional ModelOpt integration test still needs the ModelOpt extra.
 - Run `make test` or `python3 -m pytest` before opening a pull request. Tests
   are CPU-only. `make test` uses `python3` (`PYTHON ?= python3`; override if
   needed). `megaquant plan` and eval `--dry-run` must not download the 27B
@@ -21,6 +32,9 @@ Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
 
 ## 中文
 
+- Python 3.12 虚拟环境中安装 `.[dev,test]`；Linux 先按上面的命令安装 CPU
+  PyTorch。测试 extra 包含图像/parquet 依赖，以及 CPU MTP 前向使用的
+  Transformers 5.14.1；可选 ModelOpt 集成测试另外需要 ModelOpt extra。
 - 提交前跑 `make test` 或 `python3 -m pytest`。测试不需要 GPU。`make test`
   默认走 `python3`。`plan` 和评测 `--dry-run` 不能去下载 27B 权重。
 - 配方路径保持 `recipes/<name>.yaml`。新增 YAML 时在 `recipes/README.md` 补一行。

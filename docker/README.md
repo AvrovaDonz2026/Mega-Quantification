@@ -9,7 +9,7 @@
 | `megaquant:gb10` | DGX Spark ARM64 / CUDA 13 量化 |
 | `megaquant:sglang-spark` | DGX Spark 的 `serve-sglang-spark` / `eval-gpqa-spark` |
 
-SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 把 `RECIPE` 指到 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
+SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 用 `MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml` 覆盖配方。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
 
 已经在 K8s GPU 容器里、没有 Docker 的机器用 `bash scripts/gpu-pod.sh`。新虚拟机：
 
@@ -211,7 +211,7 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquan
 
 默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
 
-这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。float32 64-slot mamba 大约占 9.3 GB HBM，GPU KV 只剩不到 1 GB，16 路会排队。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
+这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1` 和 `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。float32 64-slot mamba 大约占 9.3 GB HBM，GPU KV 只剩不到 1 GB，16 路会排队。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
 
 ```bash
 EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang
