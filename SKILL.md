@@ -42,6 +42,11 @@ Transformers 4.x lacks the required model API. If the GDN hook reports an
 unsupported API, install the declared range before retrying; do not bypass
 the error and continue calibration with unpatched GDN calls.
 
+Spark full-27B W4A8/W4A4 PTQ with vision and MTP passed 256-sample calibration
+and export on 2026-09-29 (ModelOpt 0.47.0, Transformers 5.12.1). Environment,
+artifact checks and limits: `docs/validation/dgx-spark-pr46-20260929.md`.
+This validation does not establish SGLang inference quality or MTP acceptance.
+
 ## Eval
 
 Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on, `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144 context. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, resume by `item_id`.

@@ -1,0 +1,217 @@
+{
+  "revision": "b91834f822ba6ea45806dbd6a5d0040878865782",
+  "image_id": "sha256:e4b4fc03840b64d81c833603f8b58af6a1cc7d3eeb445bd239f5c921cb2f799f",
+  "preflight": {
+    "revision": "b91834f822ba6ea45806dbd6a5d0040878865782",
+    "versions": {
+      "torch": "2.13.0+cu130",
+      "transformers": "5.12.1",
+      "nvidia-modelopt": "0.47.0",
+      "Pillow": "12.3.0",
+      "accelerate": "1.14.0",
+      "safetensors": "0.8.0",
+      "pyarrow": "25.0.1"
+    },
+    "architecture": "aarch64",
+    "cuda": "13.0",
+    "gpu": "NVIDIA GB10",
+    "compute_capability": [
+      12,
+      1
+    ],
+    "cuda_matmul": "passed",
+    "gdn_export_fallback_cuda_forward": "passed",
+    "calibration_rows": 256,
+    "image_files_verified": 128,
+    "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+    "source_tensors": 1199,
+    "source_mtp_tensors": 15,
+    "source_vision_tensors": 333
+  },
+  "arm64_regression": {
+    "passed": 67,
+    "skipped": 0
+  },
+  "runs": {
+    "w4a8": {
+      "run": {
+        "revision": "b91834f822ba6ea45806dbd6a5d0040878865782",
+        "scheme": "w4a8",
+        "started_at": "2026-09-29T08:53:24.538460+00:00",
+        "finished_at": "2026-09-29T09:07:30.878268+00:00",
+        "elapsed_seconds": 846.34,
+        "exit_code": 0,
+        "peak_cuda_allocated_bytes": 55855498240,
+        "peak_cuda_reserved_bytes": 68742545408,
+        "max_rss_kib": 41250704
+      },
+      "audit": {
+        "passed": true,
+        "scheme": "nvfp4_w4a8",
+        "errors": [],
+        "warnings": [],
+        "export_tensor_count": 2544,
+        "export_shard_count": 3,
+        "source_auxiliary_tensor_counts": {
+          "vision": 333,
+          "mtp": 15
+        },
+        "source_tensor_counts": {
+          "language": 851,
+          "vision": 333,
+          "mtp": 15
+        },
+        "quantized_projection_counts": {
+          "language": {
+            "FP8": 208,
+            "NVFP4": 193
+          },
+          "vision": {
+            "NVFP4": 110
+          },
+          "mtp": {
+            "FP8": 4,
+            "NVFP4": 4
+          }
+        },
+        "calibration_coverage": {
+          "vision": {
+            "quantizers": 165,
+            "min_calls": 128,
+            "max_calls": 128
+          },
+          "mtp": {
+            "quantizers": 8,
+            "min_calls": 256,
+            "max_calls": 256
+          }
+        },
+        "scale_payload_scan": {
+          "tensors_checked": 1345,
+          "bytes_streamed": 1197496120
+        },
+        "git_sha": null,
+        "calibration_provenance": {
+          "dataset": "/data/calibration.jsonl",
+          "num_samples": 256,
+          "max_seq_length": 1024,
+          "batch_size": 1,
+          "seed": 42,
+          "with_images": true,
+          "text_field": null
+        },
+        "verified": [
+          "safetensors header layout, offsets, sizes and HF index references",
+          "all source language/vision/MTP tensor presence and logical element counts including known aliases",
+          "vision/MTP projection quantization and calibration execution evidence",
+          "config/hf quantization layer and KV metadata agreement, with no quantized module excluded by config",
+          "scheme metadata, packed NVFP4 group 16 shapes, weight and activation scale presence",
+          "scale payloads contain no NaN or infinity"
+        ],
+        "not_verified": [
+          "weight payload values/checksums or numerical quality",
+          "actual calibration sample content and exact sample count (coverage proves execution only)",
+          "SGLang loading, text/image generation, speculative MTP acceptance",
+          "GPU OOM recovery behavior"
+        ]
+      }
+    },
+    "w4a4": {
+      "run": {
+        "revision": "b91834f822ba6ea45806dbd6a5d0040878865782",
+        "scheme": "w4a4",
+        "started_at": "2026-09-29T09:08:40.373799+00:00",
+        "finished_at": "2026-09-29T09:21:41.342614+00:00",
+        "elapsed_seconds": 780.97,
+        "exit_code": 0,
+        "peak_cuda_allocated_bytes": 55855498240,
+        "peak_cuda_reserved_bytes": 65854767104,
+        "max_rss_kib": 46601256
+      },
+      "audit": {
+        "passed": true,
+        "scheme": "nvfp4_w4a4",
+        "errors": [],
+        "warnings": [],
+        "export_tensor_count": 2756,
+        "export_shard_count": 2,
+        "source_auxiliary_tensor_counts": {
+          "vision": 333,
+          "mtp": 15
+        },
+        "source_tensor_counts": {
+          "language": 851,
+          "vision": 333,
+          "mtp": 15
+        },
+        "quantized_projection_counts": {
+          "language": {
+            "NVFP4": 401
+          },
+          "vision": {
+            "NVFP4": 110
+          },
+          "mtp": {
+            "NVFP4": 8
+          }
+        },
+        "calibration_coverage": {
+          "vision": {
+            "quantizers": 165,
+            "min_calls": 128,
+            "max_calls": 128
+          },
+          "mtp": {
+            "quantizers": 8,
+            "min_calls": 256,
+            "max_calls": 256
+          }
+        },
+        "scale_payload_scan": {
+          "tensors_checked": 1557,
+          "bytes_streamed": 1654937400
+        },
+        "git_sha": null,
+        "calibration_provenance": {
+          "dataset": "/data/calibration.jsonl",
+          "num_samples": 256,
+          "max_seq_length": 1024,
+          "batch_size": 1,
+          "seed": 42,
+          "with_images": true,
+          "text_field": null
+        },
+        "verified": [
+          "safetensors header layout, offsets, sizes and HF index references",
+          "all source language/vision/MTP tensor presence and logical element counts including known aliases",
+          "vision/MTP projection quantization and calibration execution evidence",
+          "config/hf quantization layer and KV metadata agreement, with no quantized module excluded by config",
+          "scheme metadata, packed NVFP4 group 16 shapes, weight and activation scale presence",
+          "scale payloads contain no NaN or infinity"
+        ],
+        "not_verified": [
+          "weight payload values/checksums or numerical quality",
+          "actual calibration sample content and exact sample count (coverage proves execution only)",
+          "SGLang loading, text/image generation, speculative MTP acceptance",
+          "GPU OOM recovery behavior"
+        ]
+      }
+    }
+  },
+  "evidence_sha256": {
+    "build.log": "877f93439eb329c0d2e4958e8144371c093c1196eb56add108344a8c1652be69",
+    "megaquant_audit_export_pr46.py": "126bea02e248da3d8f55443ac1d66e9282df1403188f658660f36501f1434b65",
+    "megaquant_pr46_preflight.py": "06c5af56f1717e184510fd7340bb14b5abeced7b5b225239b030bfb805b029f0",
+    "megaquant_pr46_run.py": "dca64ae1af0e6b9d82755f59f708bb82783651670c83b8bfcdb3749b040e714c",
+    "preflight.json": "931d009fd73420a49a07fb1a915195dff6aa3c7e1cea1d7575398d8edeb5c946",
+    "regression.log": "37cd59d57a34089fc18735ca501db3c75361d37021b5ebfffd80dccce5ab3e75",
+    "w4a4.audit.json": "a99005faa0f37ec5984704cd1089183a01360974bed762835e11d3f018e7dc7c",
+    "w4a4.log": "42ec85d205941cec1b56eebe8dc5f319a5e254500962f03170ce4fd24c5bab12",
+    "w4a4.memory.jsonl": "a89f05cb67d108403e82aa7bed5ef18dfb99a690a7b95cc29d067687b3770349",
+    "w4a4.run.json": "43e2b299f4fcd4c9513a8dc27cbdb59ee07adc0d1aac1143c641cb0203ea37ea",
+    "w4a8.audit.json": "dcd885dbd0a57a49865e2aa34cf66201f177d530c8aad74f4d75d8aebe8cc224",
+    "w4a8.log": "458b3e00706bdeb653f2150a76f1bc48dcc827a19060bb081e0ffc169fe3f611",
+    "w4a8.memory.jsonl": "02147b4746e7089f71f86366d1785a18f4a30560ccf308598473e5613e31c12a",
+    "w4a8.run.json": "4f6783b16fd4cb576d832013e09920e901a4ba0da4b86025c1312633ed2b1b00"
+  }
+}

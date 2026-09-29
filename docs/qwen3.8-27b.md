@@ -188,6 +188,10 @@ Embeddings and the vision patch-embedding convolution remain BF16.
 Prepare a reproducible 128-image + 128-text calibration set with
 `scripts/prepare_multimodal_calibration.py`; see [Spark container commands](../docker/README.md#dgx-spark--gb10).
 
+完整 27B 的 Spark W4A8/W4A4 已于 2026-09-29 通过各 256 条图文校准和
+HF 导出，视觉及 MTP 均启用量化；张量、分片索引和 scale 检查通过。
+具体环境和限制见 [实机验证记录](validation/dgx-spark-pr46-20260929.md)。
+
 Spark 推理使用独立的 `Dockerfile.sglang.spark` 和
 `recipes/eval-gpqa-diamond.spark.yaml`，入口是
 `docker compose --profile spark up serve-sglang-spark`。镜像固定 ARM64/CUDA 13

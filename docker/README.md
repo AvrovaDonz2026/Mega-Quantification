@@ -115,6 +115,10 @@ NVFP4 presets；Spark 镜像单独使用 `docker/requirements-gpu-spark.txt`，
 不会改变 5090 镜像的 ModelOpt 0.46.1 pin。FLA/causal-conv1d 没有 ARM64
 预编译包时，PTQ 会使用 Transformers 的 PyTorch fallback；这只影响速度。
 
+2026-09-29 已在单台 GB10 上用完整 27B、256 条图文数据跑通 W4A8 混合和
+W4A4 的视觉/MTP 量化及导出，产物完整性和 scale 检查通过。环境、耗时和
+验证范围见 [Spark 实机记录](../docs/validation/dgx-spark-pr46-20260929.md)。
+
 ### Spark SGLang 服务
 
 `Dockerfile.sglang.spark` 使用官方 `lmsysorg/sglang:v0.5.20-cu130`，固定
