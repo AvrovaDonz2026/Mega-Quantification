@@ -374,6 +374,11 @@ def _load_model_and_tokenizer(recipe: Recipe, family_name: str) -> tuple[Any, An
             model_cls = getattr(transformers, model_cls)
         load_kwargs = _apply_device_map_pins(model_cls, recipe.model.source, load_kwargs)
         model = _from_pretrained(model_cls, recipe.model.source, load_kwargs)
+        if recipe.model.quantize_mtp:
+            from megaquant.mtp_model import attach_mtp
+
+            n_mtp = attach_mtp(model, recipe.model.source)
+            print(f"[megaquant] attached {n_mtp} standalone MTP tensors", flush=True)
     except MegaQuantError:
         raise
     except Exception as exc:
