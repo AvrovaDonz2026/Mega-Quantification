@@ -1,0 +1,35 @@
+# DGX Spark / GB10 profile: quantize the language model, vision tower, and MTP.
+#
+# ModelOpt 0.47 cannot export FP8 KV-cache quantizers together with the
+# quantized Qwen3.5 vision attention.  SGLang can still use FP8 KV at serve
+# time, so this export keeps kv_cache unset while retaining W4A4 weights and
+# activations for all opted-in branches.
+
+name: qwen3.8-27b-nvfp4-w4a4-spark
+backend: modelopt
+scheme: nvfp4_w4a4
+algorithm: max
+kv_cache: null
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: /models/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: true
+  quantize_mtp: true
+
+calibration:
+  dataset: /data/calibration.jsonl
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 1
+  seed: 42
+  with_images: false
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4-spark
+  format: hf
+  pack: true

@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1.7
+#
+# DGX Spark / GB10 ARM64 PTQ image.
+#
+# The Spark host already has a CUDA 13 + PyTorch image.  Keep the base
+# configurable so the same Dockerfile can use the locally verified image:
+#
+#   docker build --build-arg BASE_IMAGE=quant-env:gb10 \
+#     -f Dockerfile.spark -t megaquant:gb10 .
+#
+# A clean build can use the multi-architecture NGC image instead:
+#
+#   docker build --build-arg BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3 \
+#     -f Dockerfile.spark -t megaquant:gb10 .
+
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3
+FROM ${BASE_IMAGE}
+
+ARG INSTALL_SPARK_DEPS=1
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/cache/huggingface \
+    HUGGINGFACE_HUB_CACHE=/cache/huggingface/hub \
+    TRANSFORMERS_CACHE=/cache/huggingface/transformers \
+    HF_DATASETS_CACHE=/cache/huggingface/datasets \
+    MEGAQUANT_ROOT=/opt/megaquant \
+    PYTHONPATH=/opt/megaquant/src \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    TORCH_CUDA_ARCH_LIST=12.1 \
+    MODELOPT_NVFP4_TRITON_SWEEP=1 \
+    TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas
+
+WORKDIR /opt/megaquant
+
+COPY pyproject.toml README.md ./
+COPY docker/requirements-gpu-spark.txt /tmp/requirements-gpu-spark.txt
+COPY src ./src
+COPY recipes ./recipes
+COPY docs ./docs
+COPY docker ./docker
+COPY scripts ./scripts
+
+# The verified quant-env:gb10 base already carries these packages.  A clean
+# NGC build installs the Spark pins; INSTALL_SPARK_DEPS=0 keeps an offline
+# build from replacing its ARM64 CUDA wheels.
+RUN if [ "${INSTALL_SPARK_DEPS}" = "1" ]; then \
+      python -m pip install --no-cache-dir -r /tmp/requirements-gpu-spark.txt; \
+    fi \
+    && python -m pip install --no-cache-dir --no-deps -e . \
+    && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models \
+    && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh \
+          /opt/megaquant/scripts/*.sh
+
+WORKDIR /opt/megaquant
+ENTRYPOINT ["/opt/megaquant/docker/entrypoint.sh"]
+CMD ["plan", "-c", "recipes/qwen3.8-27b-nvfp4-w4a4.yaml"]

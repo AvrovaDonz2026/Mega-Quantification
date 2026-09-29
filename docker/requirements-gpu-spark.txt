@@ -1,0 +1,16 @@
+# DGX Spark / GB10 (CUDA 13, ARM64) dependencies.
+# The NGC and quant-env:gb10 bases already provide torch and CUDA libraries;
+# keep this list free of a torch wheel so pip cannot replace the ARM64 stack
+# with the repository's CUDA 12.8 default.
+nvidia-modelopt==0.47.0
+transformers>=4.57,<5.15
+datasets>=3.0
+accelerate>=1.0
+safetensors>=0.5
+sentencepiece>=0.2
+protobuf>=5.0
+einops>=0.8
+huggingface_hub>=0.26
+pydantic>=2.6
+pyyaml>=6.0
+tqdm>=4.66

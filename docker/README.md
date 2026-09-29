@@ -48,6 +48,47 @@ docker compose --profile gpu run --rm eval-gpqa
 
 `docker compose up` 默认只跑 `plan`，不会误触发 27B 校准。
 
+## DGX Spark / GB10
+
+DGX Spark 是 ARM64、CUDA 13、SM 12.1 的统一内存机器。用
+`Dockerfile.spark` 保留仓库的 `megaquant quantize` 流程，避免默认
+CUDA 12.8/cu128 镜像把 ARM64 的 PyTorch 替换掉：
+
+```bash
+# Spark 上已有 quant-env:gb10 时可离线构建
+DOCKER_BUILDKIT=0 docker build \
+  --build-arg BASE_IMAGE=quant-env:gb10 \
+  --build-arg INSTALL_SPARK_DEPS=0 \
+  -f Dockerfile.spark -t megaquant:gb10 .
+
+# 纯净环境可使用多架构 NGC PyTorch（需要能访问 NGC / PyPI）
+docker build \
+  --build-arg BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3 \
+  --build-arg INSTALL_SPARK_DEPS=1 \
+  -f Dockerfile.spark -t megaquant:gb10 .
+```
+
+权重和校准集挂载到容器，统一内存下建议先给 Accelerate 一个明确预算，
+避免把同一块 UMA 同时当成完整 GPU 池和完整 CPU 池：
+
+```bash
+docker run --rm --gpus all --ipc=host --shm-size=64g \
+  -e MEGAQUANT_LOW_MEMORY=1 \
+  -e MEGAQUANT_MAX_MEMORY=0:96GiB,cpu:24GiB \
+  -e MEGAQUANT_OFFLOAD_DIR=/opt/megaquant/offload \
+  -v /path/to/models:/models:ro \
+  -v /path/to/calibration.jsonl:/data/calibration.jsonl:ro \
+  -v "$PWD/outputs:/opt/megaquant/outputs" \
+  -v "$PWD/offload:/opt/megaquant/offload" \
+  megaquant:gb10 quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml \
+  --model /models/Qwen3.8-27B
+```
+
+`TORCH_CUDA_ARCH_LIST=12.1` 已写入 Spark 镜像。ModelOpt 0.47 支持仓库的
+NVFP4 presets；Spark 镜像单独使用 `docker/requirements-gpu-spark.txt`，
+不会改变 5090 镜像的 ModelOpt 0.46.1 pin。FLA/causal-conv1d 没有 ARM64
+预编译包时，PTQ 会使用 Transformers 的 PyTorch fallback；这只影响速度。
+
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
 ```bash

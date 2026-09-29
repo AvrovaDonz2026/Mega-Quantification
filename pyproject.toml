@@ -73,6 +73,7 @@ include = [
   "docker",
   "scripts",
   "Dockerfile",
+  "Dockerfile.spark",
   "Dockerfile.sglang",
   "docker-compose.yml",
   "docker-compose.ngc.yml",

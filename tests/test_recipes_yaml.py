@@ -26,6 +26,7 @@ MIXED = RECIPES / "qwen3.8-27b-nvfp4-mixed.yaml"
 W4A4 = RECIPES / "qwen3.8-27b-nvfp4-w4a4.yaml"
 W4A4_5090 = RECIPES / "qwen3.8-27b-nvfp4-w4a4.5090.yaml"
 W4A4_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-w4a4.public-calib.yaml"
+SPARK = RECIPES / "qwen3.8-27b-nvfp4-w4a4.spark.yaml"
 MIXED_5090 = RECIPES / "qwen3.8-27b-nvfp4-mixed.5090.yaml"
 MIXED_PUBLIC = RECIPES / "qwen3.8-27b-nvfp4-mixed.public-calib.yaml"
 GPQA = RECIPES / "eval-gpqa-diamond.yaml"
@@ -109,6 +110,20 @@ def test_w4a4_comparison_recipe_if_present() -> None:
     text = W4A4.read_text().lower()
     assert "16" in text
     assert "block" in text or "group" in text
+
+
+def test_spark_recipe_quantizes_vision_and_mtp() -> None:
+    data = _load(SPARK)
+    _assert_schema(data, SPARK)
+    assert data["model"]["source"] == "/models/Qwen3.8-27B"
+    assert data["scheme"] == "nvfp4_w4a4"
+    assert data["backend"] == "modelopt"
+    assert data["family"] == "qwen3_5"
+    assert data["model"]["quantize_vision"] is True
+    assert data["model"]["quantize_mtp"] is True
+    # ModelOpt 0.47 cannot export mixed KV-cache quantizers alongside the
+    # quantized Qwen3.5 vision attention; serving may still select FP8 KV.
+    assert data["kv_cache"] is None
 
 
 def test_5090_and_public_calib_recipes() -> None:
