@@ -46,8 +46,9 @@ class CalibrationBatches:
     some ModelOpt / tqdm paths call ``len()``.
     """
 
-    def __init__(self, batches: list[dict[str, Any]]):
+    def __init__(self, batches: list[dict[str, Any]], *, num_image_samples: int = 0):
         self.batches = list(batches)
+        self.num_image_samples = num_image_samples
 
     def __len__(self) -> int:
         return len(self.batches)
@@ -243,9 +244,7 @@ def _load_hf_dataset(dataset_id: str) -> Any:
             except Exception as exc:
                 errors.append(f"name={name} split={split}: {exc}")
         try:
-            return _unwrap_dataset_dict(
-                load_dataset(dataset_id, name=name, streaming=True), splits
-            )
+            return _unwrap_dataset_dict(load_dataset(dataset_id, name=name, streaming=True), splits)
         except Exception as exc:
             errors.append(f"name={name} (no split): {exc}")
 
@@ -305,7 +304,174 @@ def _tokenize_batch(tokenizer: Any, texts: list[str], max_seq_length: int) -> di
     return encoded
 
 
-def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> CalibrationBatches:
+def _image_reference(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        for key in ("path", "url", "image"):
+            if key in value:
+                return value[key]
+        raise CalibrationError("Image objects must contain a path, url, or image")
+    return value
+
+
+def _multimodal_example(
+    example: Mapping[str, Any], text_field: str | None, tokenizer: Any
+) -> tuple[list[dict[str, Any]], list[Any]]:
+    """Normalize local image rows and OpenAI-style image messages for a processor."""
+    raw_messages = example.get(text_field) if text_field else None
+    if not isinstance(raw_messages, list):
+        raw_messages = next(
+            (
+                example[key]
+                for key in ("messages", "conversations", "conversation")
+                if isinstance(example.get(key), list)
+            ),
+            None,
+        )
+    images: list[Any] = []
+    messages: list[dict[str, Any]] = []
+    if raw_messages is not None:
+        for message in raw_messages:
+            if not isinstance(message, Mapping):
+                raise CalibrationError("Multimodal messages must be objects")
+            role = message.get("role", message.get("from", "user"))
+            role = {"human": "user", "gpt": "assistant"}.get(role, role)
+            content = message.get("content", message.get("value", ""))
+            if isinstance(content, str):
+                content = [{"type": "text", "text": content}]
+            if not isinstance(content, list):
+                raise CalibrationError("Multimodal message content must be text or a list")
+            normalized = []
+            for item in content:
+                if not isinstance(item, Mapping):
+                    raise CalibrationError("Multimodal content items must be objects")
+                kind = item.get("type", "text")
+                if kind in {"image", "image_url"}:
+                    ref = item.get("image", item.get("image_url", item.get("path")))
+                    if ref is None:
+                        ref = item.get("url")
+                    if ref is None:
+                        raise CalibrationError("Each image content item needs a local image path")
+                    images.append(_image_reference(ref))
+                    normalized.append({"type": "image"})
+                elif kind == "text":
+                    normalized.append({"type": "text", "text": str(item.get("text", ""))})
+                else:
+                    raise CalibrationError(f"Unsupported calibration content type: {kind!r}")
+            messages.append({"role": role, "content": normalized})
+    else:
+        text = _extract_text(example, text_field, tokenizer)
+        if text:
+            messages.append({"role": "user", "content": [{"type": "text", "text": text}]})
+
+    top_images = example.get("images", example.get("image"))
+    if top_images is not None:
+        if images:
+            raise CalibrationError("Use either top-level images or message image content, not both")
+        if not isinstance(top_images, list):
+            top_images = [top_images]
+        images = [_image_reference(value) for value in top_images]
+        if not messages:
+            messages = [{"role": "user", "content": []}]
+        target = next((message for message in messages if message["role"] == "user"), None)
+        if target is None:
+            raise CalibrationError("Top-level images need a user message")
+        target["content"] = [{"type": "image"} for _ in images] + target["content"]
+    return messages, images
+
+
+def _load_calibration_image(reference: Any, base_dir: Path) -> Any:
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise CalibrationError("Image calibration requires Pillow: pip install pillow") from exc
+    if isinstance(reference, Image.Image):
+        return reference.convert("RGB")
+    if not isinstance(reference, (str, Path)):
+        raise CalibrationError("Calibration images must be local paths or PIL images")
+    path = Path(reference).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    try:
+        with Image.open(path) as image:
+            return image.convert("RGB")
+    except (OSError, ValueError) as exc:
+        raise CalibrationError(f"Cannot open calibration image '{path}': {exc}") from exc
+
+
+def _build_multimodal_batches(
+    recipe: Recipe,
+    tokenizer: Any,
+    examples: list[dict[str, Any]],
+    base_dir: Path,
+    processor: Any | None,
+) -> CalibrationBatches:
+    calib = recipe.calibration
+    rows = [_multimodal_example(row, calib.text_field, tokenizer) for row in examples]
+    rows = [(messages, images) for messages, images in rows if messages]
+    image_samples = sum(bool(images) for _, images in rows)
+    if not image_samples:
+        raise CalibrationError(
+            "calibration.with_images=true but no images were found in the selected samples; "
+            "provide image/images paths or image content in messages"
+        )
+    if processor is None:
+        try:
+            from transformers import AutoProcessor
+
+            processor = AutoProcessor.from_pretrained(
+                recipe.model.source, trust_remote_code=recipe.model.trust_remote_code
+            )
+        except Exception as exc:
+            raise CalibrationError(f"Could not load the multimodal processor: {exc}") from exc
+    _ensure_pad_token(getattr(processor, "tokenizer", tokenizer))
+    batches = []
+    for offset in range(0, len(rows), calib.batch_size):
+        selected = rows[offset : offset + calib.batch_size]
+        images: list[Any] = []
+        try:
+            texts = [
+                processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+                for messages, _ in selected
+            ]
+            for _, references in selected:
+                for reference in references:
+                    images.append(_load_calibration_image(reference, base_dir))
+            # Truncating expanded image tokens can leave a different token count
+            # from image_grid_thw, or remove the image entirely. Reject oversize
+            # examples below instead of silently skipping visual calibration.
+            kwargs: dict[str, Any] = {
+                "text": texts,
+                "padding": len(texts) > 1,
+                "truncation": False,
+                "return_tensors": "pt",
+            }
+            if images:
+                kwargs["images"] = images
+            encoded = dict(processor(**kwargs))
+        except CalibrationError:
+            raise
+        except Exception as exc:
+            raise CalibrationError(f"Multimodal processor failed: {exc}") from exc
+        finally:
+            for image in images:
+                image.close()
+        if "input_ids" not in encoded:
+            raise CalibrationError("Multimodal processor did not return input_ids")
+        if images and "pixel_values" not in encoded:
+            raise CalibrationError("Multimodal processor did not return pixel_values for images")
+        if any(len(ids) > calib.max_seq_length for ids in encoded["input_ids"]):
+            raise CalibrationError(
+                f"Multimodal sample exceeds max_seq_length={calib.max_seq_length}; "
+                "increase max_seq_length or use smaller images/shorter text. "
+                "Image tokens cannot be safely truncated."
+            )
+        batches.append(encoded)
+    return CalibrationBatches(batches, num_image_samples=image_samples)
+
+
+def build_calibration_iter(
+    recipe: Recipe, tokenizer: Any, *, processor: Any | None = None
+) -> CalibrationBatches:
     """Return tokenized batches with ``input_ids`` / ``attention_mask``.
 
     The result is sized (``len``) and re-iterable so ModelOpt can run the
@@ -350,6 +516,10 @@ def build_calibration_iter(recipe: Recipe, tokenizer: Any) -> CalibrationBatches
             examples.append(dict(row))
             if len(examples) >= calib.num_samples:
                 break
+
+    if calib.with_images:
+        base_dir = path.resolve().parent if path.is_file() else Path.cwd()
+        return _build_multimodal_batches(recipe, tokenizer, examples, base_dir, processor)
 
     texts: list[str] = []
     for example in examples:

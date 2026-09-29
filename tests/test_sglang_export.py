@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import struct
 from pathlib import Path
 
 import pytest
@@ -99,6 +100,113 @@ def test_rewrite_writes_mixed_precision(tmp_path: Path) -> None:
 def test_rewrite_requires_weight_map(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         rewrite_sglang_mixed_export(tmp_path)
+
+
+def _write_export_tensors(root: Path, specs: dict[str, tuple[str, list[int]]]) -> None:
+    """Small real safetensors headers; the rewriter never needs tensor payloads."""
+    header = {}
+    payload = bytearray()
+    sizes = {"U8": 1, "F8_E4M3": 1, "BF16": 2, "F32": 4}
+    for name, (dtype, shape) in specs.items():
+        count = 1
+        for dimension in shape:
+            count *= dimension
+        offset = len(payload)
+        payload.extend(bytes(count * sizes[dtype]))
+        header[name] = {"dtype": dtype, "shape": shape, "data_offsets": [offset, len(payload)]}
+    encoded = json.dumps(header).encode()
+    (root / "weights.safetensors").write_bytes(struct.pack("<Q", len(encoded)) + encoded + payload)
+    (root / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {name: "weights.safetensors" for name in specs}})
+    )
+
+
+def test_rewrite_preserves_exported_vision_mtp_precision_and_null_kv(tmp_path: Path) -> None:
+    vision = "model.visual.blocks.0.attn.qkv"
+    embedding = "model.visual.pos_embed"
+    patch = "model.visual.patch_embed.proj"
+    mtp = "mtp.layers.0.self_attn.q_proj"
+    source_layers = {
+        vision: {"quant_algo": "NVFP4", "group_size": 16},
+        embedding: {"quant_algo": "W4A16_NVFP4", "group_size": 16},
+        patch: {"quant_algo": "NVFP4", "group_size": 16},
+        mtp: {"quant_algo": "FP8"},
+    }
+    specs = {}
+    for module in (vision, embedding, patch):
+        specs[module + ".weight"] = ("U8", [2, 8])
+        specs[module + ".weight_scale"] = ("F8_E4M3", [2, 1])
+        specs[module + ".weight_scale_2"] = ("F32", [])
+    specs[mtp + ".weight"] = ("F8_E4M3", [2, 16])
+    specs[mtp + ".weight_scale"] = ("F32", [])
+    _write_export_tensors(tmp_path, specs)
+    _write_hf_quant(
+        tmp_path,
+        {
+            "quant_algo": "MIXED_PRECISION",
+            "quantized_layers": source_layers,
+            "kv_cache_quant_algo": None,
+            "exclude_modules": ["model.visual*", "mtp*", "*embed_tokens*"],
+        },
+    )
+    (tmp_path / "config.json").write_text(
+        json.dumps({"quantization_config": {"ignore": ["mtp*", "*embed_tokens*"]}})
+    )
+
+    assert rewrite_sglang_mixed_export(tmp_path) == source_layers
+    quant = json.loads((tmp_path / "hf_quant_config.json").read_text())["quantization"]
+    config_quant = json.loads((tmp_path / "config.json").read_text())["quantization_config"]
+    assert quant["kv_cache_quant_algo"] is None
+    assert config_quant["kv_cache_quant_algo"] is None
+    assert quant["exclude_modules"] == ["*embed_tokens*"]
+    assert config_quant["ignore"] == ["*embed_tokens*"]
+    assert rewrite_sglang_mixed_export(tmp_path) == source_layers
+
+
+def test_rewrite_infers_opted_in_tensors_and_keeps_bf16_restores(tmp_path: Path) -> None:
+    vision = "model.visual.blocks.0.attn.proj"
+    mtp = "mtp.fc"
+    mtp_attn = "mtp.layers.0.self_attn.q_proj"
+    restored = "mtp.layers.0.mlp.down_proj"
+    specs = {
+        mtp_attn + ".weight": ("F8_E4M3", [2, 16]),
+        mtp_attn + ".weight_scale": ("F32", []),
+        restored + ".weight": ("BF16", [2, 16]),
+        "model.visual.merger.linear_fc1.weight": ("BF16", [2, 16]),
+    }
+    for module in (vision, mtp):
+        specs[module + ".weight"] = ("U8", [2, 8])
+        specs[module + ".weight_scale"] = ("F8_E4M3", [2, 1])
+        specs[module + ".weight_scale_2"] = ("F32", [])
+    _write_export_tensors(tmp_path, specs)
+    # A stale source entry must not re-label an actually restored BF16 tensor.
+    _write_hf_quant(tmp_path, {"quantized_layers": {restored: {"quant_algo": "NVFP4"}}})
+
+    layers = rewrite_sglang_mixed_export(tmp_path)
+    assert layers == {
+        vision: {"quant_algo": "NVFP4", "group_size": 16},
+        mtp: {"quant_algo": "NVFP4", "group_size": 16},
+        mtp_attn: {"quant_algo": "FP8"},
+    }
+    quant = json.loads((tmp_path / "hf_quant_config.json").read_text())["quantization"]
+    assert quant["exclude_modules"] == []
+
+
+def test_rewrite_reads_config_layer_map_and_preserves_weight_only(tmp_path: Path) -> None:
+    vision = "model.visual.pos_embed"
+    mlp = "model.language_model.layers.0.mlp.up_proj"
+    specs = {}
+    for module in (vision, mlp):
+        specs[module + ".weight"] = ("U8", [2, 8])
+        specs[module + ".weight_scale"] = ("F8_E4M3", [2, 1])
+        specs[module + ".weight_scale_2"] = ("F32", [])
+    _write_export_tensors(tmp_path, specs)
+    entry = {"quant_algo": "W4A16_NVFP4", "group_size": 16}
+    (tmp_path / "config.json").write_text(
+        json.dumps({"quantization_config": {"quantized_layers": {vision: entry}}})
+    )
+    layers = rewrite_sglang_mixed_export(tmp_path, mlp_quant_algo="W4A16_NVFP4")
+    assert layers == {vision: entry, mlp: entry}
 
 
 def test_rewrite_sglang_cli(tmp_path: Path) -> None:

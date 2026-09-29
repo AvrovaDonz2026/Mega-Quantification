@@ -1,0 +1,34 @@
+# DGX Spark / GB10 profile for the repository's mixed W4A8 map.
+# MLP + lm_head use NVFP4 group 16; attention projections use FP8.
+# Vision projections and MTP are included; MTP attention follows the FP8 map.
+# ModelOpt 0.47 needs kv_cache unset for this quantized Qwen3.5 export;
+# select FP8 KV at serving time.
+
+name: qwen3.8-27b-nvfp4-w4a8-spark
+backend: modelopt
+scheme: nvfp4_w4a8
+algorithm: max
+kv_cache: null
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: /models/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: true
+  quantize_mtp: true
+
+calibration:
+  dataset: /data/calibration.jsonl
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 1
+  seed: 42
+  with_images: true
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A8-spark
+  format: hf
+  pack: true

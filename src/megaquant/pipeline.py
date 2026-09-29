@@ -613,6 +613,10 @@ class QuantPipeline:
             print(format_plan(plan))
             return plan
 
+        if self.recipe.model.quantize_vision and not self.recipe.calibration.with_images:
+            raise BackendError(
+                "Vision quantization requires calibration.with_images=true and image samples"
+            )
         threads = configure_host_parallelism()
         print(f"[megaquant] host threads={threads}", file=sys.stderr, flush=True)
         accel_note = enable_accelerate_non_blocking()

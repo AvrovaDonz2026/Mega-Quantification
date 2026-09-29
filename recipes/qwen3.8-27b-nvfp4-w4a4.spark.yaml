@@ -27,7 +27,7 @@ calibration:
   max_seq_length: 1024
   batch_size: 1
   seed: 42
-  with_images: false
+  with_images: true
 
 export:
   output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4-spark

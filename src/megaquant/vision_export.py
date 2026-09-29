@@ -1,4 +1,4 @@
-"""Restore unquantized vision weights after language-only Qwen3.5 PTQ."""
+"""Preserve Qwen3.5 vision weights and processor files after PTQ export."""
 
 from __future__ import annotations
 
@@ -12,7 +12,13 @@ from megaquant.mtp_export import _open_source_shard, _source_index, update_expor
 from megaquant.sglang_export import load_weight_map
 
 VISION_SHARD_NAME = "vision.safetensors"
-_PROCESSOR_FILES = ("preprocessor_config.json", "video_preprocessor_config.json")
+_PROCESSOR_FILES = (
+    "preprocessor_config.json",
+    "video_preprocessor_config.json",
+    "processor_config.json",
+    "chat_template.json",
+    "chat_template.jinja",
+)
 
 
 def _restore_processor_files(root: Path, source_root: Path | str) -> None:
@@ -37,8 +43,10 @@ def _restore_processor_files(root: Path, source_root: Path | str) -> None:
         raise BackendError("Vision export requires preprocessor_config.json in model.source")
 
 
-def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any] | None:
-    """Copy source vision tensors missing from a language-only HF export."""
+def restore_vision(
+    export_dir: str | Path, source: str | Path, *, quantize_vision: bool = False
+) -> dict[str, Any] | None:
+    """Restore BF16 vision, or validate ModelOpt vision; copy processor files."""
     root = Path(export_dir)
     config_path = root / "config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -46,7 +54,7 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
         return None
 
     if not source:
-        raise BackendError("Vision export requires model.source to restore source weights")
+        raise BackendError("Vision export requires model.source to restore source files")
     source_index, source_root = _source_index(source)
     source_map = source_index.get("weight_map", {})
     if not isinstance(source_map, dict):
@@ -57,12 +65,28 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
     _restore_processor_files(root, source_root)
 
     exported = load_weight_map(root)
+    exported_vision = {
+        key: shard for key, shard in exported.items() if key.startswith("model.visual.")
+    }
     missing = {
         key: shard
         for key, shard in expected.items()
         if key not in exported or not (root / str(exported[key])).is_file()
     }
-    if missing:
+    if quantize_vision:
+        missing.update(
+            {
+                key: shard
+                for key, shard in exported_vision.items()
+                if not (root / str(shard)).is_file()
+            }
+        )
+        if missing:
+            raise BackendError(
+                "Quantized vision export is missing tensors or shards: "
+                + ", ".join(sorted(missing)[:3])
+            )
+    elif missing:
         if (root / VISION_SHARD_NAME).exists():
             missing.update(
                 {
@@ -102,10 +126,11 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
         config["language_model_only"] = False
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
+    method = "modelopt-export" if quantize_vision else "hf-source" if missing else "already-present"
     note = {
-        "vision_tensors": len(expected),
+        "vision_tensors": len(exported_vision) if quantize_vision else len(expected),
         "restored_tensors": len(missing),
-        "method": "hf-source" if missing else "already-present",
+        "method": method,
     }
     (root / "vision_export.json").write_text(
         json.dumps(note, indent=2) + "\n", encoding="utf-8"
@@ -116,7 +141,9 @@ def restore_vision(export_dir: str | Path, source: str | Path) -> dict[str, Any]
 def restore_vision_from_recipe(export_dir: Path, recipe: Any) -> dict[str, Any] | None:
     from megaquant.models.base import recipe_flag, recipe_get
 
-    if recipe_flag(recipe, "model", "quantize_vision", default=False):
-        return None
     source = recipe_get(recipe, "model", "source", default=None)
-    return restore_vision(export_dir, source)
+    return restore_vision(
+        export_dir,
+        source,
+        quantize_vision=recipe_flag(recipe, "model", "quantize_vision", default=False),
+    )

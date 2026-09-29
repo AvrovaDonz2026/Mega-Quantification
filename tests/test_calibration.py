@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from types import ModuleType
 from typing import Any
+
+import pytest
 
 from megaquant.calibration import (
     CalibrationBatches,
@@ -15,6 +18,7 @@ from megaquant.calibration import (
     build_calibration_iter,
 )
 from megaquant.config import recipe_from_mapping
+from megaquant.exceptions import CalibrationError
 
 NEMOTRON_ROW = {
     "uuid": "x",
@@ -132,3 +136,122 @@ def test_dummy_calib_iter_has_len() -> None:
     dummy = DummyCalibIter(3)
     assert len(dummy) == 3
     assert len(list(dummy)) == 3
+
+
+class _FakeProcessor:
+    def __init__(self, *, sequence_length=4, pixel_values=True):
+        self.tokenizer = _FakeTokenizer()
+        self.sequence_length = sequence_length
+        self.pixel_values = pixel_values
+        self.messages = []
+        self.calls = []
+
+    def apply_chat_template(self, messages, **kwargs):
+        self.messages.append(messages)
+        return "rendered image conversation"
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        encoded = {
+            "input_ids": [[1] * self.sequence_length for _ in kwargs["text"]],
+            "attention_mask": [[1] * self.sequence_length for _ in kwargs["text"]],
+        }
+        if kwargs.get("images") and self.pixel_values:
+            encoded["pixel_values"] = [[0.1, 0.2]] * len(kwargs["images"])
+            encoded["image_grid_thw"] = [[1, 2, 2]] * len(kwargs["images"])
+        return encoded
+
+
+def test_multimodal_local_images_reach_processor_and_keep_image_tensors(tmp_path) -> None:
+    Image = pytest.importorskip("PIL.Image")
+
+    image_path = tmp_path / "example.png"
+    Image.new("RGB", (8, 8), color="red").save(image_path)
+    dataset = tmp_path / "calibration.jsonl"
+    dataset.write_text(json.dumps({"text": "Describe the image", "image": "example.png"}))
+    processor = _FakeProcessor()
+    batches = build_calibration_iter(
+        _w4a8_recipe(str(dataset), with_images=True), _FakeTokenizer(), processor=processor
+    )
+    assert batches.num_image_samples == 1
+    assert len(batches) == 1
+    assert batches[0]["pixel_values"] == [[0.1, 0.2]]
+    assert batches[0]["image_grid_thw"] == [[1, 2, 2]]
+    assert list(batches) == list(batches)
+    assert processor.calls[0]["truncation"] is False
+    content = processor.messages[0][0]["content"]
+    assert content[0] == {"type": "image"}
+    assert content[1] == {"type": "text", "text": "Describe the image"}
+
+
+def test_multimodal_message_images_preserve_order_and_allow_text_rows(tmp_path) -> None:
+    Image = pytest.importorskip("PIL.Image")
+
+    for name, color in (("one.png", "red"), ("two.png", "blue")):
+        Image.new("RGB", (8, 8), color=color).save(tmp_path / name)
+    rows = [
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": "one.png"}},
+                        {"type": "text", "text": "Compare with"},
+                        {"type": "image", "path": "two.png"},
+                    ],
+                }
+            ]
+        },
+        {"text": "Also explain image comparison."},
+    ]
+    dataset = tmp_path / "calibration.jsonl"
+    dataset.write_text("\n".join(json.dumps(row) for row in rows))
+    processor = _FakeProcessor()
+    batches = build_calibration_iter(
+        _w4a8_recipe(str(dataset), with_images=True, batch_size=2),
+        _FakeTokenizer(),
+        processor=processor,
+    )
+    assert batches.num_image_samples == 1
+    assert len(batches[0]["pixel_values"]) == 2
+    assert len(batches[0]["input_ids"]) == 2
+    image_content = next(
+        conversation[0]["content"]
+        for conversation in processor.messages
+        if conversation[0]["content"][0]["type"] == "image"
+    )
+    assert [item["type"] for item in image_content] == ["image", "text", "image"]
+
+
+def test_with_images_rejects_text_only_dataset(tmp_path) -> None:
+    dataset = tmp_path / "calibration.jsonl"
+    dataset.write_text('{"text": "No image in this row"}\n')
+    with pytest.raises(CalibrationError, match="no images were found"):
+        build_calibration_iter(
+            _w4a8_recipe(str(dataset), with_images=True),
+            _FakeTokenizer(),
+            processor=_FakeProcessor(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("processor_kwargs", "error"),
+    [
+        ({"sequence_length": 33}, "cannot be safely truncated"),
+        ({"pixel_values": False}, "did not return pixel_values"),
+    ],
+)
+def test_multimodal_rejects_missing_pixels_or_truncated_images(
+    tmp_path, processor_kwargs, error
+) -> None:
+    Image = pytest.importorskip("PIL.Image")
+
+    Image.new("RGB", (8, 8)).save(tmp_path / "image.png")
+    dataset = tmp_path / "calibration.jsonl"
+    dataset.write_text('{"text": "Describe", "images": ["image.png"]}\n')
+    with pytest.raises(CalibrationError, match=error):
+        build_calibration_iter(
+            _w4a8_recipe(str(dataset), with_images=True),
+            _FakeTokenizer(),
+            processor=_FakeProcessor(**processor_kwargs),
+        )

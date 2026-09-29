@@ -77,7 +77,15 @@ def _export_dir(root: Path, *, mtp_layers: int = 1) -> Path:
     dest = root / "export"
     dest.mkdir()
     _write_index(dest / "model.safetensors.index.json", _lm_weight_map(), total_size=12)
-    (dest / "a.safetensors").write_bytes(b"weights")
+    write_safetensors(
+        dest / "a.safetensors",
+        {
+            name: RawTensor(
+                dtype="F8_E4M3" if "self_attn" in name else "U8", shape=(1, 4), data=bytes(4)
+            )
+            for name in _lm_weight_map()
+        },
+    )
     (dest / "config.json").write_text(
         json.dumps(
             {

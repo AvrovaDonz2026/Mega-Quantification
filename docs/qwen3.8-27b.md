@@ -97,6 +97,7 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-w4a8.yaml` | `nvfp4_w4a8` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A8` |
 | `recipes/qwen3.8-27b-nvfp4-w4a8.5090.yaml` | `nvfp4_w4a8` | `max` | ultrachat 256×1024, **batch 1** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a8.public-calib.yaml` | `nvfp4_w4a8` | `max` | ultrachat 512 (anonymous Hub) | same |
+| `recipes/qwen3.8-27b-nvfp4-w4a8.spark.yaml` | `nvfp4_w4a8` | `max` | local `/data/calibration.jsonl`, 256 × 1024, batch 1 | `outputs/Qwen3.8-27B-NVFP4-W4A8-spark`; mixed W4A8 + vision/MTP |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | `max` | 512 | `outputs/Qwen3.8-27B-NVFP4-W4A4` |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 1** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
@@ -171,9 +172,19 @@ NVIDIA 公开卡上的其他基准（vLLM，262k，混合权重）：
 | Dataset | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v2` | `nvidia/Nemotron-Post-Training-Dataset-v3` | `HuggingFaceH4/ultrachat_200k` |
 | Images | `with_images: false` (text-only calibration; BF16 vision weights restored after export) | same | same | same |
 
-The Spark recipe uses 256 text samples by default and enables the vision/MTP
-quantizers. The current calibration iterator accepts text only; use a processor-backed
-image dataset before treating the vision activation scales as production quality.
+The Spark recipes use 256 samples and require `with_images: true`. Local JSONL
+rows can contain `image`/`images` paths relative to the JSONL, plus `text` or
+chat `messages`. Text-only rows may be mixed in. `AutoProcessor` prepares image
+tensors and image tokens; oversize image sequences fail instead of being truncated.
+The standalone MTP block runs on the target model's hidden states and next-token
+embeddings during calibration. Export requires every enabled vision/MTP input
+quantizer to execute and records the counts in `calibration_coverage.json`.
+Embeddings and the vision patch-embedding convolution remain BF16.
+
+Prepare a reproducible 128-image + 128-text calibration set with
+`scripts/prepare_multimodal_calibration.py`; see [Spark container commands](../docker/README.md#dgx-spark--gb10).
+Calibration coverage verifies execution, not model quality or speculative-decoding
+acceptance rate; those still need inference evaluation.
 
 `max` 记下激活的 amax，再 round-to-nearest。它是 SGLang W4A8、均匀 W4A4，以及 5090 混合配方的默认算法。Local-Hessian（`fp8_scale_sweep: true`，Hessian `block_size` 16）是 NVIDIA 混合卡用的质量档，2048 条在 32 GB 上放不下。5090 上跑完的是 `mixed.5090.yaml`（`max` + ultrachat 256）。`mixed.yaml` 留给更大的卡。不改 YAML 也可以临时换算法：
 
@@ -201,6 +212,7 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
 MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 # DGX Spark GB10 (language + vision + MTP; see docker/README.md):
 MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.spark.yaml
 ```
 
 Export is a Hugging Face unified checkpoint
