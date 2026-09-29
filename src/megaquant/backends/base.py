@@ -151,6 +151,7 @@ _FORWARD_KEYS = frozenset(
         "pixel_values",
         "image_grid_thw",
         "image_sizes",
+        "mm_token_type_ids",
         "cross_attention_mask",
         "labels",
     }
