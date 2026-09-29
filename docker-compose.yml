@@ -102,6 +102,23 @@ x-sglang: &sglang
   volumes: *common-volumes
   working_dir: /opt/megaquant
 
+x-sglang-spark: &sglang-spark
+  build:
+    context: .
+    dockerfile: Dockerfile.sglang.spark
+    args:
+      BASE_IMAGE: ${SGLANG_SPARK_BASE_IMAGE:-lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f}
+  image: ${SGLANG_SPARK_IMAGE:-megaquant:sglang-spark}
+  platform: linux/arm64
+  pull_policy: missing
+  environment:
+    <<: *common-env
+    EVAL_RECIPE: ${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+  volumes: *common-volumes
+  working_dir: /opt/megaquant
+
 services:
   # Default: dry-run. Safe on `compose up`.
   megaquant:
@@ -151,6 +168,28 @@ services:
         "--model",
         "${MEGAQUANT_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8}",
       ]
+
+  serve-sglang-spark:
+    <<: [*sglang-spark, *gpu]
+    profiles: ["spark"]
+    ports:
+      - "${SGLANG_SPARK_PORT:-30000}:30000"
+    command:
+      ["serve", "-c", "${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}",
+       "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}"]
+
+  eval-gpqa-spark:
+    <<: *sglang-spark
+    profiles: ["spark"]
+    environment:
+      <<: *common-env
+      EVAL_RECIPE: ${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}
+      MEGAQUANT_SGLANG_BASE_URL: ${SPARK_SGLANG_BASE_URL:-http://serve-sglang-spark:30000/v1}
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+      NVIDIA_VISIBLE_DEVICES: ""
+    command:
+      ["eval", "-c", "${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}",
+       "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}"]
 
   serve-vllm:
     <<: [*sglang, *gpu]

@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+# ARM64 / CUDA 13 / GB10. Preserve the upstream torch and kernel wheels.
+# Pin the multi-platform index; Docker selects its linux/arm64 manifest.
+ARG BASE_IMAGE=lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f
+FROM ${BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/cache/huggingface \
+    MEGAQUANT_ROOT=/opt/megaquant \
+    PYTHONPATH=/opt/megaquant/src \
+    TORCH_CUDA_ARCH_LIST=12.1 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+WORKDIR /opt/megaquant
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+COPY recipes ./recipes
+COPY docs ./docs
+COPY docker ./docker
+COPY scripts ./scripts
+
+# Only add the MegaQuant CLI. Do not resolve another torch/sglang wheel set.
+RUN python -m pip install --no-cache-dir --no-deps -e . \
+    && python scripts/patch_sglang_spark.py \
+    && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models /data \
+    && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/scripts/*.sh
+
+ENTRYPOINT ["/opt/megaquant/docker/entrypoint.sh"]
+CMD ["serve", "-c", "recipes/eval-gpqa-diamond.spark.yaml"]

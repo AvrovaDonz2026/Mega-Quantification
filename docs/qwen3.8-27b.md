@@ -183,6 +183,14 @@ Embeddings and the vision patch-embedding convolution remain BF16.
 
 Prepare a reproducible 128-image + 128-text calibration set with
 `scripts/prepare_multimodal_calibration.py`; see [Spark container commands](../docker/README.md#dgx-spark--gb10).
+
+Spark 推理使用独立的 `Dockerfile.sglang.spark` 和
+`recipes/eval-gpqa-diamond.spark.yaml`，入口是
+`docker compose --profile spark up serve-sglang-spark`。镜像固定 ARM64/CUDA 13
+SGLang 0.5.20，包含量化视觉/MTP 加载兼容补丁。初始为 TP1、32k 上下文、
+4 并发、0.70 内存比例、关闭 HiCache/CUDA graph；MTP 需要在文本/图像验证后
+单独开启配方中的 `speculative_*` 参数。校准覆盖与服务实测是两个独立结果。
+构建、检查和评测命令见 [Spark SGLang 服务](../docker/README.md#spark-sglang-服务)。
 Calibration coverage verifies execution, not model quality or speculative-decoding
 acceptance rate; those still need inference evaluation.
 

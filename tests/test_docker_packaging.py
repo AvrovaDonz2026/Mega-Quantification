@@ -191,6 +191,21 @@ def test_dockerfile_sglang_does_not_copy_weights(repo_root: Path) -> None:
             assert "huggingface" not in lowered
 
 
+def test_dockerfile_sglang_spark_is_pinned_and_patches_quantized_vlm(repo_root: Path) -> None:
+    dockerfile = (repo_root / "Dockerfile.sglang.spark").read_text()
+    assert "lmsysorg/sglang:v0.5.20-cu130@sha256:" in dockerfile
+    assert "TORCH_CUDA_ARCH_LIST=12.1" in dockerfile
+    assert "pip install --no-cache-dir --no-deps -e ." in dockerfile
+    assert "scripts/patch_sglang_spark.py" in dockerfile
+    assert "requirements-sglang.txt" not in dockerfile
+    assert "COPY outputs" not in dockerfile
+    for line in dockerfile.splitlines():
+        if line.strip().startswith("COPY "):
+            lowered = line.lower()
+            assert "safetensors" not in lowered
+            assert "huggingface" not in lowered
+
+
 def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:
     script = (repo_root / "docker" / "install-host.sh").read_text()
     readme = (repo_root / "docker" / "README.md").read_text()

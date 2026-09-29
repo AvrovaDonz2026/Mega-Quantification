@@ -29,6 +29,7 @@ change when a hardware profile is added. Groups below are the public index.
 | `eval-gpqa-diamond.yaml` | CUDA ≥ 12.9, FlashInfer, HiCache 12 GiB, concurrency 1. |
 | `eval-gpqa-diamond.5090.yaml` | 32 GB SM120 / CUDA 12.8. Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off. |
 | `eval-gpqa-diamond.6000d.yaml` | 80 GB SM120 / CUDA 12.8. Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on. |
+| `eval-gpqa-diamond.spark.yaml` | DGX Spark ARM64 / CUDA 13 / SM121. Vision enabled, 32k context, 4 requests, CUDA graphs and HiCache off; optional embedded MTP. |
 
 采样和比特布局在 `docs/qwen3.8-27b.md`。跑完的分数是 journal 里 198 行都在之后的 `correct/198`。代理从仓库根目录的 `SKILL.md` 读硬约定。
 
