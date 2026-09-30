@@ -3,7 +3,7 @@
 # keep this list free of a torch wheel so pip cannot replace the ARM64 stack
 # with the repository's CUDA 12.8 default.
 nvidia-modelopt==0.47.0
-transformers>=4.57,<5.15
+transformers>=5.8,<5.15
 datasets>=3.0
 accelerate>=1.0
 safetensors>=0.5

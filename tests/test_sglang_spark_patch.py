@@ -65,6 +65,23 @@ QUANT_SOURCE = '''class ModelOptFp4Config:
         quant_method = config.get("quant_algo")
         quant_config.is_w4a16 = quant_method == "W4A16_NVFP4"
         return quant_config
+
+class ModelOptFp4LinearMethod(LinearMethodBase):
+    def __init__(self, quant_config):
+        self.quant_config = quant_config
+
+    def apply(
+        self, layer, x, bias=None,
+    ):
+        x_m, _ = x.shape
+        layer.last_input = x
+        output = x @ layer.weight.T
+        if bias is not None:
+            output = output + bias
+        return output.reshape(x_m, layer.weight.shape[0])
+
+class ModelOptNvFp4A16LinearMethod(LinearMethodBase):
+    pass
 '''
 
 CONFIG_SOURCE = '''class ModelConfig:
@@ -105,6 +122,7 @@ def _namespace(relative_path, **extra):
     tree.body = [node for node in tree.body if not isinstance(node, ast.ImportFrom)]
     namespace = {
         "nn": SimpleNamespace(Module=object),
+        "LinearMethodBase": object,
         "copy": copy,
         "Qwen3_5ForCausalLM": SimpleNamespace(
             packed_modules_mapping={"qkv_proj": ["q_proj", "k_proj", "v_proj"]}
@@ -176,6 +194,18 @@ def test_manifest_cannot_omit_a_patch_target(upstream_tree):
     path.write_text(json.dumps(manifest))
     with pytest.raises(patch.PatchError, match="manifest or installed files"):
         patch.patch_tree(upstream_tree, "0.5.20")
+
+
+def test_old_patch_manifest_is_rejected_before_any_write(upstream_tree):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v1"
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
 
 
 def test_vision_uses_explicit_quantization_without_mutating_text_config():
@@ -251,6 +281,56 @@ def test_uniform_config_preserves_exported_layer_evidence(nested):
     config = cls.from_config({"quantization": quant} if nested else quant)
     assert config._megaquant_quantized_layers == quant["quantized_layers"]
     assert cls.from_config({"quant_algo": "NVFP4"})._megaquant_quantized_layers == {}
+
+
+@pytest.mark.parametrize("name", ["modelopt_mixed", "modelopt_fp4"])
+@pytest.mark.parametrize("shape", [(2, 3, 8), (2, 3, 4, 8), (0, 3, 8), (8,), (6, 8)])
+@pytest.mark.parametrize("use_bias", [False, True])
+def test_nvfp4_visual_linear_preserves_leading_dimensions(name, shape, use_bias):
+    torch = pytest.importorskip("torch")
+    helper = _namespace("srt/models/qwen3_vl.py")["_megaquant_vision_quant_config"]
+    config = helper(
+        QuantConfig(
+            name,
+            {"model.visual.blocks.0.attn.qkv": {"quant_algo": "NVFP4"}},
+            uniform=name == "modelopt_fp4",
+        )
+    )
+    cls = _namespace("srt/layers/quantization/modelopt_quant.py", torch=torch)[
+        "ModelOptFp4LinearMethod"
+    ]
+    method = cls(config)
+    x = torch.arange(torch.tensor(shape).prod().item(), dtype=torch.float64).reshape(shape)
+    if x.ndim > 2 and x.numel():
+        x = x.transpose(0, 1)
+        assert not x.is_contiguous()
+    layer = SimpleNamespace(weight=torch.arange(40, dtype=torch.float64).reshape(5, 8))
+    bias = torch.arange(5, dtype=torch.float64) if use_bias else None
+    output = method.apply(layer, x, bias)
+    torch.testing.assert_close(output, torch.nn.functional.linear(x, layer.weight, bias))
+    assert output.shape == (*x.shape[:-1], 5)
+    assert layer.last_input.ndim == 2
+    if x.ndim == 2:
+        assert layer.last_input is x
+
+
+def test_nvfp4_shape_adapter_preserves_prequantized_tuple_path():
+    torch = pytest.importorskip("torch")
+    decorate = _namespace("srt/layers/quantization/modelopt_quant.py", torch=torch)[
+        "_megaquant_fp4_apply_nd"
+    ]
+    packed = (torch.ones(3, 4, dtype=torch.uint8), torch.ones(3, 1))
+    layer = object()
+    bias = object()
+    seen = []
+
+    def apply(self, received_layer, x, received_bias):
+        seen.append((self, received_layer, x, received_bias))
+        return x
+
+    method = object()
+    assert decorate(apply)(method, layer, packed, bias) is packed
+    assert seen == [(method, layer, packed, bias)]
 
 
 def test_draft_cache_metadata_is_one_layer_and_target_config_is_unchanged():

@@ -37,6 +37,24 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 
 Pinned in `pyproject.toml` and `docker/requirements-gpu.txt`: `nvidia-modelopt[hf]==0.46.1`. Serve image pins `sglang==0.5.20`.
 
+Qwen3.5/3.8 PTQ supports `transformers>=5.8,<5.15`; CPU tests pin 5.14.1.
+Transformers 4.x lacks the required model API. If the GDN hook reports an
+unsupported API, install the declared range before retrying; do not bypass
+the error and continue calibration with unpatched GDN calls.
+
+Spark full-27B W4A8/W4A4 PTQ with vision and MTP passed 256-sample calibration
+and export on 2026-09-29 (ModelOpt 0.47.0, Transformers 5.12.1). Environment,
+artifact checks and limits: `docs/validation/dgx-spark-pr46-20260929.md`.
+This validation does not establish SGLang inference quality or MTP acceptance.
+Subsequent text/image and embedded MTP checks are recorded in
+`docs/validation/dgx-spark-serving-20260930.md`. Spark serving uses FP32 SSM
+states: BF16 states reproduced a W4A4 greedy-output mismatch between ordinary
+decode and MTP verification. This changes the state cache, not W4A4 weights or
+activations. Use `scripts/check_sglang_multimodal.py` to check image answers,
+actual accepted drafts and exact baseline token IDs; its MTP gate must fail on
+token mismatches or zero accepted drafts. The recorded checks are small TP1
+tests, not a general quality or determinism guarantee.
+
 ## Eval
 
 Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on, `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144 context. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, resume by `item_id`.
@@ -92,7 +110,7 @@ megaquant serve -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 megaquant eval -c recipes/eval-gpqa-diamond.5090.yaml --dry-run
 ```
 
-Tests are CPU-only: `python -m pytest` and `python -m ruff check src tests scripts`.
+Tests are CPU-only: `python3 -m pytest` and `python3 -m ruff check src tests scripts`.
 
 ## Where code lives
 

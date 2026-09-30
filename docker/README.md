@@ -9,7 +9,7 @@
 | `megaquant:gb10` | DGX Spark ARM64 / CUDA 13 量化 |
 | `megaquant:sglang-spark` | DGX Spark 的 `serve-sglang-spark` / `eval-gpqa-spark` |
 
-SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 把 `RECIPE` 指到 `recipes/qwen3.8-27b-nvfp4-mixed.yaml`。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
+SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 用 `MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml` 覆盖配方。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
 
 已经在 K8s GPU 容器里、没有 Docker 的机器用 `bash scripts/gpu-pod.sh`。新虚拟机：
 
@@ -115,6 +115,10 @@ NVFP4 presets；Spark 镜像单独使用 `docker/requirements-gpu-spark.txt`，
 不会改变 5090 镜像的 ModelOpt 0.46.1 pin。FLA/causal-conv1d 没有 ARM64
 预编译包时，PTQ 会使用 Transformers 的 PyTorch fallback；这只影响速度。
 
+2026-09-29 已在单台 GB10 上用完整 27B、256 条图文数据跑通 W4A8 混合和
+W4A4 的视觉/MTP 量化及导出，产物完整性和 scale 检查通过。环境、耗时和
+验证范围见 [Spark 实机记录](../docs/validation/dgx-spark-pr46-20260929.md)。
+
 ### Spark SGLang 服务
 
 `Dockerfile.sglang.spark` 使用官方 `lmsysorg/sglang:v0.5.20-cu130`，固定
@@ -149,6 +153,14 @@ CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存�
 一致的镜像/权重、分布式初始化地址和网络配置，不能只把本配方的 TP 改成 2。
 MTP 默认为关闭；文本/图片通过后，可在配方中启用注释列出的 EAGLE 参数，
 使用完整导出里的 `mtp.*`。量化 MTP 不应指向丢失量化元数据的 BF16 draft。
+
+2026-09-30 的[视觉/MTP 服务实测](../docs/validation/dgx-spark-serving-20260930.md)
+记录了红蓝图对照、数字 OCR、实际草稿接受率和逐 token 基线比较。
+需要重新构建带 v2 补丁的镜像，以修复视觉 NVFP4 三维输入前向。
+Spark 配方的 SSM 状态使用 FP32：BF16 状态曾复现 W4A4 普通 decode 与
+MTP verify 输出分歧。这只增加循环状态缓存的内存，不改变 W4A4 权重/激活格式。
+可用 `scripts/check_sglang_multimodal.py` 分别运行 baseline 和 MTP；
+MTP 模式遇到 token 不一致或没有接受草稿时会返回非零退出码。
 
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
@@ -211,7 +223,7 @@ docker compose -f docker-compose.yml -f docker-compose.ngc.yml run --rm megaquan
 
 默认 `megaquant:sglang` 底包是 `nvidia/cuda:12.8.1-devel-ubuntu24.04`（`SGLANG_BASE_IMAGE`），不要改这个默认。FlashInfer JIT 在 nvcc 12.8 上看不见 SM 12.0（`SM 12.x requires CUDA >= 12.9`），DeepGEMM `set_pdl` 也要求 nvcc 12.9+，所以 Compose 默认 `SGLANG_ENABLE_JIT_DEEPGEMM=0`。
 
-这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。float32 64-slot mamba 大约占 9.3 GB HBM，GPU KV 只剩不到 1 GB，16 路会排队。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
+这台 5090 上先用 `recipes/eval-gpqa-diamond.5090.yaml`（不要改 Compose 里的默认 `EVAL_RECIPE`）：Triton 注意力/GDN、PyTorch sampling、Triton FP8 GEMM、Marlin NVFP4，以及 `SGLANG_FORCE_FP8_MARLIN=1` 和 `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`。只改 `--attention-backend triton` 不够——mixed 的 FP8 `linear_attn` 投影仍会走 FlashInfer BMM。94 GiB 内存机器把 `--hicache-size` 钉在 **64 GiB**。HiCache 按 GPU 池比例切 host RAM，所以 5090 用 **bf16** GDN（`max_mamba_cache_size: 96`）把 HBM 还给注意力 KV，GPQA 开 **24** 路。float32 64-slot mamba 大约占 9.3 GB HBM，GPU KV 只剩不到 1 GB，16 路会排队。Host 上的 `docker-compose.override.yml` 如果写死了 `sglang` argv，也要把 `--hicache-size` / `--max-mamba-cache-size` / `--mamba-ssm-dtype` 改成同样的数，否则 recipe 不会生效。
 
 ```bash
 EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up serve-sglang

@@ -312,7 +312,7 @@ def test_prepare_export_memory_is_noop_without_cuda() -> None:
 
     dummy = Dummy()
     kind = _prepare_export_memory(dummy)
-    assert kind in {"cpu-only", "cuda", "cuda-freed", "partial-cpu"}
+    assert kind in {"cpu-only", "cuda", "cuda-freed", "partial-cpu", "cuda-unchanged"}
     if kind == "cpu-only":
         assert dummy.moved_to is None
     assert _is_cuda_oom(RuntimeError("CUDA out of memory. Tried to allocate 4.74 GiB"))

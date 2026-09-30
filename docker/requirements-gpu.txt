@@ -3,7 +3,7 @@
 nvidia-modelopt[hf]==0.46.1
 llmcompressor>=0.8.0
 compressed-tensors>=0.10.0
-transformers>=4.56.0
+transformers>=5.8,<5.15
 datasets>=3.0.0
 accelerate>=1.0.0
 safetensors>=0.5.0

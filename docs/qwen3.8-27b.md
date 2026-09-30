@@ -10,6 +10,10 @@ DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NV
 
 代理从仓库根目录的 [SKILL.md](../SKILL.md) 读硬约定。
 
+Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
+5.14.1。Transformers 4.x 缺少所需的模型接口。若启动时报告 GDN API 不兼容，
+先重新安装仓库的 `.[hf,modelopt]` 依赖，再重跑；不要跳过错误继续校准。
+
 ## Quantization format
 
 | 张量 | 权重 | 激活 | `quantized_layers` |
@@ -184,6 +188,10 @@ Embeddings and the vision patch-embedding convolution remain BF16.
 Prepare a reproducible 128-image + 128-text calibration set with
 `scripts/prepare_multimodal_calibration.py`; see [Spark container commands](../docker/README.md#dgx-spark--gb10).
 
+完整 27B 的 Spark W4A8/W4A4 已于 2026-09-29 通过各 256 条图文校准和
+HF 导出，视觉及 MTP 均启用量化；张量、分片索引和 scale 检查通过。
+具体环境和限制见 [实机验证记录](validation/dgx-spark-pr46-20260929.md)。
+
 Spark 推理使用独立的 `Dockerfile.sglang.spark` 和
 `recipes/eval-gpqa-diamond.spark.yaml`，入口是
 `docker compose --profile spark up serve-sglang-spark`。镜像固定 ARM64/CUDA 13
@@ -191,6 +199,9 @@ SGLang 0.5.20，包含量化视觉/MTP 加载兼容补丁。初始为 TP1、32k 
 4 并发、0.70 内存比例、关闭 HiCache/CUDA graph；MTP 需要在文本/图像验证后
 单独开启配方中的 `speculative_*` 参数。校准覆盖与服务实测是两个独立结果。
 构建、检查和评测命令见 [Spark SGLang 服务](../docker/README.md#spark-sglang-服务)。
+2026-09-30 的[视觉/MTP 服务验证](validation/dgx-spark-serving-20260930.md)
+包含红蓝图、OCR 和嵌入式 MTP 的逐 token 对照。Spark 配方现在使用 FP32
+SSM 状态，修复已复现的 W4A4 投机验证输出分歧；权重和激活仍为 W4A4。
 Calibration coverage verifies execution, not model quality or speculative-decoding
 acceptance rate; those still need inference evaluation.
 
@@ -485,7 +496,7 @@ vLLM support for that combo is limited.
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
-| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); CUDA 12.8 SM120: Triton attn + Marlin NVFP4 + `SGLANG_FORCE_FP8_MARLIN`. 32 GB recipe also disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). 80 GB recipe keeps CUDA graph, leaves KV on GPU, uses CUTLASS FP8, and sets `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION` (`eval-gpqa-diamond.6000d.yaml`). |
+| Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); both CUDA 12.8 SM120 recipes use Triton attn + Marlin NVFP4, `SGLANG_FORCE_FP8_MARLIN=1`, and `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. The 32 GB recipe disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). The 80 GB recipe keeps CUDA graph, leaves KV on GPU, and uses CUTLASS FP8 (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
 | Headline | `correct/198` once `summary.json` exists and the journal has every row. Truncated and unparsed rows count as wrong. |
 

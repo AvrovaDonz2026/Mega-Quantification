@@ -185,6 +185,7 @@ def test_spark_recipe_serves_images_without_double_budgeting_unified_memory(monk
     assert argv[argv.index("--attention-backend") + 1] == "flashinfer"
     assert argv[argv.index("--linear-attn-backend") + 1] == "triton"
     assert argv[argv.index("--quantization") + 1] == "modelopt"
+    assert argv[argv.index("--mamba-ssm-dtype") + 1] == "float32"
     assert "--enable-multimodal" in argv
     assert "--disable-cuda-graph" in argv
     assert "--enable-hierarchical-cache" not in argv
@@ -222,6 +223,7 @@ def test_sglang_recipe_can_opt_into_embedded_mtp() -> None:
     assert argv[argv.index("--speculative-num-steps") + 1] == "2"
     assert argv[argv.index("--speculative-eagle-topk") + 1] == "1"
     assert argv[argv.index("--speculative-num-draft-tokens") + 1] == "3"
+    assert argv[argv.index("--mamba-ssm-dtype") + 1] == "float32"
     # SGLang selects the embedded Qwen MTP from the target export.
     assert "--speculative-draft-model-path" not in argv
 

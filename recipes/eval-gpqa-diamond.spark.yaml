@@ -58,7 +58,8 @@ serve:
   enable_jit_deepgemm: false
   mamba_full_memory_ratio: 4.59
   mamba_radix_cache_strategy: extra_buffer_lazy
-  mamba_ssm_dtype: bfloat16
+  # BF16 state stores can change greedy output between decode and MTP verify.
+  mamba_ssm_dtype: float32
   max_mamba_cache_size: 16
   enable_hierarchical_cache: false
   kv_offloading_backend: none
