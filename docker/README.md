@@ -154,6 +154,14 @@ CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存�
 MTP 默认为关闭；文本/图片通过后，可在配方中启用注释列出的 EAGLE 参数，
 使用完整导出里的 `mtp.*`。量化 MTP 不应指向丢失量化元数据的 BF16 draft。
 
+2026-09-30 的[视觉/MTP 服务实测](../docs/validation/dgx-spark-serving-20260930.md)
+记录了红蓝图对照、数字 OCR、实际草稿接受率和逐 token 基线比较。
+需要重新构建带 v2 补丁的镜像，以修复视觉 NVFP4 三维输入前向。
+Spark 配方的 SSM 状态使用 FP32：BF16 状态曾复现 W4A4 普通 decode 与
+MTP verify 输出分歧。这只增加循环状态缓存的内存，不改变 W4A4 权重/激活格式。
+可用 `scripts/check_sglang_multimodal.py` 分别运行 baseline 和 MTP；
+MTP 模式遇到 token 不一致或没有接受草稿时会返回非零退出码。
+
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
 ```bash

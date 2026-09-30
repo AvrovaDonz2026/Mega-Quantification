@@ -46,6 +46,14 @@ Spark full-27B W4A8/W4A4 PTQ with vision and MTP passed 256-sample calibration
 and export on 2026-09-29 (ModelOpt 0.47.0, Transformers 5.12.1). Environment,
 artifact checks and limits: `docs/validation/dgx-spark-pr46-20260929.md`.
 This validation does not establish SGLang inference quality or MTP acceptance.
+Subsequent text/image and embedded MTP checks are recorded in
+`docs/validation/dgx-spark-serving-20260930.md`. Spark serving uses FP32 SSM
+states: BF16 states reproduced a W4A4 greedy-output mismatch between ordinary
+decode and MTP verification. This changes the state cache, not W4A4 weights or
+activations. Use `scripts/check_sglang_multimodal.py` to check image answers,
+actual accepted drafts and exact baseline token IDs; its MTP gate must fail on
+token mismatches or zero accepted drafts. The recorded checks are small TP1
+tests, not a general quality or determinism guarantee.
 
 ## Eval
 

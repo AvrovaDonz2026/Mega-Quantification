@@ -199,6 +199,9 @@ SGLang 0.5.20，包含量化视觉/MTP 加载兼容补丁。初始为 TP1、32k 
 4 并发、0.70 内存比例、关闭 HiCache/CUDA graph；MTP 需要在文本/图像验证后
 单独开启配方中的 `speculative_*` 参数。校准覆盖与服务实测是两个独立结果。
 构建、检查和评测命令见 [Spark SGLang 服务](../docker/README.md#spark-sglang-服务)。
+2026-09-30 的[视觉/MTP 服务验证](validation/dgx-spark-serving-20260930.md)
+包含红蓝图、OCR 和嵌入式 MTP 的逐 token 对照。Spark 配方现在使用 FP32
+SSM 状态，修复已复现的 W4A4 投机验证输出分歧；权重和激活仍为 W4A4。
 Calibration coverage verifies execution, not model quality or speculative-decoding
 acceptance rate; those still need inference evaluation.
 
