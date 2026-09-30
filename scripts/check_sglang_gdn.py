@@ -73,6 +73,7 @@ def check_gdn_decode_verify() -> list[dict]:
             b=b,
             initial_state_source=verify_state,
             initial_state_indices=indices,
+            cu_seqlens=torch.tensor([0, steps], device="cuda", dtype=torch.int32),
             use_qk_l2norm_in_kernel=True,
             disable_state_update=True,
             intermediate_states_buffer=intermediate,
@@ -93,8 +94,10 @@ def check_gdn_decode_verify() -> list[dict]:
             report[name + "_max_abs"] = difference.max().item()
         if any(report[name + "_nonzero"] for name in differences):
             raise RuntimeError(f"GDN decode/verify mismatch: {report}")
-        if not torch.equal(verify_envelope, initial) or not torch.equal(
-            packed_envelope[:, 1], initial[:, 1]
+        if (
+            not torch.equal(verify_envelope, initial)
+            or not torch.equal(packed_envelope[:, 1], initial[:, 1])
+            or not torch.equal(packed_envelope[0], initial[0])
         ):
             raise RuntimeError("GDN validation changed an unrelated or read-only state")
         reports.append(report)
