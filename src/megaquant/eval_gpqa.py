@@ -153,6 +153,7 @@ class EvalServe(StrictModel):
     tool_call_parser: str = "qwen3_coder"
     mm_encoder_tp_mode: str = "data"
     enable_multimodal: bool = False
+    enable_deterministic_inference: bool = False
     quantization: str | None = "modelopt"
     # Embedded Qwen MTP uses EAGLE with the target checkpoint as its draft.
     # Leave unset until the selected runtime/checkpoint has been validated.
@@ -553,6 +554,7 @@ def sglang_serve_argv(
     reasoning_parser: str | None = None,
     tool_call_parser: str | None = None,
     enable_multimodal: bool = False,
+    enable_deterministic_inference: bool = False,
     quantization: str | None = None,
     speculative_algorithm: str | None = None,
     speculative_num_steps: int | None = None,
@@ -631,6 +633,8 @@ def sglang_serve_argv(
     ]
     if enable_multimodal:
         argv.append("--enable-multimodal")
+    if enable_deterministic_inference:
+        argv.append("--enable-deterministic-inference")
     if quantization:
         argv.extend(["--quantization", quantization])
     if speculative_algorithm:
@@ -708,6 +712,7 @@ def sglang_serve_argv_from_recipe(
         reasoning_parser=serve.reasoning_parser,
         tool_call_parser=serve.tool_call_parser,
         enable_multimodal=serve.enable_multimodal,
+        enable_deterministic_inference=serve.enable_deterministic_inference,
         quantization=serve.quantization,
         speculative_algorithm=serve.speculative_algorithm,
         speculative_num_steps=serve.speculative_num_steps,
