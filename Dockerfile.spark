@@ -12,6 +12,7 @@ FROM ${BASE_IMAGE}
 
 ARG BASE_IMAGE
 ARG GIT_REVISION=unknown
+ARG PIP_NO_INDEX=0
 
 LABEL org.opencontainers.image.source="https://github.com/AvrovaDonz2026/Mega-Quantification" \
       org.opencontainers.image.revision="${GIT_REVISION}" \
@@ -39,6 +40,7 @@ WORKDIR /opt/megaquant
 COPY pyproject.toml README.md LICENSE ./
 COPY docker/requirements-gpu-spark.txt /tmp/requirements-gpu-spark.txt
 COPY docker/requirements-build-spark.txt /tmp/requirements-build-spark.txt
+COPY docker/wheelhouse /tmp/wheelhouse
 COPY src ./src
 COPY recipes ./recipes
 COPY docs ./docs
@@ -50,8 +52,9 @@ COPY scripts ./scripts
 # Torch/CUDA stack. The Torch entry must already exist in the immutable base.
 # Disable build isolation after installing the pinned build backend so an
 # implicit Hatchling environment cannot introduce floating dependencies.
-RUN python -m pip install --no-cache-dir --no-deps -r /tmp/requirements-build-spark.txt \
-    && python -m pip install --no-cache-dir --no-deps -r /tmp/requirements-gpu-spark.txt \
+# PIP_NO_INDEX=1 plus the prepared wheelhouse permits --network=none builds.
+RUN python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-build-spark.txt \
+    && python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-gpu-spark.txt \
     && python -m pip install --no-cache-dir --no-deps --no-build-isolation . \
     && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models \
     && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh \

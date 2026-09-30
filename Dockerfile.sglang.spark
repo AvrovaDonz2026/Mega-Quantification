@@ -5,6 +5,7 @@ FROM ${BASE_IMAGE}
 
 ARG BASE_IMAGE
 ARG GIT_REVISION=unknown
+ARG PIP_NO_INDEX=0
 LABEL org.opencontainers.image.source="https://github.com/AvrovaDonz2026/Mega-Quantification" \
     org.opencontainers.image.revision=${GIT_REVISION}
 
@@ -21,6 +22,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /opt/megaquant
 COPY pyproject.toml README.md LICENSE ./
 COPY docker/requirements-build-spark.txt /tmp/requirements-build-spark.txt
+COPY docker/wheelhouse /tmp/wheelhouse
 COPY src ./src
 COPY recipes ./recipes
 COPY docs ./docs
@@ -28,7 +30,7 @@ COPY docker ./docker
 COPY scripts ./scripts
 
 # Only add the MegaQuant CLI. Do not resolve another torch/sglang wheel set.
-RUN python -m pip install --no-cache-dir --no-deps -r /tmp/requirements-build-spark.txt \
+RUN python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-build-spark.txt \
     && python -m pip install --no-cache-dir --no-deps --no-build-isolation . \
     && python scripts/patch_sglang_spark.py \
     && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models /data \

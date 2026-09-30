@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -290,6 +292,14 @@ def _family_ignore(family_name: str, recipe: Recipe, notes: list[str]) -> list[s
 
 
 def _git_sha() -> str | None:
+    manifest = Path(os.environ.get("MEGAQUANT_ROOT", "/opt/megaquant")) / "container-manifest.json"
+    try:
+        record = json.loads(manifest.read_text())
+        revision = record.get("git_revision") if isinstance(record, dict) else None
+        if isinstance(revision, str) and re.fullmatch(r"[0-9a-fA-F]{40}", revision):
+            return revision
+    except (OSError, UnicodeError, ValueError):
+        pass
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -512,9 +522,12 @@ def _require_backend(plan: ResolvedPlan) -> Any:
 
 
 def _write_provenance(plan: ResolvedPlan, export_path: Path) -> None:
-    prov_dir = export_path.parent if export_path.suffix else export_path
-    if export_path.exists() and export_path.is_file():
+    if export_path.is_dir():
+        prov_dir = export_path
+    elif export_path.is_file():
         prov_dir = export_path.parent
+    else:
+        prov_dir = export_path.parent if export_path.suffix else export_path
     prov_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "name": plan.recipe.name,
