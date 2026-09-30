@@ -6,18 +6,35 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import platform
+from pathlib import Path
+
+from container_manifest import MANIFEST, snapshot, verify
+from patch_sglang_spark import patch_tree
 
 
 def main() -> None:
     import sgl_kernel
     import torch
 
+    root = Path("/opt/megaquant")
+    manifest = json.loads((root / MANIFEST).read_text())
+    errors = verify(manifest, snapshot(root))
+    if errors:
+        raise SystemExit(f"Container manifest failed: {errors}")
+    import sglang
+
+    patch = patch_tree(
+        Path(sglang.__file__).parent, importlib.metadata.version("sglang"), check=True
+    )
     report = {
         "machine": platform.machine(),
         "sglang": importlib.metadata.version("sglang"),
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "sgl_kernel": sgl_kernel.__file__,
+        "git_revision": manifest["git_revision"],
+        "container_manifest": "verified",
+        "sglang_patch": patch,
     }
     if not torch.cuda.is_available():
         raise SystemExit("CUDA unavailable: run the Spark image with --gpus all")

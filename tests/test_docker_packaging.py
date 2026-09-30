@@ -10,9 +10,7 @@ import yaml
 def test_dockerfile_does_not_copy_weights(repo_root: Path) -> None:
     dockerfile = (repo_root / "Dockerfile").read_text()
     copy_lines = [
-        line.strip()
-        for line in dockerfile.splitlines()
-        if line.strip().startswith("COPY ")
+        line.strip() for line in dockerfile.splitlines() if line.strip().startswith("COPY ")
     ]
     assert copy_lines
     for line in copy_lines:
@@ -85,9 +83,7 @@ def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     eval_svc = services["eval-gpqa"]
     assert eval_svc.get("gpus") in (None, False, [])
     eval_deploy = eval_svc.get("deploy") or {}
-    eval_devices = (
-        (eval_deploy.get("resources") or {}).get("reservations") or {}
-    ).get("devices")
+    eval_devices = ((eval_deploy.get("resources") or {}).get("reservations") or {}).get("devices")
     assert not eval_devices
     serve_image = str(services["serve-sglang"].get("image") or "")
     assert "megaquant:sglang" in serve_image
@@ -128,7 +124,7 @@ def test_gpu_pod_packs_host_ram_threads_and_batch(repo_root: Path) -> None:
     assert "nvfp4_w4a4" in script
     assert "Qwen3.8-27B-NVFP4-mixed" not in script
     assert "Qwen3.8-27B-NVFP4-W4A8" in script
-    assert 'MEGAQUANT_GPU_HEADROOM_GIB:-1' in script or 'MEGAQUANT_GPU_HEADROOM_GIB:-"1"' in script
+    assert "MEGAQUANT_GPU_HEADROOM_GIB:-1" in script or 'MEGAQUANT_GPU_HEADROOM_GIB:-"1"' in script
     assert "eval-gpqa-diamond.yaml" in script
     assert "serve|eval" in script
     assert "HiCache" in script or "KV CPU offload" in script
@@ -195,7 +191,8 @@ def test_dockerfile_sglang_spark_is_pinned_and_patches_quantized_vlm(repo_root: 
     dockerfile = (repo_root / "Dockerfile.sglang.spark").read_text()
     assert "lmsysorg/sglang:v0.5.20-cu130@sha256:" in dockerfile
     assert "TORCH_CUDA_ARCH_LIST=12.1" in dockerfile
-    assert "pip install --no-cache-dir --no-deps -e ." in dockerfile
+    assert "pip install --no-cache-dir --no-deps --no-build-isolation ." in dockerfile
+    assert "-e ." not in dockerfile
     assert "scripts/patch_sglang_spark.py" in dockerfile
     assert "requirements-sglang.txt" not in dockerfile
     assert "COPY outputs" not in dockerfile
@@ -204,6 +201,71 @@ def test_dockerfile_sglang_spark_is_pinned_and_patches_quantized_vlm(repo_root: 
             lowered = line.lower()
             assert "safetensors" not in lowered
             assert "huggingface" not in lowered
+
+
+def test_spark_compose_retains_image_source_and_recipes(repo_root: Path) -> None:
+    data = yaml.safe_load((repo_root / "docker-compose.yml").read_text())
+    allowed = {
+        "/cache/huggingface",
+        "/models",
+        "/opt/megaquant/outputs",
+        "/opt/megaquant/offload",
+        "/data",
+    }
+    for name in (
+        "serve-sglang-spark",
+        "serve-sglang-spark-mtp",
+        "eval-gpqa-spark",
+        "quantize-spark-w4a8",
+        "quantize-spark-w4a4",
+        "check-sglang-spark",
+        "check-sglang-spark-mtp",
+    ):
+        service = data["services"][name]
+        targets = {
+            volume.rsplit(":", 2)[-2 if volume.endswith(":ro") else -1]
+            for volume in service["volumes"]
+        }
+        assert targets == allowed, name
+        for volume in service["volumes"]:
+            if ":/models" in volume or ":/data" in volume:
+                assert volume.endswith(":ro"), (name, volume)
+
+
+def test_spark_ptq_compose_uses_clean_image_defaults(repo_root: Path) -> None:
+    data = yaml.safe_load((repo_root / "docker-compose.yml").read_text())
+    for scheme in ("w4a8", "w4a4"):
+        service = data["services"][f"quantize-spark-{scheme}"]
+        assert service["platform"] == "linux/arm64"
+        assert service["profiles"] == ["spark-ptq"]
+        assert service["gpus"] == "all"
+        assert service["build"]["dockerfile"] == "Dockerfile.spark"
+        assert "BASE_IMAGE" not in service["build"]["args"]
+        assert "INSTALL_SPARK_DEPS" not in service["build"]["args"]
+        assert service["build"]["args"]["GIT_REVISION"] == "${GIT_REVISION:-unknown}"
+        assert service["command"] == [
+            "quantize",
+            "-c",
+            f"recipes/qwen3.8-27b-nvfp4-{scheme}.spark.yaml",
+        ]
+
+
+def test_spark_mtp_baked_recipe_changes_only_speculation(repo_root: Path) -> None:
+    recipes = repo_root / "recipes"
+    baseline = yaml.safe_load((recipes / "eval-gpqa-diamond.spark.yaml").read_text())
+    mtp = yaml.safe_load((recipes / "eval-gpqa-diamond.spark-mtp.yaml").read_text())
+    assert mtp.pop("name") == "gpqa-diamond-qwen38-spark-mtp"
+    baseline.pop("name")
+    expected = {
+        "speculative_algorithm": "EAGLE",
+        "speculative_num_steps": 2,
+        "speculative_eagle_topk": 1,
+        "speculative_num_draft_tokens": 3,
+    }
+    for key, value in expected.items():
+        assert mtp["serve"].pop(key) == value
+    assert mtp == baseline
+    assert mtp["serve"]["mamba_ssm_dtype"] == "float32"
 
 
 def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:

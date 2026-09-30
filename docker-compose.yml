@@ -45,6 +45,15 @@ x-common-volumes: &common-volumes
   # (EvalServe.sampling_backend, etc.) without rebuilding megaquant:sglang.
   - ./src:/opt/megaquant/src
 
+# Spark runs use the source and recipes baked into the image. Only inputs,
+# exports, download caches and temporary offload storage come from the host.
+x-spark-volumes: &spark-volumes
+  - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
+  - ${MODELS_DIR:-./models}:/models:ro
+  - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
+  - ${OFFLOAD_DIR:-./offload_folder}:/opt/megaquant/offload
+  - ${DATA_DIR:-./data}:/data:ro
+
 x-gpu: &gpu
   ipc: host
   shm_size: 64gb
@@ -108,6 +117,7 @@ x-sglang-spark: &sglang-spark
     dockerfile: Dockerfile.sglang.spark
     args:
       BASE_IMAGE: ${SGLANG_SPARK_BASE_IMAGE:-lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f}
+      GIT_REVISION: ${GIT_REVISION:-unknown}
   image: ${SGLANG_SPARK_IMAGE:-megaquant:sglang-spark}
   platform: linux/arm64
   pull_policy: missing
@@ -116,7 +126,25 @@ x-sglang-spark: &sglang-spark
     EVAL_RECIPE: ${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
-  volumes: *common-volumes
+  volumes: *spark-volumes
+  working_dir: /opt/megaquant
+
+x-ptq-spark: &ptq-spark
+  <<: *gpu
+  build:
+    context: .
+    dockerfile: Dockerfile.spark
+    # Inherit the pinned public base in Dockerfile.spark.
+    args:
+      GIT_REVISION: ${GIT_REVISION:-unknown}
+  image: ${MEGAQUANT_SPARK_IMAGE:-megaquant:gb10}
+  platform: linux/arm64
+  pull_policy: missing
+  environment:
+    <<: *common-env
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+  volumes: *spark-volumes
   working_dir: /opt/megaquant
 
 services:
@@ -177,6 +205,53 @@ services:
     command:
       ["serve", "-c", "${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}",
        "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}"]
+
+  serve-sglang-spark-mtp:
+    <<: [*sglang-spark, *gpu]
+    # Start this after stopping the baseline service on a single GPU.
+    profiles: ["spark-mtp"]
+    ports:
+      - "${SGLANG_SPARK_MTP_PORT:-30001}:30000"
+    command:
+      ["serve", "-c", "recipes/eval-gpqa-diamond.spark-mtp.yaml",
+       "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}"]
+
+  quantize-spark-w4a8:
+    <<: *ptq-spark
+    profiles: ["spark-ptq"]
+    command: ["quantize", "-c", "recipes/qwen3.8-27b-nvfp4-w4a8.spark.yaml"]
+
+  quantize-spark-w4a4:
+    <<: *ptq-spark
+    profiles: ["spark-ptq"]
+    command: ["quantize", "-c", "recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml"]
+
+  check-sglang-spark:
+    <<: *sglang-spark
+    profiles: ["spark-check"]
+    environment:
+      <<: *common-env
+      NVIDIA_VISIBLE_DEVICES: ""
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+    entrypoint: ["python", "scripts/check_sglang_multimodal.py"]
+    command:
+      ["--base-url", "http://serve-sglang-spark:30000",
+       "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}",
+       "--mode", "baseline", "--output", "${SPARK_CHECK_OUTPUT:-outputs/spark-baseline.json}"]
+
+  check-sglang-spark-mtp:
+    <<: *sglang-spark
+    profiles: ["spark-check"]
+    environment:
+      <<: *common-env
+      NVIDIA_VISIBLE_DEVICES: ""
+      MEGAQUANT_SKIP_GPU_REPORT: "1"
+    entrypoint: ["python", "scripts/check_sglang_multimodal.py"]
+    command:
+      ["--base-url", "http://serve-sglang-spark-mtp:30000",
+       "--model", "${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}",
+       "--mode", "mtp", "--output", "${SPARK_MTP_CHECK_OUTPUT:-outputs/spark-mtp.json}",
+       "--baseline", "${SPARK_CHECK_OUTPUT:-outputs/spark-baseline.json}"]
 
   eval-gpqa-spark:
     <<: *sglang-spark

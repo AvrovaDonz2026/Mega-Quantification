@@ -118,3 +118,37 @@ def test_spark_services_share_arm64_image_but_only_serve_attaches_gpu() -> None:
     assert env["NVIDIA_VISIBLE_DEVICES"] == ""
     assert env["MEGAQUANT_SKIP_GPU_REPORT"] == "1"
     assert "serve-sglang-spark:30000/v1" in env["MEGAQUANT_SGLANG_BASE_URL"]
+
+
+def test_spark_mtp_uses_embedded_checkpoint_and_baked_recipe() -> None:
+    _text, data = _load()
+    baseline = data["services"]["serve-sglang-spark"]
+    mtp = data["services"]["serve-sglang-spark-mtp"]
+    assert _has_gpu_attach(mtp)
+    assert mtp["image"] == baseline["image"]
+    assert mtp["platform"] == "linux/arm64"
+    assert mtp["profiles"] == ["spark-mtp"]
+    command = " ".join(mtp["command"])
+    assert "recipes/eval-gpqa-diamond.spark-mtp.yaml" in command
+    assert "--model ${SPARK_EVAL_MODEL:-outputs/Qwen3.8-27B-NVFP4-W4A8-spark}" in command
+    assert "draft-model-path" not in command
+
+
+def test_spark_visual_mtp_clients_do_not_attach_gpu() -> None:
+    _text, data = _load()
+    services = data["services"]
+    baseline = services["check-sglang-spark"]
+    mtp = services["check-sglang-spark-mtp"]
+    for client in (baseline, mtp):
+        assert not _has_gpu_attach(client)
+        assert client["image"] == services["serve-sglang-spark"]["image"]
+        assert client["environment"]["NVIDIA_VISIBLE_DEVICES"] == ""
+        assert client["environment"]["MEGAQUANT_SKIP_GPU_REPORT"] == "1"
+        assert client["entrypoint"] == ["python", "scripts/check_sglang_multimodal.py"]
+    assert "http://serve-sglang-spark:30000" in baseline["command"]
+    assert "http://serve-sglang-spark-mtp:30000" in mtp["command"]
+    assert baseline["command"][baseline["command"].index("--mode") + 1] == "baseline"
+    assert mtp["command"][mtp["command"].index("--mode") + 1] == "mtp"
+    assert mtp["command"][mtp["command"].index("--baseline") + 1] == (
+        baseline["command"][baseline["command"].index("--output") + 1]
+    )
