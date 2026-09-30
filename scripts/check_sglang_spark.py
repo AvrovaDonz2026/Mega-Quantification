@@ -8,6 +8,7 @@ import json
 import platform
 from pathlib import Path
 
+from check_sglang_gdn import check_gdn_decode_verify
 from container_manifest import MANIFEST, snapshot, verify
 from patch_sglang_spark import patch_tree
 
@@ -47,6 +48,7 @@ def main() -> None:
         raise SystemExit("CUDA matrix multiplication check failed")
     torch.cuda.synchronize()
     report["cuda_matmul"] = "passed"
+    report["gdn_decode_verify"] = check_gdn_decode_verify()
     print(json.dumps(report, indent=2))
 
 

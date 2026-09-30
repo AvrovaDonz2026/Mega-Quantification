@@ -97,6 +97,11 @@ FIXTURES = {
     "srt/models/qwen3_5_mtp.py": MTP_SOURCE,
     "srt/layers/quantization/modelopt_quant.py": QUANT_SOURCE,
     "srt/configs/model_config.py": CONFIG_SOURCE,
+    "kernels/ops/attention/fla/fused_recurrent.py": (
+        "def packed_decode(b_val, b):\n"
+        "    beta_val = tl.sigmoid(b_val).to(b.dtype.element_ty).to(tl.float32)\n"
+        "    return beta_val\n"
+    ),
 }
 
 
@@ -206,6 +211,17 @@ def test_old_patch_manifest_is_rejected_before_any_write(upstream_tree):
     with pytest.raises(patch.PatchError, match="manifest or installed files"):
         patch.patch_tree(upstream_tree, "0.5.20")
     assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+
+
+def test_old_v2_manifest_cannot_skip_gdn_precision_fix(upstream_tree):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v2"
+    del manifest["files"]["kernels/ops/attention/fla/fused_recurrent.py"]
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=True)
 
 
 def test_vision_uses_explicit_quantization_without_mutating_text_config():
