@@ -1,21 +1,30 @@
 # DGX Spark clean container validation - 2026-09-30
 
-**Status: incomplete.** Full W4A8/W4A4 quantization and export audits passed at
-revision `15561d8`. The original official-based serving image passed W4A8
-vision/MTP checks but reproduced a stable W4A4 baseline/MTP token mismatch.
-The revised serving image at revision `44bf3d7` built cleanly twice with matching
-container manifests, passed its GDN GPU regression and isolated archive
-roundtrip, and passed strict W4A4 visual/MTP validation. Its W4A8 functional
-checks passed but Python baseline/MTP tokens diverged. Later v4/v5 clean builds
-also passed, and v5 passed its isolated image roundtrip. Projection repairs
-have not established full-model W4A8 parity. Further serving repair and
-clean-image validation remain pending.
-Complete container reproduction is not yet established.
+**Status: passed within the tested scope.** Full 27B W4A8/W4A4 quantization and
+export audits passed at `15561d8`. Final clean serving revision `7d1daea` passed
+all four baseline/MTP runs, including visual counterfactuals and OCR. For each
+format, all 205 output token IDs matched between baseline and embedded MTP,
+and every output logprob was finite. Both images passed independent clean
+builds with matching software manifests and isolated save/load checks.
+
+This verifies TP1 on one physical Spark, with five fixed requests per serving
+mode and CPU image portability on the same host/kernel. Earlier reproducible
+failures and the experiments that led to the final repair are retained below.
 
 The companion
-[JSON record](dgx-spark-clean-container-20260930.json) keeps pending results as
-`null` and records `complete: false`. Commands are in the
+[JSON record](dgx-spark-clean-container-20260930.json) records `complete: true`
+and `status: passed` for this scope. Commands are in the
 [Spark container runbook](../DGX_SPARK.md).
+
+| Final GPU check | Result | Exact baseline/MTP IDs | Accepted / proposed drafts | Verification steps |
+|---|---|---|---|---|
+| Mixed W4A8 baseline + MTP | 5/5 cases per mode, finite logprobs | 205/205 | 136/146 (93.15%) | 73 |
+| Uniform W4A4 baseline + MTP | 5/5 cases per mode, finite logprobs | 205/205 | 137/142 (96.48%) | 71 |
+
+| Final image portability | Runtime | Empty store with private containerd, mount/network namespaces |
+|---|---|---|
+| PTQ image | `15561d8` | Passed; config, layers, manifest and baked W4A8/W4A4 plans matched |
+| Serving image | `7d1daea` | Passed; config, layers, manifest, seven patch guards and baked baseline/MTP commands matched |
 
 | Stage | Runtime revision | Git source archive SHA256 |
 |---|---|---|
@@ -23,10 +32,12 @@ The companion
 | Corrected serving validation | `44bf3d7e3a5679c722f27b27e04d3bfb26784d8b` | `cb5cbe73d05fa2259b3e9a330c0a3935aa9c52d5e30888fb778637cbda7f455d` |
 | FP8 serving repair, v4 | `4897adb63227e4ce62ba68042ccd21e2dbb5de19` | `a6eae547194cbde33d5c51708acc0cc16bab1f60a31032298d6cbdc2e7ec6cb4` |
 | BF16 GDN gate repair, v5 | `fc8925db4b59187bfacc920fefbc0192bf3593d1` | `4749b63443b374209b0bfc9eeb1730213fa101bb2c01e326a0420a5e178f9da9` |
+| Final guarded serving repair, v6 | `7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6` | `f66994238301b977235f8bb2ccfa73a4cc5fd2261cc8bbb81f1fe3ea68b43415` |
 
-The corrected serving runs reuse the audited exports produced by the quantization
-runtime. The full PTQ runs were not repeated at the later serving revisions. Separately verified
-dependency wheelhouses are not part of either Git archive.
+The final serving stage uses revision `7d1daea` with audited exports produced
+by quantization revision `15561d8`. The full PTQ runs were not repeated at the
+later serving revisions. Separately verified dependency wheelhouses are not
+part of the Git archives.
 
 ## Scope and inputs
 
@@ -243,13 +254,13 @@ Acceptance does not override the token-equivalence gate or establish a speedup.
 
 ### Stable W4A4 Token Divergence
 
-The first differing Python token is index 16, the 17th output token: baseline
+The first differing Python token was index 16, the 17th output token: baseline
 chose token `449` (` with`), while MTP chose `264` (` a`). Both responses reached
 the 192-token cap. Arithmetic, both color images and OCR exactly matched their
 baselines. Two additional baseline requests each reproduced the original
 baseline's 192 IDs; two additional MTP requests each reproduced the original
-MTP's 192 IDs. Every repeat reported zero cached tokens. Thus the mismatch is
-stable within each decoding mode in these tests.
+MTP's 192 IDs. Every repeat reported zero cached tokens. Thus the mismatch was
+stable within each decoding mode in these historical tests.
 
 The repeat requests also collected top-five output logprobs at that position:
 
@@ -261,8 +272,8 @@ The repeat requests also collected top-five output logprobs at that position:
 The candidates changed rank rather than tying. This establishes different
 verification/decode distributions for the same recorded prefix; it does not by
 itself identify the responsible kernel operation. The revised GDN precision
-patch is now baked into both successful `44bf3d7` clean serving builds. Full
-model parity and portability must be rechecked on that corrected image.
+patch was then baked into both successful `44bf3d7` clean serving builds. The
+next stage rechecked full-model parity and portability on that corrected image.
 
 ## Revised Serving Archive Roundtrip
 
@@ -338,8 +349,8 @@ comparisons using bounded seeded BF16 weights and inputs, with batch sizes 3
 and 12 against single-row execution. Every row was bitwise equal and finite.
 Its independent CPU FP64 reference was within the declared budget
 (`rtol=0.00400625`, `atol=0.001`), with zero out-of-budget elements. This
-synthetic regression complements the real-weight comparison; the full-model
-token-equivalence gate still needs to pass.
+synthetic regression complemented the real-weight comparison; full-model
+token equivalence had not yet passed at this stage.
 
 The experimental gate-repair image also passed all five functional W4A8 cases
 but failed Python token parity at index 16. That experiment accepted 136/146
@@ -351,8 +362,8 @@ comparisons: 593 identical and 583 different. Its earliest recorded difference
 was layer index 4, before convolution, in gate `a` at position 52 for input
 token `71093`: 36 of 48 BF16 elements differed, maximum absolute difference
 `0.015625`. The previous layer-2 same-input gate difference was repaired, but
-the new trace does not establish attention-layer causality. Investigation now
-includes attention layer 3. Common token/position matches alone do not prove an
+the new trace did not establish attention-layer causality. Investigation then
+included attention layer 3. Common token/position matches alone do not prove an
 identical earlier prefix or accepted draft; the comparison preserves that limit.
 
 The 378 baseline and 378 MTP raw tensor files were deleted after comparison as
@@ -362,7 +373,7 @@ tensors. Official deterministic-mode candidates have not passed the complete
 model gate and are not enabled by default. In the recorded `fc8925d` test with
 `--enable-deterministic-inference`, all five functional cases passed but Python
 still differed at index 16; the four short cases matched. It accepted 136/146
-drafts over 73 verification steps. The complete reproduction gate remains open.
+drafts over 73 verification steps. The reproduction gate was still open at that stage.
 
 ### V5 Portable Roundtrip
 
@@ -412,7 +423,8 @@ It therefore records a mathematical attention-output difference without
 reproducing the earlier `264` versus `449` token failure. The previous raw GDN
 run did reproduce the 192-token Python failure before its tensors were deleted.
 These experiments have different observation coverage and are recorded
-separately. No complete attention repair or clean-image inference pass is claimed.
+separately. Those observations alone did not establish a complete attention
+repair or a passing clean-image inference result.
 Observers add synchronization and allocations and may alter the result; the
 summary also limits comparisons to common token/position rows, which do not
 prove equal earlier draft ancestry.
@@ -422,7 +434,7 @@ prove equal earlier draft ancestry.
 An actual GPU replay on SM121 with FlashInfer `0.6.18` reconstructed both
 observed FP8 decode and verification attention outputs exactly, with zero
 different elements. Prefill K/V and the first token's Q/K/V/gate inputs were
-byte-identical between modes. The replay used 24 query heads, four KV heads,
+element-wise equal with matching dtypes between modes. The replay used 24 query heads, four KV heads,
 head dimension 256, 52 prefix tokens, page size 1 and unit K/V scales.
 
 | KV representation | Single-query versus three-query attention | Maximum absolute difference |
@@ -454,11 +466,81 @@ baseline/MTP equality still failed at index 16. The four short cases matched.
 MTP accepted 136/146 drafts over 73 verification steps (93.15%). This candidate
 is separate from the clean `fc8925d` image and is not a verified final repair.
 
+### Three-Query Decode Candidate
+
+A later image derived from clean v5 replaced the attention backend with a
+candidate that pads decode queries to three identical rows while writing only
+the real KV rows. It passed fresh-export baseline and embedded-MTP validation
+for both formats. Every mode passed all five functional cases, including visual
+counterfactuals and OCR, with finite output logprobs for all 205 tokens.
+Both MTP responses matched all baseline `output_ids`, including the 192-token
+Python output.
+
+| Experimental export | Exact output IDs | Accepted / proposed drafts | Verification steps |
+|---|---|---|---|
+| Mixed W4A8 | 205/205 | 136/146 (93.15%) | 73 |
+| Uniform W4A4 | 205/205 | 137/142 (96.48%) | 71 |
+
+Its synthetic GPU regression also called the actual backend `forward_decode`
+and passed four cases: single-request KV lengths 1, 2 and 53, plus a two-request
+batch with lengths 2 and 127. Output bytes matched verification exactly in each
+case, outputs were finite, and two poisoned future tokens did not affect the
+first query. Each case made one cache-write call for the real request rows.
+The checker covers those cases, not every context length or prompt.
+
+This experimental image had an added backend file. Its result led to the
+guarded v6 backend change and the independent final clean builds, GPU,
+full-model visual/MTP and portable-image checks recorded next.
+
+## Final V6 Validation
+
+The final serving code is `7d1daea`, with patch `megaquant-spark-v6`. The
+repository Dockerfile built twice from the same official pinned SGLang base
+with `--no-cache`, build networking disabled and an offline wheelhouse. Both
+manifest checks and all seven guarded installed-file checks passed, including
+the attention backend with padded three-query routing.
+
+| Final build | OCI image index / Docker inspect ID | Container manifest SHA256 |
+|---|---|---|
+| First clean build | `sha256:909c4cabb46bb2632dddce7f7a58e58d919a6a8696739b658324bd8d6c50262b` | `6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74` |
+| Independent repeat | `sha256:1ab17822e16dd4a335ab24a4706b38c59c821e09624aa5766bca851f0a62cca2` | `6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74` |
+
+The manifest files are byte-identical and record serving revision `7d1daea`.
+The final image's baked GPU preflight passed CUDA matmul, GDN, FP8 and BF16 gate
+regressions, plus the four actual-backend attention cases. All four full-model
+serving runs used the normal baked entrypoint and recipes, without external
+code or recipe mounts. Baseline and MTP received identical requests; each mode
+passed arithmetic, 192-token Python code, red/blue image counterfactuals and OCR
+`3729`. For both formats, all 205 output IDs matched and all output logprobs
+were finite. Embedded quantized MTP executed for every case, without an
+external draft checkpoint. The final response statistics are in the table at
+the top; they were independently recalculated from the saved response JSON.
+
+The final serving archive passed an empty-store roundtrip with private
+containerd and distinct network/mount namespaces. It contained 14,752,742,912
+bytes with SHA256
+`bc9566e0dd638d44a783d029f6de74ecc729a5a21e656b5222b083c50d82a86b`.
+Its loaded configuration was
+`sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f`.
+Configuration, layers, baked manifest and all seven installed guards matched;
+baked baseline/MTP commands and imports passed without GPU attachment,
+container networking or live code/recipe mounts. The host bridge and all three
+original containers' PIDs, start records and networks matched before and after.
+This final image test is separate from the earlier derived candidate.
+
+All four validation services were stopped and removed successfully. The GPU
+worker's final inspection confirmed that only the original three containers
+remained, private validation daemons had stopped, and the trace root had zero
+raw tensor files. The retained cleanup summaries record 896 deleted files;
+raw tensors were never downloaded.
+
+Required push and PR CI for `7d1daea` passed; the retained PR log reports
+394 passed, one ModelOpt-dependent skip in 18.81 seconds.
+
 ## Limits
 
-Complete reproduction remains unverified until the W4A8 token divergence is
-resolved and a subsequent clean serving image passes the required gates. A local
-mirror or offline base archive must preserve the pinned
+The tested reproduction gates passed. A local mirror or offline base archive
+must preserve the pinned
 official manifest/layer bytes; using a preconfigured derived image would change
 the scope. Manifest checks detect recorded file and package-version drift; they
 do not cryptographically authenticate every installed third-party package file.

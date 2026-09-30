@@ -6,7 +6,12 @@ The recipes use TP1. Cross-node TP2 requires a separate distributed validation.
 
 The [clean-container report](validation/dgx-spark-clean-container-20260930.md)
 records the exact PTQ and serving revisions, inputs, image digests and results.
-The earlier
+The 2026-09-30 TP1 validation passed full W4A8/W4A4 PTQ, strict export audits,
+two independent offline serving builds, GPU regressions, text/image/OCR and
+embedded quantized MTP checks, and isolated image save/load. PTQ used revision
+`15561d8`; serving used `7d1daea`. Each format matched 205 baseline/MTP token IDs
+across five fixed cases. This coverage does not establish arbitrary-prompt
+determinism or TP2. The earlier
 [quantization](validation/dgx-spark-pr46-20260929.md) and
 [serving](validation/dgx-spark-serving-20260930.md) reports describe their actual
 environments; they do not prove a clean build of these new images. No published

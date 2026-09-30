@@ -1,23 +1,26 @@
 {
   "schema_version": 1,
   "date": "2026-09-30",
-  "complete": false,
-  "status": "in_progress_w4a8_mtp_parity_failure",
+  "complete": true,
+  "status": "passed",
   "quantization_runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
-  "serving_runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
-  "latest_serving_candidate_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+  "serving_runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
   "source_archives_sha256": {
     "quantization_and_original_serving": "5716b7ed292d7be27ce035158363121849753a2fd8dc797006e1da5bf60c8968",
     "corrected_serving": "cb5cbe73d05fa2259b3e9a330c0a3935aa9c52d5e30888fb778637cbda7f455d",
     "serving_v4": "a6eae547194cbde33d5c51708acc0cc16bab1f60a31032298d6cbdc2e7ec6cb4",
-    "serving_v5": "4749b63443b374209b0bfc9eeb1730213fa101bb2c01e326a0420a5e178f9da9"
+    "serving_v5": "4749b63443b374209b0bfc9eeb1730213fa101bb2c01e326a0420a5e178f9da9",
+    "final_serving_v6": "f66994238301b977235f8bb2ccfa73a4cc5fd2261cc8bbb81f1fe3ea68b43415"
   },
   "full_ptq_repeated_at_serving_revision": false,
   "pr": "https://github.com/AvrovaDonz2026/Mega-Quantification/pull/47",
   "scope": {
     "architecture": "aarch64",
     "gpu": "NVIDIA GB10",
-    "compute_capability": [12, 1],
+    "compute_capability": [
+      12,
+      1
+    ],
     "tensor_parallel_size": 1,
     "physical_hosts": 1,
     "public_registry_publication": false
@@ -28,7 +31,11 @@
     "source_shard_checksums_recorded": true,
     "source_index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
     "source_tensors": 1199,
-    "source_tensor_groups": {"language": 851, "vision": 333, "mtp": 15},
+    "source_tensor_groups": {
+      "language": 851,
+      "vision": 333,
+      "mtp": 15
+    },
     "calibration_rows": 256,
     "calibration_images_verified": 128,
     "calibration_jsonl_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
@@ -106,7 +113,8 @@
       "gpu_serving_started": true,
       "gpu_preflight_passed": null
     },
-    "sglang": {
+    "sglang_v3": {
+      "historical_validation": true,
       "runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
       "base_image": "lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f",
       "tag": "megaquant:clean-sglang-44bf3d7",
@@ -146,6 +154,55 @@
       "portable_archive_bytes": 14752680448,
       "portable_loaded_configuration_digest": "sha256:0bf34831245ef6cd700b9e1ffdb60f92225e2eebb8260868133e814e727609af",
       "full_visual_mtp_validation_passed": false
+    },
+    "sglang": {
+      "runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "base_image": "lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f",
+      "tag": "megaquant:clean-sglang-7d1daea",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "explicit_wheelhouse": true,
+      "editable_install": false,
+      "live_code_recipe_mounts": false,
+      "container_manifest_sha256": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+      "repeat_container_manifest_equal": true,
+      "cpu_manifest_verified": true,
+      "loader_patch_verified": true,
+      "loader_patch_id": "megaquant-spark-v6",
+      "guarded_installed_files": 7,
+      "docker_inspect_id_type": "OCI image index",
+      "docker_inspect_id": "sha256:909c4cabb46bb2632dddce7f7a58e58d919a6a8696739b658324bd8d6c50262b",
+      "repeat_image_index_digest": "sha256:1ab17822e16dd4a335ab24a4706b38c59c821e09624aa5766bca851f0a62cca2",
+      "platform_manifest_digest": null,
+      "configuration_digest": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+      "repeat_platform_manifest_digest": null,
+      "repeat_configuration_digest": null,
+      "byte_identical_image": false,
+      "versions": {
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "nvidia-modelopt": "0.46.1",
+        "sglang": "0.5.20",
+        "sglang-kernel": "0.4.7",
+        "flashinfer-python": "0.6.18"
+      },
+      "gpu_preflight_passed": true,
+      "gpu_preflight_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "gpu_preflight_checks": [
+        "manifest",
+        "CUDA matmul",
+        "GDN decode/verify",
+        "FP8 batch invariance",
+        "BF16 BA batch invariance and CPU FP64 reference",
+        "four actual-backend attention decode/verify cases"
+      ],
+      "portable_archive_roundtrip_passed": true,
+      "portable_archive_sha256": "bc9566e0dd638d44a783d029f6de74ecc729a5a21e656b5222b083c50d82a86b",
+      "portable_archive_bytes": 14752742912,
+      "portable_loaded_configuration_digest": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+      "full_visual_mtp_validation_passed": true
     }
   },
   "original_portable_roundtrip": {
@@ -207,8 +264,16 @@
     "root_cause": "Suffix heuristic wrote provenance beside an existing dotted export directory; Git revision was null in the image without a checkout",
     "initial_export_tensors": 2544,
     "initial_export_shards": 3,
-    "initial_vision_quantizers": {"count": 165, "min_calls": 128, "max_calls": 128},
-    "initial_mtp_quantizers": {"count": 8, "min_calls": 256, "max_calls": 256},
+    "initial_vision_quantizers": {
+      "count": 165,
+      "min_calls": 128,
+      "max_calls": 128
+    },
+    "initial_mtp_quantizers": {
+      "count": 8,
+      "min_calls": 256,
+      "max_calls": 256
+    },
     "initial_finite_scales_scanned": 1345,
     "fixed_in_tested_runtime": true,
     "new_provenance_regression_tests": 22,
@@ -224,6 +289,17 @@
     "ci_tests_skipped": 1,
     "ci_skip_reason": "ModelOpt not installed in GitHub CPU CI",
     "ci_elapsed_seconds": 22.67,
+    "final_serving_ci": {
+      "revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "required_ci_push_passed": true,
+      "required_ci_pr_passed": true,
+      "ci_push_run_id": 36718607380,
+      "ci_pr_run_id": 36718613590,
+      "passed": 394,
+      "skipped": 1,
+      "skip_reason": "ModelOpt not installed in GitHub CPU CI",
+      "elapsed_seconds": 18.81
+    },
     "actual_modelopt_mtp_cpu": {
       "passed": 5,
       "skipped": 0,
@@ -252,13 +328,29 @@
       "export_tensors": 2544,
       "export_shards": 3,
       "projection_counts": {
-        "language": {"NVFP4": 193, "FP8": 208},
-        "vision": {"NVFP4": 110},
-        "mtp": {"NVFP4": 4, "FP8": 4}
+        "language": {
+          "NVFP4": 193,
+          "FP8": 208
+        },
+        "vision": {
+          "NVFP4": 110
+        },
+        "mtp": {
+          "NVFP4": 4,
+          "FP8": 4
+        }
       },
       "calibration_coverage": {
-        "vision": {"quantizers": 165, "min_calls": 128, "max_calls": 128},
-        "mtp": {"quantizers": 8, "min_calls": 256, "max_calls": 256}
+        "vision": {
+          "quantizers": 165,
+          "min_calls": 128,
+          "max_calls": 128
+        },
+        "mtp": {
+          "quantizers": 8,
+          "min_calls": 256,
+          "max_calls": 256
+        }
       },
       "finite_scales_scanned": 1345,
       "scale_payload_bytes_streamed": 1197496120
@@ -276,13 +368,27 @@
       "export_tensors": 2756,
       "export_shards": 2,
       "projection_counts": {
-        "language": {"NVFP4": 401},
-        "vision": {"NVFP4": 110},
-        "mtp": {"NVFP4": 8}
+        "language": {
+          "NVFP4": 401
+        },
+        "vision": {
+          "NVFP4": 110
+        },
+        "mtp": {
+          "NVFP4": 8
+        }
       },
       "calibration_coverage": {
-        "vision": {"quantizers": 165, "min_calls": 128, "max_calls": 128},
-        "mtp": {"quantizers": 8, "min_calls": 256, "max_calls": 256}
+        "vision": {
+          "quantizers": 165,
+          "min_calls": 128,
+          "max_calls": 128
+        },
+        "mtp": {
+          "quantizers": 8,
+          "min_calls": 256,
+          "max_calls": 256
+        }
       },
       "finite_scales_scanned": 1557,
       "scale_payload_bytes_streamed": 1654937400
@@ -359,7 +465,12 @@
       "all_output_logprobs_finite": true,
       "color_counterfactual_passed": true,
       "exact_output_ids": false,
-      "exact_output_id_cases": ["arithmetic", "red_square", "blue_square", "ocr_3729"],
+      "exact_output_id_cases": [
+        "arithmetic",
+        "red_square",
+        "blue_square",
+        "ocr_3729"
+      ],
       "output_tokens_per_mode": 205,
       "verification_steps": 70,
       "accepted_drafts": 138,
@@ -372,19 +483,42 @@
       "baseline_token_at_mismatch": 449,
       "mtp_token_at_mismatch": 264,
       "mtp_client_exit_code": 1,
-      "repeat_baseline_matches_original": [true, true],
-      "repeat_mtp_matches_original": [true, true],
-      "repeat_baseline_tokens": [192, 192],
-      "repeat_mtp_tokens": [192, 192],
-      "repeat_cached_tokens": [0, 0, 0, 0],
+      "repeat_baseline_matches_original": [
+        true,
+        true
+      ],
+      "repeat_mtp_matches_original": [
+        true,
+        true
+      ],
+      "repeat_baseline_tokens": [
+        192,
+        192
+      ],
+      "repeat_mtp_tokens": [
+        192,
+        192
+      ],
+      "repeat_cached_tokens": [
+        0,
+        0,
+        0,
+        0
+      ],
       "repeat_candidate_logprobs_at_index_16": {
-        "baseline": {"449": -0.629574716091156, "264": -1.7545747756958008},
-        "mtp": {"449": -1.1769373416900635, "264": -1.0519373416900635},
+        "baseline": {
+          "449": -0.629574716091156,
+          "264": -1.7545747756958008
+        },
+        "mtp": {
+          "449": -1.1769373416900635,
+          "264": -1.0519373416900635
+        },
         "same_for_both_repeats_in_each_mode": true
       }
     }
   },
-  "fresh_export_serving": {
+  "v3_fresh_export_serving": {
     "runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
     "weights_quantization_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
     "loader_patch_id": "megaquant-spark-v3",
@@ -403,7 +537,12 @@
       "all_output_logprobs_finite": true,
       "color_counterfactual_passed": true,
       "exact_output_ids": false,
-      "exact_output_id_cases": ["arithmetic", "red_square", "blue_square", "ocr_3729"],
+      "exact_output_id_cases": [
+        "arithmetic",
+        "red_square",
+        "blue_square",
+        "ocr_3729"
+      ],
       "exact_short_output_ids": 13,
       "output_tokens_per_mode": 205,
       "verification_steps": 71,
@@ -435,6 +574,71 @@
       "python_proposed_drafts": 128,
       "python_accept_rate": 0.9921875
     }
+  },
+  "fresh_export_serving": {
+    "runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+    "weights_quantization_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "loader_patch_id": "megaquant-spark-v6",
+    "recipe": "recipes/eval-gpqa-diamond.spark.yaml",
+    "mtp_recipe": "recipes/eval-gpqa-diamond.spark-mtp.yaml",
+    "client": "scripts/check_sglang_multimodal.py",
+    "mamba_ssm_dtype": "float32",
+    "quantized_embedded_mtp": true,
+    "external_draft_checkpoint": false,
+    "w4a8": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "functional_cases_per_mode": 5,
+      "color_counterfactual_passed": true,
+      "all_output_logprobs_finite": true,
+      "exact_output_ids": true,
+      "matching_output_id_count": 205,
+      "accepted_drafts": 136,
+      "proposed_drafts": 146,
+      "verification_steps": 73,
+      "aggregate_acceptance_rate": 0.9315068493150684,
+      "client_elapsed_seconds": {
+        "baseline": 28.361,
+        "mtp": 17.329
+      },
+      "response_sha256": {
+        "baseline": "7c59a3d64af4da0a49c4d911b4bbaa3c256dc6cca2e2997309ab0a6dc663efad",
+        "mtp": "9c56c7bbe2151dc185f78c6be036173865af888abb21b0dcc9241e11a0182ca0"
+      }
+    },
+    "w4a4": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "functional_cases_per_mode": 5,
+      "color_counterfactual_passed": true,
+      "all_output_logprobs_finite": true,
+      "exact_output_ids": true,
+      "matching_output_id_count": 205,
+      "accepted_drafts": 137,
+      "proposed_drafts": 142,
+      "verification_steps": 71,
+      "aggregate_acceptance_rate": 0.9647887323943662,
+      "client_elapsed_seconds": {
+        "baseline": 25.988,
+        "mtp": 15.59
+      },
+      "response_sha256": {
+        "baseline": "9eba982e9ec201f3efe7dc1c7a81db0207afd8246e4b11f7cec5cb497fa3b34f",
+        "mtp": "92b2e8e6b8abc71a628464d4f973b1b436e4cd1da8178f4e81806ae6af0c09bd"
+      }
+    },
+    "status": "passed",
+    "normal_baked_entrypoint_verified": true,
+    "live_code_recipe_mounts": false,
+    "cases": [
+      "arithmetic",
+      "python_code",
+      "red_square",
+      "blue_square",
+      "ocr_3729"
+    ],
+    "output_ids_per_mode": 205,
+    "all_four_client_exit_codes": 0
   },
   "serving_repair_history": {
     "v4": {
@@ -472,10 +676,17 @@
         "verify_batch_rows": 3,
         "position": 52,
         "input_id": 71093,
-        "identical_hidden_rows_at_layer_indices": [0, 1, 2],
+        "identical_hidden_rows_at_layer_indices": [
+          0,
+          1,
+          2
+        ],
         "first_gate_difference_layer_index": 2,
         "different_gate": "a",
-        "other_gates_equal": ["b", "qkv"],
+        "other_gates_equal": [
+          "b",
+          "qkv"
+        ],
         "raw_tensor_retained": false,
         "complete_model_cause_established": false
       }
@@ -483,7 +694,14 @@
     "gate_weight_gpu_comparison": {
       "comparisons": 54,
       "layers": 3,
-      "seeds": [42, 11, 0, 7, 19, 29],
+      "seeds": [
+        42,
+        11,
+        0,
+        7,
+        19,
+        29
+      ],
       "original_changed_rows": 18,
       "original_max_abs_difference": 0.0078125,
       "fixed_all_bitwise_equal": true,
@@ -496,8 +714,14 @@
       "scope": "Bounded seeded BF16 weights and inputs through installed UnquantizedLinearMethod; separate candidate image",
       "passed": true,
       "compared_rows": 30,
-      "seeds": [42, 11],
-      "batch_sizes": [3, 12],
+      "seeds": [
+        42,
+        11
+      ],
+      "batch_sizes": [
+        3,
+        12
+      ],
       "all_bitwise_equal": true,
       "nonfinite_elements": 0,
       "independent_reference": "CPU FP64",
@@ -534,7 +758,13 @@
       "repeat_image_index_digest": "sha256:8de68795847eed70ef1f75e1cb33a95046afd745bb85decd8a4ed02861be1640",
       "full_gpu_preflight_evidence_recorded": true,
       "gpu_preflight_passed": true,
-      "gpu_preflight_checks": ["manifest", "CUDA matmul", "GDN decode/verify", "FP8 batch invariance", "BF16 BA batch invariance and CPU FP64 reference"],
+      "gpu_preflight_checks": [
+        "manifest",
+        "CUDA matmul",
+        "GDN decode/verify",
+        "FP8 batch invariance",
+        "BF16 BA batch invariance and CPU FP64 reference"
+      ],
       "full_visual_mtp_validation_passed": null,
       "portable_roundtrip_passed": true,
       "portable_archive_bytes": 14752694272,
@@ -598,7 +828,9 @@
     },
     "bf16_kv_candidate": {
       "runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
-      "override": {"kv_cache_dtype": "bfloat16"},
+      "override": {
+        "kv_cache_dtype": "bfloat16"
+      },
       "other_serving_options_unchanged": true,
       "baseline_functional_cases": 5,
       "mtp_functional_cases": 5,
@@ -626,7 +858,12 @@
       "layer_index": 3,
       "position": 52,
       "input_id": 71093,
-      "same_tensors": ["input", "qkv", "rotary_position_output", "gate"],
+      "same_tensors": [
+        "input",
+        "qkv",
+        "rotary_position_output",
+        "gate"
+      ],
       "attention_output_nonzero_elements": 1217,
       "attention_output_elements": 6144,
       "attention_output_max_abs_difference": 0.0078125,
@@ -644,7 +881,10 @@
         "local_tensor_downloaded": false,
         "comparison_replay_and_cleanup_summaries_retained": true
       },
-      "separate_gdn_and_attention_cleanup_totals": {"deleted_tensor_files": 896, "deleted_tensor_bytes": 2878950904},
+      "separate_gdn_and_attention_cleanup_totals": {
+        "deleted_tensor_files": 896,
+        "deleted_tensor_bytes": 2878950904
+      },
       "previous_raw_gdn_run_reproduced_python_token_failure": true,
       "complete_attention_repair_passed": false,
       "limitations": [
@@ -655,7 +895,10 @@
     },
     "flashinfer_wrapper_replay": {
       "gpu_replay_performed": true,
-      "device_capability": [12, 1],
+      "device_capability": [
+        12,
+        1
+      ],
       "flashinfer_version": "0.6.18",
       "torch_version": "2.13.0+cu130",
       "layer_index": 3,
@@ -669,12 +912,21 @@
       "page_size": 1,
       "k_scale": 1.0,
       "v_scale": 1.0,
-      "same_prefill_and_first_query_input_bytes": true,
-      "fp8_observed_decode_reproduced_bitwise": true,
-      "fp8_observed_verify_reproduced_bitwise": true,
-      "fp8_single_vs_three_queries": {"different_elements": 1217, "elements": 6144, "max_abs_difference": 0.0078125},
-      "bf16_single_vs_three_queries": {"different_elements": 749, "elements": 6144, "max_abs_difference": 0.00390625},
-      "causal_vs_custom_mask_same_query_count_bitwise_equal": true,
+      "same_prefill_and_first_query_input_values_and_dtypes": true,
+      "storage_byte_equivalence_checked": false,
+      "fp8_observed_decode_reproduced_with_zero_numeric_difference": true,
+      "fp8_observed_verify_reproduced_with_zero_numeric_difference": true,
+      "fp8_single_vs_three_queries": {
+        "different_elements": 1217,
+        "elements": 6144,
+        "max_abs_difference": 0.0078125
+      },
+      "bf16_single_vs_three_queries": {
+        "different_elements": 749,
+        "elements": 6144,
+        "max_abs_difference": 0.00390625
+      },
+      "causal_vs_custom_mask_same_query_count_numeric_equal": true,
       "masked_future_kv_entries_leave_single_query_output_unchanged": true,
       "scale_resolution": {
         "checkpoint_verified": true,
@@ -687,9 +939,9 @@
         "query_count": 3,
         "visible_kv_entries": 53,
         "extended_kv_entries_with_future_masked": 55,
-        "bf16_first_output_equals_original_mtp_first_output_bitwise": true,
-        "fp8_first_output_equals_original_mtp_first_output_bitwise": true,
-        "kv53_and_masked_kv55_outputs_equal_bitwise": true
+        "bf16_first_output_equals_original_mtp_first_output_numeric": true,
+        "fp8_first_output_equals_original_mtp_first_output_numeric": true,
+        "kv53_and_masked_kv55_outputs_equal_numeric": true
       },
       "complete_serving_parity_established": false,
       "limitations": [
@@ -713,7 +965,68 @@
       "accept_rate": 0.9315068493150684,
       "final_repair_verified": false
     },
-    "next_investigation": "Attention layer index 3; exact cause of remaining full-model W4A8 token divergence is not yet established"
+    "padded_three_query_decode_candidate": {
+      "base_runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+      "derived_experimental_image": true,
+      "clean_build_identity_claimed": false,
+      "added_backend_file": "srt/layers/attention/flashinfer_backend.py",
+      "added_backend_file_sha256": "8303031e53acb916c426194f0b9f3ce7b65bcccb7df796eaf87b455f2b41bc4a",
+      "complete_four_run_status_passed": true,
+      "w4a8": {
+        "baseline_functional_cases": 5,
+        "mtp_functional_cases": 5,
+        "all_output_logprobs_finite": true,
+        "output_tokens_per_mode": 205,
+        "exact_output_ids": true,
+        "strict_validation_passed": true,
+        "verification_steps": 73,
+        "accepted_drafts": 136,
+        "proposed_drafts": 146,
+        "accept_rate": 0.9315068493150684
+      },
+      "w4a4": {
+        "baseline_functional_cases": 5,
+        "mtp_functional_cases": 5,
+        "all_output_logprobs_finite": true,
+        "output_tokens_per_mode": 205,
+        "exact_output_ids": true,
+        "strict_validation_passed": true,
+        "verification_steps": 71,
+        "accepted_drafts": 137,
+        "proposed_drafts": 142,
+        "accept_rate": 0.9647887323943662
+      },
+      "actual_backend_gpu_regression": {
+        "passed": true,
+        "synthetic_inputs": true,
+        "actual_backend_forward_decode_exercised": true,
+        "case_count": 4,
+        "decode_kv_lengths": [
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            53
+          ],
+          [
+            2,
+            127
+          ]
+        ],
+        "cloned_queries_per_request": 3,
+        "all_output_bytes_equal_to_verification": true,
+        "all_outputs_finite": true,
+        "first_query_ignores_two_poisoned_future_tokens": true,
+        "kv_write_calls_per_case": 1,
+        "only_real_kv_rows_written": true,
+        "scope": "Four synthetic cases; all context lengths and prompts are not established"
+      },
+      "final_clean_revision_verified": false
+    },
+    "next_validation": "Completed: final v6 guarded clean builds/repeat, GPU preflight, fresh W4A8/W4A4 visual/MTP validation and private portable roundtrip all passed"
   },
   "retained_evidence_sha256": {
     "initial_ptq_preflight.json": "e319ee1cdfc890b453cf8b8189183454c38ee1b23df2e5085b662278a11b0e96",
@@ -799,14 +1112,156 @@
     "prefilldecode_w4a8_mtp_check.run.json": "a8d0d62f45fb33ccf153fdbd4f33a6a38d897d5f8a6f10864e057857d0d125c9",
     "prefilldecode_serving.status.json": "f65d56324b97631b5a323b03ca21c7199dbcca704df043de79810f9c7df9492b",
     "v5_attn_trace_cleanup.json": "ed65ab7533ad9f38a02fc81d8b45ddb7b0872158ad3d069bd295c008b004e2b0",
-    "v5_flashinfer_repeatq_replay.json": "5c0c5800dce9c6512203718eb7185df40dde55bfaf7c23b98be39687f8a83660"
+    "v5_flashinfer_repeatq_replay.json": "5c0c5800dce9c6512203718eb7185df40dde55bfaf7c23b98be39687f8a83660",
+    "paddecode_w4a8_baseline.json": "7c74322b29be2912dc30e1ef10a05ca94d26eb192be7e22f6cc9adb3376bad9f",
+    "paddecode_w4a8_mtp.json": "d700db18635d73e466d6c573d56317159d1d974a4e5f995538a38c77ea61d8dd",
+    "paddecode_w4a4_baseline.json": "98cec89d702b79e604804537289a349656bde5610ba640ac5def8566acaa6a88",
+    "paddecode_w4a4_mtp.json": "19fd56d508b3062ee6ac71bf4051f55bf55e37851368f9fd08b80eb032dce13d",
+    "paddecode_serving.status.json": "0f9732071aabc96662979198c067859ad0bf8058fe95745ce8da23df1428a44c",
+    "paddecode_attention_preflight.json": "813a94741d1db4a59f5a7d0237395a12b20b83c3b8f3ea776013ce654022c679",
+    "sglang_v6_build.run.json": "b9280ab33c9726b0f265c198adbd2f131e557c7b9ec9802e84d4a84967b4fd9e",
+    "sglang_v6_build_repeat.run.json": "71f038b8d84a301c8f4b8f84ff33449a991d25b2640cd0778d039320e4754064",
+    "sglang_v6_build.image.json": "e1acd530724608fdc384c65033a803edb690344478926f3b315142817fd6a9ab",
+    "sglang_v6_build_repeat.image.json": "3122d5872f241b2319aa3b6451ef6dc126c96bc93390b200e4f56f7db5e6652d",
+    "sglang_v6_build.manifest.json": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+    "sglang_v6_build_repeat.manifest.json": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+    "sglang_v6_build.verify.json": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_build_repeat.verify.json": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_build.patch.json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_build_repeat.patch.json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_repeat_build_compare.json": "e296d70d9aaf76b85ca587ad9131148e0ad9c7f93dbdae11c0bc6f50dcc4c3cc",
+    "v6_sglang_preflight.log": "65aaa8f789d761fba8f026a235933763ee3b62f080ab3b74da199d5bb3569f30",
+    "v6_ci.log": "7271255ab8cc6a8656124aa26f33a5355d24e0ffa6141cbb37214ea921078f88",
+    "sglang_v6_results_v6_w4a8_baseline_json": "7c59a3d64af4da0a49c4d911b4bbaa3c256dc6cca2e2997309ab0a6dc663efad",
+    "sglang_v6_results_w4a8_baseline_container_json": "8354c743663da59471cf35bb98becc4eb20881f41a334b3aeb66c8470f97916a",
+    "sglang_v6_results_w4a8_baseline_check_run_json": "5ecd30a1c2527d36b679f84e82618cf4870c822e5b1738e46d8b556cd2495625",
+    "sglang_v6_results_w4a8_baseline_stop_run_json": "e7bb5d42450fbae6d0bc6fe615614bec489db471922359643992536691ab0364",
+    "sglang_v6_results_w4a8_baseline_remove_run_json": "b65a8b7330c57b9a0e562b2ab98f620d7c54b27df797a70340d265ccc4bb717a",
+    "sglang_v6_results_v6_w4a8_mtp_json": "9c56c7bbe2151dc185f78c6be036173865af888abb21b0dcc9241e11a0182ca0",
+    "sglang_v6_results_w4a8_mtp_container_json": "767b1558aa0e58d77187ce867be84fa80bb49f99e0df20a3368916dd93573b6c",
+    "sglang_v6_results_w4a8_mtp_check_run_json": "c7fa8e442cc48399a5272615ae58643e8468dc266046648fd71502eb6d3b02a1",
+    "sglang_v6_results_w4a8_mtp_stop_run_json": "7fbee31943fb3a6dcce1e54c4d998a9011caed418cf64d6c8111f02cf359e8ed",
+    "sglang_v6_results_w4a8_mtp_remove_run_json": "62989b43269c6bab4afab154cc9d9e69a76b2876cc9f79a689bc5aa3387aa451",
+    "sglang_v6_results_v6_w4a4_baseline_json": "9eba982e9ec201f3efe7dc1c7a81db0207afd8246e4b11f7cec5cb497fa3b34f",
+    "sglang_v6_results_w4a4_baseline_container_json": "d2c2a6695fb6735cd87a14c829f8712070127e4b16c81f3a0efface350a7dadf",
+    "sglang_v6_results_w4a4_baseline_check_run_json": "a70d040e5f53638a16e4db66ffd7571623bcb79ef8578938c01d89bb80500890",
+    "sglang_v6_results_w4a4_baseline_stop_run_json": "af4a00b6fc3811a9497208f9fdbf6527aea5ea4c6df10e0eb44a64942d06d577",
+    "sglang_v6_results_w4a4_baseline_remove_run_json": "30ce24da58361a5ed7e4e035c430f356ded4af57ac2987419d14065e5a0a4f25",
+    "sglang_v6_results_v6_w4a4_mtp_json": "92b2e8e6b8abc71a628464d4f973b1b436e4cd1da8178f4e81806ae6af0c09bd",
+    "sglang_v6_results_w4a4_mtp_container_json": "416951a90a28a14f0a58ae52905bc0625b7a48c80fdf5cf50e945cece48c3d71",
+    "sglang_v6_results_w4a4_mtp_check_run_json": "aeda3c216bb3564731b9223feee89223e1d5f477419fb21507719aff0a42f735",
+    "sglang_v6_results_w4a4_mtp_stop_run_json": "ef790a7318fc091ad1b82eb8322fd2ba5b62aaa3d4e674469b945223d06df98f",
+    "sglang_v6_results_w4a4_mtp_remove_run_json": "bddf464234cfc6df19bdfade522810d1ab11fab45ad768404d3aef2147b39de6",
+    "sglang_v6_results_serving_status_json": "0f9732071aabc96662979198c067859ad0bf8058fe95745ce8da23df1428a44c",
+    "sglang_v6_portable_results_portable_report_json": "6c1346a7a463da764ecaa80eabe134cdddfc0729435432cf79d29b9601e60475",
+    "sglang_v6_portable_results_original_image_json": "e1acd530724608fdc384c65033a803edb690344478926f3b315142817fd6a9ab",
+    "sglang_v6_portable_results_loaded_image_json": "c7635a30ff925f9b89cba3ae01c6fe5c6c6da1eb121b06dc7bc15fba69db8501",
+    "sglang_v6_portable_results_loaded_image_after_runs_json": "c7635a30ff925f9b89cba3ae01c6fe5c6c6da1eb121b06dc7bc15fba69db8501",
+    "sglang_v6_portable_results_original_containers_before_json": "823494af6c58993209a5c9070643da77b529a020a495aa7f53eb3dda2e4030a4",
+    "sglang_v6_portable_results_original_containers_after_json": "823494af6c58993209a5c9070643da77b529a020a495aa7f53eb3dda2e4030a4",
+    "sglang_v6_portable_results_host_docker0_before_json": "da85733e04ab914419a839132b7e6faad166fd4857cd8da75a7ec88fb28ada01",
+    "sglang_v6_portable_results_host_docker0_after_json": "da85733e04ab914419a839132b7e6faad166fd4857cd8da75a7ec88fb28ada01",
+    "sglang_v6_portable_results_host_docker0_address_before_json": "08f8468f2931ae74b614841e2dd8de5562434fb00b0ae1435c0e6aeed663b62c",
+    "sglang_v6_portable_results_host_docker0_address_after_json": "08f8468f2931ae74b614841e2dd8de5562434fb00b0ae1435c0e6aeed663b62c",
+    "sglang_v6_portable_results_manifest_verify_txt": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_portable_results_patch_check_json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_portable_results_host_netns_txt": "fe50dd5e5a7f72627cc0c52a6cb6ca6c043032fd15edfa678477400ba07a9e86",
+    "sglang_v6_portable_results_private_netns_txt": "ab5cd8d59f94541e5adb1428f6f27db3b6066b0b8515c1f148cfaf235f7a1e40",
+    "sglang_v6_portable_results_host_mountns_txt": "7580c3a20f1c14e57ed67f2d36b14788a7f48660c7bdb96d977faadcb984f423",
+    "sglang_v6_portable_results_private_mountns_txt": "e983bfd5fa06b7046c6a2b43d197e71db6692f17c406223906d4d636166f2f85"
   },
   "not_verified": [
-    "Resolution of W4A8 baseline/MTP greedy token mismatch across the retained serving revisions",
-    "Subsequent serving repair, clean build/repeat, full visual/MTP validation and portable roundtrip",
     "TP2 or a second physical host",
     "Video, general quality, long-context or concurrent performance",
     "Full GPQA score or controlled MTP speedup",
     "Public registry publication"
-  ]
+  ],
+  "final_serving_portable_roundtrip": {
+    "status": "passed",
+    "git_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+    "original_store_digest": "sha256:909c4cabb46bb2632dddce7f7a58e58d919a6a8696739b658324bd8d6c50262b",
+    "selected_image_config_sha256": "42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+    "loaded_image_id": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+    "archive_bytes": 14752742912,
+    "archive_sha256": "bc9566e0dd638d44a783d029f6de74ecc729a5a21e656b5222b083c50d82a86b",
+    "architecture": "arm64",
+    "container_manifest": {
+      "status": "verified",
+      "kind": "sglang",
+      "git_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "manifest_sha256": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+      "errors": []
+    },
+    "isolated_empty_docker_store": true,
+    "private_containerd": true,
+    "private_network_namespace": true,
+    "private_mount_namespace": true,
+    "host_bridge_identity_preserved": true,
+    "host_bridge_addresses_preserved": true,
+    "all_three_original_containers_not_restarted": true,
+    "all_three_original_container_networks_preserved": true,
+    "original_container_gateway_reachable_before_and_after": true,
+    "same_image_config_and_layers_after_load": true,
+    "network_for_validation_containers": "none",
+    "gpu_requested": false,
+    "host_source_or_recipe_mounts": false,
+    "sglang_patch": {
+      "status": "already-patched",
+      "patch": "megaquant-spark-v6",
+      "sglang": "0.5.20",
+      "files": {
+        "srt/models/qwen3_vl.py": {
+          "upstream_sha256": "a32ac0793e0526c8951f2ad3936bd8b002b7ad00a291c442ad2f215b9064a80f",
+          "patched_sha256": "3be98419e08552f82b650f6932fdb02d0b26cea4d77bcff209a3c55d6d7f00b1"
+        },
+        "srt/models/qwen3_5_mtp.py": {
+          "upstream_sha256": "1ebc9643333046d5621ad8b1bd6bd005686988c0104576bd1ea6c3d5e51acf24",
+          "patched_sha256": "870d294b97caa43a73ce31fa4568a19c7d96b69345e52b2bfe1d214c1821fd88"
+        },
+        "srt/layers/quantization/modelopt_quant.py": {
+          "upstream_sha256": "afe1315c27e37dac2ecad87fe867217081609d7be4b43f0cf5eb42401d6d5d8e",
+          "patched_sha256": "017a0319e7f9c5550c1cdb940ff8ddb92428e34804b477da16fff7e3d761ac40"
+        },
+        "srt/configs/model_config.py": {
+          "upstream_sha256": "85c36b134e3e4a39bce382d9172aa4fe4819f02996d55cbdf779846da4cfb8c8",
+          "patched_sha256": "b89b317cb94ac0d3c7af52f709f4c037f5332f5b220d8a83478ff5a72e0bc346"
+        },
+        "kernels/ops/attention/fla/fused_recurrent.py": {
+          "upstream_sha256": "35a928d24bf6cc3ca56d73e4b729ec004ec8a34760e2425e2f04d6ef783db9f8",
+          "patched_sha256": "b90bb5b144e4815ebc3fbba074b06aecac4c6db8b27bef8e43c74e7ddfd6d2cd"
+        },
+        "srt/layers/quantization/unquant.py": {
+          "upstream_sha256": "9f071f09eba9522e8d2b3e26fa0f12c0a6564da22b8062d5c8a12df9db4202bb",
+          "patched_sha256": "5fb4a36edbd365cb350c0fc2fa27d3fc5661f3170090c01144b0760b6ccf2431"
+        },
+        "srt/layers/attention/flashinfer_backend.py": {
+          "upstream_sha256": "dce9594f150664cd12c2fb3cfddb37a955759b32a312bc27b0538c1435e82294",
+          "patched_sha256": "337d14ac88c5cb21d5d6ddcad5b0c20ff0f2773b9486317ebab25440d86e6d52"
+        }
+      }
+    },
+    "checks": [
+      "archive SHA256 before and after load",
+      "installed package and source/config manifest",
+      "v6 SGLang patch guard verifies all seven pinned installed files including FP32 packed decode gate, SM121 FP8 dispatch, batch-invariant BF16 BA projection and padded three-query attention routing",
+      "baked multimodal FP32 baseline command",
+      "baked embedded EAGLE MTP command",
+      "installed SGLang/Torch/Transformers/Pillow/CLI imports and SGL kernel presence",
+      "baked multimodal checker CLI"
+    ],
+    "limits": [
+      "Same physical ARM64 host and host kernel",
+      "No GPU PTQ or inference in the isolated store; the root task tests those separately"
+    ]
+  },
+  "completion_cleanup": {
+    "four_validation_services_stop_and_remove_exit_codes": 0,
+    "original_three_containers_and_networks_preserved": true,
+    "raw_trace_tensor_files_remaining": 0,
+    "raw_trace_files_deleted": 896,
+    "raw_trace_bytes_deleted": 2878950904,
+    "raw_tensors_downloaded": false,
+    "private_validation_daemons_stopped": true,
+    "final_remote_state_observed_by_gpu_worker": true
+  }
 }
