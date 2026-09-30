@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 VERSION = "0.5.20"
-PATCH_ID = "megaquant-spark-v1"
+PATCH_ID = "megaquant-spark-v2"
 MANIFEST = ".megaquant-spark-patch.json"
 MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision and MTP compatibility.\n"
 
@@ -114,6 +114,24 @@ MTP_GATE_NEW = '''    if quant_config and (
         return None
 '''
 
+FP4_ND_HELPER = '''
+def _megaquant_fp4_apply_nd(apply):
+    """Flatten visual batch dimensions for the matrix-only NVFP4 kernels."""
+    from functools import wraps
+
+    @wraps(apply)
+    def apply_nd(self, layer, x, bias=None):
+        # Text projections and explicitly prequantized inputs use the original path.
+        if not isinstance(x, torch.Tensor) or x.ndim == 2:
+            return apply(self, layer, x, bias)
+        shape = x.shape
+        output = apply(self, layer, x.reshape(-1, shape[-1]), bias)
+        return output.reshape(*shape[:-1], output.shape[-1])
+
+    return apply_nd
+
+'''
+
 
 class PatchError(RuntimeError):
     """Installed SGLang does not match the tested patch target."""
@@ -204,6 +222,21 @@ def transform(relative_path: str, source: str) -> str:
 ''',
             "uniform NVFP4 layer metadata",
         )
+        source = _replace_once(
+            source,
+            "class ModelOptFp4LinearMethod(LinearMethodBase):\n",
+            FP4_ND_HELPER + "class ModelOptFp4LinearMethod(LinearMethodBase):\n",
+            "NVFP4 multidimensional input helper",
+        )
+        start = source.index("class ModelOptFp4LinearMethod(LinearMethodBase):\n")
+        end = source.index("class ModelOptNvFp4A16LinearMethod(LinearMethodBase):\n", start)
+        method_class = _replace_once(
+            source[start:end],
+            "    def apply(\n",
+            "    @_megaquant_fp4_apply_nd\n    def apply(\n",
+            "NVFP4 linear input shape adapter",
+        )
+        source = source[:start] + method_class + source[end:]
     elif relative_path == "srt/configs/model_config.py":
         source = _replace_once(
             source,
