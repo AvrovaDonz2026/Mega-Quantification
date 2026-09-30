@@ -56,17 +56,14 @@ DGX Spark 是 ARM64、CUDA 13、SM 12.1 的统一内存机器。用
 `Dockerfile.spark` 保留仓库的 `megaquant quantize` 流程，避免默认
 CUDA 12.8/cu128 镜像把 ARM64 的 PyTorch 替换掉：
 
-```bash
-# Spark 上已有 quant-env:gb10 时可离线构建
-DOCKER_BUILDKIT=0 docker build \
-  --build-arg BASE_IMAGE=quant-env:gb10 \
-  --build-arg INSTALL_SPARK_DEPS=0 \
-  -f Dockerfile.spark -t megaquant:gb10 .
+完整构建、镜像身份核验、双格式量化及视觉/MTP 复验命令见
+[Spark 容器运行手册](../docs/DGX_SPARK.md)。Spark 服务使用镜像内安装的
+wheel 和固定配方，启动时校验 manifest；修改宿主源码或配方后需重新构建。
 
-# 纯净环境可使用多架构 NGC PyTorch（需要能访问 NGC / PyPI）
-docker build \
-  --build-arg BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3 \
-  --build-arg INSTALL_SPARK_DEPS=1 \
+```bash
+# 使用 Dockerfile 中固定摘要的公开 NGC 基础镜像和完整依赖版本
+docker build --platform linux/arm64 --no-cache \
+  --build-arg GIT_REVISION="$(git rev-parse HEAD)" \
   -f Dockerfile.spark -t megaquant:gb10 .
 ```
 
@@ -151,8 +148,10 @@ CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存�
 
 单台 Spark 有一颗 GPU，配方默认 TP1。跨两台 Spark 的 TP2 还需要两端
 一致的镜像/权重、分布式初始化地址和网络配置，不能只把本配方的 TP 改成 2。
-MTP 默认为关闭；文本/图片通过后，可在配方中启用注释列出的 EAGLE 参数，
-使用完整导出里的 `mtp.*`。量化 MTP 不应指向丢失量化元数据的 BF16 draft。
+普通服务的 MTP 默认为关闭；文本/图片通过后，停止该服务，再启动
+`--profile spark-mtp up -d serve-sglang-spark-mtp`。该服务使用镜像内的
+`eval-gpqa-diamond.spark-mtp.yaml` 和完整导出里的 `mtp.*`；量化 MTP 不应
+指向丢失量化元数据的 BF16 draft。
 
 2026-09-30 的[视觉/MTP 服务实测](../docs/validation/dgx-spark-serving-20260930.md)
 记录了红蓝图对照、数字 OCR、实际草稿接受率和逐 token 基线比较。

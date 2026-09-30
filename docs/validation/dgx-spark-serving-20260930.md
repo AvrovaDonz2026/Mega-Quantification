@@ -18,7 +18,8 @@ results and SHA256 hashes of the retained request/response records and logs.
 | Transformers | 5.12.1 |
 | SGLang / sglang-kernel | 0.5.20 / 0.4.7 |
 | FlashInfer | 0.6.18 |
-| Tested serving image | `sha256:c0c1992d72102ef74b7d3894a657b0a717c3e6576751a88a76e12b31651f52c9` |
+| Tested serving image (OCI index / Docker inspect ID) | `sha256:3cbab79ab5b591fa388189532bbe402632b7e8e2489aae9bdc2c754830f474b7` |
+| Serving image config digest | `sha256:c0c1992d72102ef74b7d3894a657b0a717c3e6576751a88a76e12b31651f52c9` |
 | Reused CUDA base image | `sha256:4cd0f8c8e31730b24d7949166b0f2b6516e69b2d4435388cbe841222cd60970c` |
 | Loader patch | `megaquant-spark-v2`, revision `5fae056242aaf9399cba2b8a83294ea975c0b311` |
 | FP32 recipe / public client revision | `41969f150c7b2a91139a8b2c6096196218543b5a` |

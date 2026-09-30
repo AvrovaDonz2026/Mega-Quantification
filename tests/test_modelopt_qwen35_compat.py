@@ -31,7 +31,8 @@ def test_quantization_installs_bound_transformers_to_supported_gdn_api() -> None
         if Requirement(item).name == "transformers"
     ]
     assert len(project_transformers) == 1
-    assert project_transformers[0].specifier == SpecifierSet(">=5.8,<5.15")
+    supported = SpecifierSet(">=5.8,<5.15")
+    assert project_transformers[0].specifier == supported
 
     for filename in ("requirements-gpu.txt", "requirements-gpu-spark.txt"):
         requirements = [
@@ -41,7 +42,12 @@ def test_quantization_installs_bound_transformers_to_supported_gdn_api() -> None
         ]
         transformers = [item for item in requirements if item.name == "transformers"]
         assert len(transformers) == 1
-        assert transformers[0].specifier == SpecifierSet(">=5.8,<5.15")
+        if filename == "requirements-gpu-spark.txt":
+            # Spark freezes a validated version inside the supported GDN API range.
+            assert transformers[0].specifier == SpecifierSet("==5.12.1")
+            assert "5.12.1" in supported
+        else:
+            assert transformers[0].specifier == supported
 
 
 def _install_fake_transformers(monkeypatch: pytest.MonkeyPatch, *, missing: str | None = None):
