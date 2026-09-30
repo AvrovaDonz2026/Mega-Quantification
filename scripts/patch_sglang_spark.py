@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any
 
 VERSION = "0.5.20"
-PATCH_ID = "megaquant-spark-v3"
+PATCH_ID = "megaquant-spark-v4"
 MANIFEST = ".megaquant-spark-patch.json"
-MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN compatibility.\n"
+MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN/FP8 compatibility.\n"
 
 # Exact files from https://github.com/sgl-project/sglang/tree/v0.5.20/python/sglang
 UPSTREAM_SHA256 = {
@@ -212,6 +212,19 @@ def transform(relative_path: str, source: str) -> str:
             "MTP decoder layer type",
         )
     elif relative_path == "srt/layers/quantization/modelopt_quant.py":
+        source = _replace_once(
+            source,
+            "        self.use_sm120_fp8 = cuda_capability is not None"
+            " and cuda_capability[0] == 12\n",
+            "        # SM121 decode GEMV and verify cuBLAS use different FP8 reductions.\n"
+            "        # Avoid the M=1-only GEMV by retaining the existing static-scale fallback.\n"
+            "        self.use_sm120_fp8 = (\n"
+            "            cuda_capability is not None\n"
+            "            and cuda_capability[0] == 12\n"
+            "            and cuda_capability != (12, 1)\n"
+            "        )\n",
+            "SM121 FP8 decode/verify backend alignment",
+        )
         source = _replace_once(
             source,
             '        quant_config.is_w4a16 = quant_method == "W4A16_NVFP4"\n',

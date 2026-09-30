@@ -58,7 +58,22 @@ class Qwen3_5ForCausalLMMTP(nn.Module):
         return hidden_states
 '''
 
-QUANT_SOURCE = '''class ModelOptFp4Config:
+QUANT_SOURCE = '''class ModelOptFp8LinearMethod(LinearMethodBase):
+    def __init__(self, quant_config):
+        super().__init__()
+        self.quant_config = quant_config
+        self.cutlass_fp8_supported = cutlass_fp8_supported()
+        self.enable_flashinfer_bmm = flashinfer_per_tensor_fp8_supported()
+        self.use_marlin = False
+        if is_cuda():
+            self.use_marlin = (
+                envs.SGLANG_FORCE_FP8_MARLIN.get() or can_auto_enable_marlin_fp8()
+            )
+        # The SM12x facade selects the best qualified small-M FP8 kernel.
+        cuda_capability = torch.cuda.get_device_capability() if is_cuda() else None
+        self.use_sm120_fp8 = cuda_capability is not None and cuda_capability[0] == 12
+
+class ModelOptFp4Config:
     @classmethod
     def from_config(cls, config):
         quant_config = cls()
@@ -222,6 +237,55 @@ def test_old_v2_manifest_cannot_skip_gdn_precision_fix(upstream_tree):
     path.write_text(json.dumps(manifest))
     with pytest.raises(patch.PatchError, match="manifest or installed files"):
         patch.patch_tree(upstream_tree, "0.5.20", check=True)
+
+
+def test_old_v3_manifest_cannot_skip_sm121_fp8_alignment(upstream_tree):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v3"
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=True)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+
+
+@pytest.mark.parametrize(
+    ("capability", "is_cuda_device", "use_facade"),
+    [
+        ((12, 0), True, True),
+        ((12, 1), True, False),
+        ((12, 2), True, True),
+        ((9, 0), True, False),
+        (None, False, False),
+    ],
+)
+def test_fp8_constructor_uses_common_backend_only_on_sm121(capability, is_cuda_device, use_facade):
+    capability_queries = []
+
+    def get_device_capability():
+        assert is_cuda_device
+        capability_queries.append(capability)
+        return capability
+
+    namespace = _namespace(
+        "srt/layers/quantization/modelopt_quant.py",
+        torch=SimpleNamespace(cuda=SimpleNamespace(get_device_capability=get_device_capability)),
+        is_cuda=lambda: is_cuda_device,
+        cutlass_fp8_supported=lambda: True,
+        flashinfer_per_tensor_fp8_supported=lambda: True,
+        envs=SimpleNamespace(SGLANG_FORCE_FP8_MARLIN=SimpleNamespace(get=lambda: False)),
+        can_auto_enable_marlin_fp8=lambda: False,
+    )
+    config = object()
+    method = namespace["ModelOptFp8LinearMethod"](config)
+    assert method.use_sm120_fp8 is use_facade
+    assert method.quant_config is config
+    assert method.cutlass_fp8_supported is True
+    assert method.enable_flashinfer_bmm is True
+    assert method.use_marlin is False
+    assert capability_queries == ([capability] if is_cuda_device else [])
 
 
 def test_vision_uses_explicit_quantization_without_mutating_text_config():
