@@ -4,8 +4,9 @@ This runbook builds the repository's ARM64 / CUDA 13 images and runs full-27B
 W4A8 and W4A4 quantization, image inference and embedded MTP checks on one GB10.
 The recipes use TP1. Cross-node TP2 requires a separate distributed validation.
 
-The frozen-container changes are in revision `03949ba`. Clean image builds and
-the complete GPU/PTQ/vision/MTP rerun are still being verified. The earlier
+The [clean-container report](validation/dgx-spark-clean-container-20260930.md)
+records the exact PTQ and serving revisions, inputs, image digests and results.
+The earlier
 [quantization](validation/dgx-spark-pr46-20260929.md) and
 [serving](validation/dgx-spark-serving-20260930.md) reports describe their actual
 environments; they do not prove a clean build of these new images. No published
@@ -16,7 +17,7 @@ registry image is claimed here.
 | Image | Public base | Repository additions |
 |---|---|---|
 | `megaquant:gb10` | NGC PyTorch 26.08, pinned by SHA256 in `Dockerfile.spark` | Complete Spark PTQ dependency version list, installed MegaQuant wheel, recipes and scripts |
-| `megaquant:sglang-spark` | SGLang 0.5.20 CUDA 13, pinned by SHA256 in `Dockerfile.sglang.spark` | Installed MegaQuant wheel, guarded visual/MTP loader patch, recipes and scripts |
+| `megaquant:sglang-spark` | SGLang 0.5.20 CUDA 13, pinned by SHA256 in `Dockerfile.sglang.spark` | Installed MegaQuant wheel, guarded visual/MTP loaders, GDN and SM121 projection repairs, recipes and scripts |
 
 Both builds use the fixed wheel build backend in
 `docker/requirements-build-spark.txt`, `--no-deps` and `--no-build-isolation`.
@@ -132,8 +133,9 @@ scale is valid; inspect those records and audit the checkpoint before serving.
 
 ## Vision and MTP inference
 
-Verify the serving image's manifest, loader patch, ARM64/SM121 GPU and CUDA
-matrix multiplication before loading the full checkpoint:
+Verify the serving image's manifest, six-file patch guard, ARM64/SM121 GPU,
+CUDA matrix multiplication, GDN decode/verify state parity and FP8/BF16
+projection batch invariance before loading the full checkpoint:
 
 ```bash
 docker compose --profile spark run --rm --entrypoint python serve-sglang-spark \
@@ -144,6 +146,20 @@ For each format, start the baseline and MTP servers separately. Both use baked
 FP32 SSM state recipes. Baseline uses `eval-gpqa-diamond.spark.yaml`; MTP uses
 `eval-gpqa-diamond.spark-mtp.yaml` with embedded EAGLE, two speculative steps,
 top-k 1 and three draft tokens. No external draft checkpoint is supplied.
+
+The patch keeps the packed GDN decode sigmoid gate in FP32, matching the
+speculative verification kernel. FP32 SSM cache alone does not remove the
+upstream decode gate's BF16 rounding. The GPU preflight compares 32 sequential
+decode steps with a speculative verification chain, including every cached
+intermediate state, grouped heads and a strided state pool. An older patch
+manifest or changed pinned source is rejected; rebuild from the official base.
+
+On SM121, static FP8 projections retain the existing FlashInfer/cuBLAS path for
+both single-row decode and multi-row verification. BF16 GDN BA projections use
+SGLang's existing batch-invariant Triton matrix multiplication. GPU preflight
+checks exact row equality and finite outputs; the BF16 check also uses a CPU
+FP64 reference. These operator checks do not establish full-model token parity.
+The clean-container report records the remaining W4A8 strict-comparison failure.
 
 The following runs W4A8. For W4A4, change `SPARK_EVAL_MODEL` to the W4A4 export
 and use distinct output JSON filenames. The HTTP clients do not attach a GPU.
