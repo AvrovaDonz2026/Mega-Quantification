@@ -7,8 +7,9 @@ import copy
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -107,6 +108,47 @@ CONFIG_SOURCE = '''class ModelConfig:
             self.hf_text_config.num_nextn_predict_layers = 1
 '''
 
+UNQUANT_SOURCE = '''class UnquantizedLinearMethod(LinearMethodBase):
+    def apply(
+        self, layer, x, bias=None,
+    ) -> torch.Tensor:
+        if use_intel_amx_backend(layer):
+            x_shapes = x.shape
+            if len(x_shapes) == 3:
+                x = x.view(-1, x.shape[-1])
+            output = torch.ops.sgl_kernel.weight_packed_linear(
+                x,
+                layer.weight,
+                bias,
+                True,  # is_vnni
+            )
+            if len(x_shapes) == 3:
+                output = output.view(x_shapes[0], x_shapes[1], -1)
+            return output
+
+        elif _use_aiter and type(layer.weight.data) is torch.Tensor:
+            return tgemm.mm(x, layer.weight, bias, otype=x.dtype)
+
+        elif (
+            get_bf16_gemm_backend().is_cutedsl()
+            and x.is_cuda
+            and x.dtype == torch.bfloat16
+            and layer.weight.dtype == torch.bfloat16
+            and (bias is None or bias.dtype == torch.bfloat16)
+            and not layer.weight.requires_grad
+            and (bias is None or not bias.requires_grad)
+        ):
+            if torch.compiler.is_compiling():
+                # The m-dependent kernel heuristic would guard on the symbolic
+                # token dim under Dynamo and recompile per shape bucket; the
+                # opaque op resolves it at runtime with concrete shapes,
+                # keeping the per-shape kernel choice.
+                return bf16_gemm_dispatch(x, layer.weight, bias)
+            return _bf16_gemm_dispatch_impl(x, layer.weight, bias)
+
+        return F.linear(x, layer.weight, bias)
+'''
+
 FIXTURES = {
     "srt/models/qwen3_vl.py": VISION_SOURCE,
     "srt/models/qwen3_5_mtp.py": MTP_SOURCE,
@@ -117,6 +159,7 @@ FIXTURES = {
         "    beta_val = tl.sigmoid(b_val).to(b.dtype.element_ty).to(tl.float32)\n"
         "    return beta_val\n"
     ),
+    "srt/layers/quantization/unquant.py": UNQUANT_SOURCE,
 }
 
 
@@ -251,6 +294,48 @@ def test_old_v3_manifest_cannot_skip_sm121_fp8_alignment(upstream_tree):
     assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
 
 
+@pytest.mark.parametrize("check", [False, True])
+def test_old_v4_manifest_cannot_skip_sm121_ba_alignment(upstream_tree, check):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v4"
+    del manifest["files"]["srt/layers/quantization/unquant.py"]
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    before_manifest = path.read_bytes()
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=check)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert path.read_bytes() == before_manifest
+
+
+def test_sixth_ba_target_hash_drift_fails_before_any_write(upstream_tree):
+    target = upstream_tree / "srt/layers/quantization/unquant.py"
+    target.write_text(target.read_text() + "# upstream BA implementation changed\n")
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="unquant.py: upstream SHA256 mismatch"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+def test_ba_fragment_drift_fails_before_any_write(upstream_tree, monkeypatch):
+    name = "srt/layers/quantization/unquant.py"
+    target = upstream_tree / name
+    target.write_text(
+        target.read_text().replace("if use_intel_amx_backend(layer):", "if changed(layer):")
+    )
+    monkeypatch.setitem(
+        patch.UPSTREAM_SHA256, name, hashlib.sha256(target.read_bytes()).hexdigest()
+    )
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="BF16 GDN BA.*expected one upstream fragment"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
 @pytest.mark.parametrize(
     ("capability", "is_cuda_device", "use_facade"),
     [
@@ -286,6 +371,111 @@ def test_fp8_constructor_uses_common_backend_only_on_sm121(capability, is_cuda_d
     assert method.enable_flashinfer_bmm is True
     assert method.use_marlin is False
     assert capability_queries == ([capability] if is_cuda_device else [])
+
+
+@pytest.mark.parametrize(
+    ("changes", "use_persistent"),
+    [
+        pytest.param({}, True, id="sm121-m1"),
+        pytest.param({"rows": 3}, True, id="sm121-m3"),
+        pytest.param({"capability": (12, 0)}, False, id="sm120"),
+        pytest.param({"capability": (12, 2)}, False, id="sm122"),
+        pytest.param({"capability": (9, 0)}, False, id="sm90"),
+        pytest.param({"is_cuda": False}, False, id="cpu"),
+        pytest.param(
+            {"prefix": "model.layers.2.linear_attn.in_proj_a"}, False, id="other-projection"
+        ),
+        pytest.param({"prefix": "in_proj_ba"}, False, id="bare-prefix"),
+        pytest.param({"dtype": "fp16"}, False, id="fp16-input"),
+        pytest.param({"weight_dtype": "fp16"}, False, id="fp16-weight"),
+        pytest.param({"ndim": 3}, False, id="rank3-input"),
+        pytest.param({"bias": True}, False, id="bias"),
+        pytest.param({"requires_grad": True}, False, id="input-grad"),
+        pytest.param({"weight_requires_grad": True}, False, id="weight-grad"),
+    ],
+)
+def test_ba_apply_uses_fixed_triton_only_for_sm121_inference(monkeypatch, changes, use_persistent):
+    arguments = {
+        "rows": 1,
+        "capability": (12, 1),
+        "is_cuda": True,
+        "prefix": "model.layers.2.linear_attn.in_proj_ba",
+        "dtype": "bf16",
+        "weight_dtype": "bf16",
+        "ndim": 2,
+        "bias": False,
+        "requires_grad": False,
+        "weight_requires_grad": False,
+        **changes,
+    }
+    calls, capability_queries = [], []
+    persistent_output, fallback_output, transposed_weight = object(), object(), object()
+
+    def persistent(**kwargs):
+        calls.append(("persistent", kwargs))
+        return persistent_output
+
+    def linear(*args):
+        calls.append(("fallback", args))
+        return fallback_output
+
+    def capability(device):
+        capability_queries.append(device)
+        return arguments["capability"]
+
+    module_name = "sglang.srt.batch_invariant_ops.batch_invariant_ops"
+    module = ModuleType(module_name)
+    module._matmul_persistent_triton = persistent
+    monkeypatch.setitem(sys.modules, module_name, module)
+    namespace = _namespace(
+        "srt/layers/quantization/unquant.py",
+        torch=SimpleNamespace(
+            Tensor=object,
+            bfloat16="bf16",
+            cuda=SimpleNamespace(get_device_capability=capability),
+        ),
+        _is_cuda=True,
+        _use_aiter=False,
+        F=SimpleNamespace(linear=linear),
+        use_intel_amx_backend=lambda layer: False,
+        get_bf16_gemm_backend=lambda: SimpleNamespace(is_cutedsl=lambda: False),
+    )
+    x = SimpleNamespace(
+        is_cuda=arguments["is_cuda"],
+        ndim=arguments["ndim"],
+        shape=(arguments["rows"], 5120),
+        dtype=arguments["dtype"],
+        requires_grad=arguments["requires_grad"],
+        device="cuda:0",
+    )
+    weight = SimpleNamespace(
+        is_cuda=arguments["is_cuda"],
+        ndim=2,
+        dtype=arguments["weight_dtype"],
+        requires_grad=arguments["weight_requires_grad"],
+        t=lambda: transposed_weight,
+    )
+    layer = SimpleNamespace(prefix=arguments["prefix"], weight=weight)
+    bias = object() if arguments["bias"] else None
+    result = namespace["UnquantizedLinearMethod"]().apply(layer, x, bias)
+    if use_persistent:
+        assert result is persistent_output
+        assert calls == [("persistent", {"a": x, "b": transposed_weight, "out_dtype": x.dtype})]
+    else:
+        assert result is fallback_output
+        assert calls == [("fallback", (x, weight, bias))]
+    assert capability_queries == ([x.device] if use_persistent or "capability" in changes else [])
+
+
+def test_ba_patch_preserves_all_original_fallback_statements():
+    original = ast.parse(UNQUANT_SOURCE).body[0].body[0]
+    source = patch.transform("srt/layers/quantization/unquant.py", UNQUANT_SOURCE)
+    patched = ast.parse(source).body[0].body[0]
+    # Only the new guarded dispatch precedes the original apply implementation.
+    assert isinstance(patched.body[0], ast.If)
+    assert ast.dump(ast.Module(body=patched.body[1:], type_ignores=[])) == ast.dump(
+        ast.Module(body=original.body, type_ignores=[])
+    )
 
 
 def test_vision_uses_explicit_quantization_without_mutating_text_config():

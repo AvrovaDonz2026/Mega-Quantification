@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any
 
 VERSION = "0.5.20"
-PATCH_ID = "megaquant-spark-v4"
+PATCH_ID = "megaquant-spark-v5"
 MANIFEST = ".megaquant-spark-patch.json"
-MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN/FP8 compatibility.\n"
+MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN/FP8/BF16 compatibility.\n"
 
 # Exact files from https://github.com/sgl-project/sglang/tree/v0.5.20/python/sglang
 UPSTREAM_SHA256 = {
@@ -35,6 +35,9 @@ UPSTREAM_SHA256 = {
     ),
     "kernels/ops/attention/fla/fused_recurrent.py": (
         "35a928d24bf6cc3ca56d73e4b729ec004ec8a34760e2425e2f04d6ef783db9f8"
+    ),
+    "srt/layers/quantization/unquant.py": (
+        "9f071f09eba9522e8d2b3e26fa0f12c0a6564da22b8062d5c8a12df9db4202bb"
     ),
 }
 
@@ -281,6 +284,36 @@ def transform(relative_path: str, source: str) -> str:
             "    # changes the recurrent state even when the SSM cache is FP32.\n"
             "    beta_val = 1.0 / (1.0 + tl.exp(-b_val))\n",
             "GDN packed decode gate precision",
+        )
+    elif relative_path == "srt/layers/quantization/unquant.py":
+        source = _replace_once(
+            source,
+            "    ) -> torch.Tensor:\n        if use_intel_amx_backend(layer):\n",
+            '''    ) -> torch.Tensor:
+        # Keep GDN BA dot reductions identical for decode and target verify on GB10.
+        if (
+            _is_cuda
+            and x.is_cuda
+            and layer.weight.is_cuda
+            and getattr(layer, "prefix", "").endswith(".in_proj_ba")
+            and x.ndim == 2
+            and layer.weight.ndim == 2
+            and x.dtype == torch.bfloat16
+            and layer.weight.dtype == torch.bfloat16
+            and bias is None
+            and not x.requires_grad
+            and not layer.weight.requires_grad
+            and torch.cuda.get_device_capability(x.device) == (12, 1)
+        ):
+            from sglang.srt.batch_invariant_ops.batch_invariant_ops import (
+                _matmul_persistent_triton,
+            )
+
+            return _matmul_persistent_triton(a=x, b=layer.weight.t(), out_dtype=x.dtype)
+
+        if use_intel_amx_backend(layer):
+''',
+            "SM121 BF16 GDN BA decode/verify backend alignment",
         )
     else:
         raise PatchError(f"unknown patch target: {relative_path}")
