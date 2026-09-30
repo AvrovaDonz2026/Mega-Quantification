@@ -133,9 +133,9 @@ scale is valid; inspect those records and audit the checkpoint before serving.
 
 ## Vision and MTP inference
 
-Verify the serving image's manifest, six-file patch guard, ARM64/SM121 GPU,
+Verify the serving image's manifest, seven-file patch guard, ARM64/SM121 GPU,
 CUDA matrix multiplication, GDN decode/verify state parity and FP8/BF16
-projection batch invariance before loading the full checkpoint:
+projection and attention decode/verify parity before loading the full checkpoint:
 
 ```bash
 docker compose --profile spark run --rm --entrypoint python serve-sglang-spark \
@@ -159,7 +159,18 @@ both single-row decode and multi-row verification. BF16 GDN BA projections use
 SGLang's existing batch-invariant Triton matrix multiplication. GPU preflight
 checks exact row equality and finite outputs; the BF16 check also uses a CPU
 FP64 reference. These operator checks do not establish full-model token parity.
-The clean-container report records the remaining W4A8 strict-comparison failure.
+The clean-container report records the original W4A8 strict-comparison failure
+and the separately validated repair.
+
+For eager Qwen3.5 inference on SM121 with FP8 KV, page size 1, 24 query heads,
+4 KV heads and head dimension 256, ordinary decode uses the existing FlashInfer
+prefill wrapper with three copies of the current query. Each copy reads only
+the real cached KV through an explicit mask; KV is written once and only the
+first output is returned. This aligns the attention reduction shape with the
+three-token MTP recipe. The GPU preflight covers short sequences and two
+requests, including masked future tokens. The extra attention work has not
+been benchmarked; this is a scoped compatibility repair, not a general
+determinism or performance guarantee.
 
 The following runs W4A8. For W4A4, change `SPARK_EVAL_MODEL` to the W4A4 export
 and use distinct output JSON filenames. The HTTP clients do not attach a GPU.

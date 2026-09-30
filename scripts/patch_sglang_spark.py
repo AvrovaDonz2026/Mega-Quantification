@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 VERSION = "0.5.20"
-PATCH_ID = "megaquant-spark-v5"
+PATCH_ID = "megaquant-spark-v6"
 MANIFEST = ".megaquant-spark-patch.json"
 MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN/FP8/BF16 compatibility.\n"
 
@@ -38,6 +38,9 @@ UPSTREAM_SHA256 = {
     ),
     "srt/layers/quantization/unquant.py": (
         "9f071f09eba9522e8d2b3e26fa0f12c0a6564da22b8062d5c8a12df9db4202bb"
+    ),
+    "srt/layers/attention/flashinfer_backend.py": (
+        "dce9594f150664cd12c2fb3cfddb37a955759b32a312bc27b0538c1435e82294"
     ),
 }
 
@@ -136,6 +139,85 @@ def _megaquant_fp4_apply_nd(apply):
 
     return apply_nd
 
+'''
+
+FLASHINFER_DECODE_GUARD = '''        self._megaquant_sm121_fp8_prefill_decode = (
+            self.__class__ is FlashInferAttnBackend
+            and model_runner.server_args.disable_cuda_graph
+            and not getattr(model_runner, "is_draft_worker", False)
+            and self.flashinfer_kv_cache_dtype == torch.float8_e4m3fn
+            and model_runner.model_config.hf_config.model_type == "qwen3_5"
+            and self.page_size == 1
+            and model_runner.model_config.num_attention_heads
+            // get_parallel().attn_tp_size == 24
+            and model_runner.model_config.get_num_kv_heads(
+                get_parallel().attn_tp_size, get_parallel().attn_dcp_size
+            ) == 4
+            and model_runner.model_config.head_dim == 256
+            and self.num_wrappers == 1
+            and not self.skip_prefill
+            and not self.prefill_uses_dequant_workspace
+            and not self.decode_uses_dequant_workspace
+            and torch.cuda.is_available()
+            and torch.cuda.get_device_capability(model_runner.device) == (12, 1)
+        )
+
+'''
+
+FLASHINFER_DECODE_PLAN = '''        if (
+            self._megaquant_sm121_fp8_prefill_decode
+            and forward_batch.forward_mode.is_decode()
+            and forward_batch.spec_info is None
+        ):
+            self.indices_updater_prefill.update(
+                forward_batch.req_pool_indices,
+                forward_batch.seq_lens,
+                forward_batch.seq_lens_cpu,
+                forward_batch.seq_lens_sum,
+                prefix_lens=forward_batch.seq_lens - 3,
+                prefill_wrappers=self.prefill_wrappers_verify,
+                use_ragged=False,
+                encoder_lens=forward_batch.encoder_lens,
+                spec_info=None,
+                fixed_split_size=None,
+            )
+            self.forward_metadata = PrefillMetadata(
+                self.prefill_wrappers_verify,
+                False,
+                False,
+                swa_out_cache_loc=swa_out_cache_loc,
+            )
+            return
+
+'''
+
+FLASHINFER_DECODE_FORWARD = '''        if (
+            self._megaquant_sm121_fp8_prefill_decode
+            and forward_batch.forward_mode.is_decode()
+            and forward_batch.spec_info is None
+            and isinstance(self.forward_metadata, PrefillMetadata)
+        ):
+            # Three identical queries select the same reduction shape as verify.
+            # The all-true CUSTOM mask gives every clone the original full KV.
+            output = self.forward_extend(
+                q.repeat_interleave(3, dim=0), k, v, layer, forward_batch,
+                save_kv_cache=save_kv_cache,
+            )
+            return output.reshape(q.shape[0], 3, -1)[:, 0].contiguous()
+
+'''
+
+FLASHINFER_DECODE_MASK = '''            if (
+                self.attn_backend._megaquant_sm121_fp8_prefill_decode
+                and wrapper_paged is self.attn_backend.prefill_wrappers_verify[0]
+            ):
+                # Normal decode is the only no-spec use of this verify wrapper.
+                # Flattened per-request masks contain 3 * actual KV length bits.
+                custom_mask = torch.ones(
+                    3 * paged_kernel_lens_sum,
+                    dtype=torch.bool,
+                    device=req_pool_indices.device,
+                )
 '''
 
 
@@ -315,6 +397,42 @@ def transform(relative_path: str, source: str) -> str:
 ''',
             "SM121 BF16 GDN BA decode/verify backend alignment",
         )
+    elif relative_path == "srt/layers/attention/flashinfer_backend.py":
+        source = _replace_once(
+            source,
+            '        fmha_backend = "auto"\n',
+            FLASHINFER_DECODE_GUARD + '        fmha_backend = "auto"\n',
+            "SM121 FP8 attention decode scope",
+        )
+        start = source.index("    def init_forward_metadata(self, forward_batch: ForwardBatch):")
+        end = source.index("    def init_cuda_graph_state(", start)
+        method = _replace_once(
+            source[start:end],
+            "        if forward_batch.forward_mode.is_decode_or_idle():\n",
+            FLASHINFER_DECODE_PLAN
+            + "        if forward_batch.forward_mode.is_decode_or_idle():\n",
+            "SM121 FP8 attention decode plan",
+        )
+        source = source[:start] + method + source[end:]
+        start = source.index("    def forward_decode(\n")
+        end = source.index("    def _get_wrapper_idx(", start)
+        method = _replace_once(
+            source[start:end],
+            "        decode_wrapper = self.forward_metadata.decode_wrappers[\n",
+            FLASHINFER_DECODE_FORWARD
+            + "        decode_wrapper = self.forward_metadata.decode_wrappers[\n",
+            "SM121 FP8 attention decode forward",
+        )
+        source = source[:start] + method + source[end:]
+        start = source.index("class FlashInferIndicesUpdaterPrefill:")
+        end = source.index("class FlashInferMultiStepDraftBackend:", start)
+        updater = _replace_once(
+            source[start:end],
+            "            custom_mask = cross_attention_custom_mask\n",
+            "            custom_mask = cross_attention_custom_mask\n" + FLASHINFER_DECODE_MASK,
+            "SM121 FP8 attention decode mask",
+        )
+        source = source[:start] + updater + source[end:]
     else:
         raise PatchError(f"unknown patch target: {relative_path}")
     source = MARKER + source

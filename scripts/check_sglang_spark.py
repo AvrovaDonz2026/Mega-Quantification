@@ -8,6 +8,7 @@ import json
 import platform
 from pathlib import Path
 
+from check_sglang_attention import check_attention_decode_verify
 from check_sglang_ba import check_ba_batch_invariance
 from check_sglang_fp8 import check_fp8_batch_invariance
 from check_sglang_gdn import check_gdn_decode_verify
@@ -53,6 +54,7 @@ def main() -> None:
     report["gdn_decode_verify"] = check_gdn_decode_verify()
     report["fp8_batch_invariance"] = check_fp8_batch_invariance()
     report["ba_batch_invariance"] = check_ba_batch_invariance()
+    report["attention_decode_verify"] = check_attention_decode_verify()
     print(json.dumps(report, indent=2))
 
 
