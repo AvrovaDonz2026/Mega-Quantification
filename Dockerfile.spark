@@ -16,7 +16,7 @@ ARG PIP_NO_INDEX=0
 
 LABEL org.opencontainers.image.source="https://github.com/AvrovaDonz2026/Mega-Quantification" \
       org.opencontainers.image.revision="${GIT_REVISION}" \
-      org.opencontainers.image.version="0.1.1" \
+      org.opencontainers.image.version="0.1.2" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
