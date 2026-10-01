@@ -85,6 +85,15 @@ The Spark recipe is TP1; a two-node TP2 deployment needs explicit distributed
 configuration. Optional `serve.speculative_*` fields enable embedded MTP, without
 adding an external draft path.
 
+The 2026-10-01 v0.1.2 release rerun at `ac53833` is recorded in
+`docs/validation/dgx-spark-release-20261001.md`. Both images passed two offline
+clean builds and isolated save/load checks. Fresh full W4A8/W4A4 quantization,
+strict export audits, vision/OCR and quantized embedded MTP passed; each format
+matched 205 baseline/MTP output IDs across five fixed cases. This remains a
+single-host TP1 result, without quality, performance or TP2 claims. The public
+stdlib auditor is `scripts/audit_spark_export.py`; pass the full PTQ image
+revision with `--expected-revision` when checking export provenance.
+
 ## MTP
 
 After export, `megaquant.mtp_export` copies BF16 `mtp.*` from the in-memory module or from the original HF source. Only shards whose index entries are `mtp.*` are read. The shard is `mtp.safetensors`. A sibling `<export>-draft` directory is the 1-layer SGLang draft (`--speculative-algorithm NEXTN`). Do not point the draft path at the 64-layer export.
