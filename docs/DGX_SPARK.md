@@ -136,6 +136,22 @@ Exports appear in `OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A8-spark` and
 all visual and MTP quantizers were exercised or that every exported tensor and
 scale is valid; inspect those records and audit the checkpoint before serving.
 
+Run the stdlib-only strict audit for each export, supplying the full Git SHA
+used to build the PTQ image. The audit requires all source language, vision and
+MTP tensors, quantized auxiliary projections with calibration coverage, valid
+packed shapes and finite scales. It checks the recorded provenance revision
+against the supplied SHA; it does not rewrite that record or prove inference
+quality.
+
+```bash
+python scripts/audit_spark_export.py \
+  "$OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A8-spark" "$MODELS_DIR/Qwen3.8-27B" nvfp4_w4a8 \
+  --expected-revision "$GIT_REVISION" --output-json w4a8-export-audit.json
+python scripts/audit_spark_export.py \
+  "$OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A4-spark" "$MODELS_DIR/Qwen3.8-27B" nvfp4_w4a4 \
+  --expected-revision "$GIT_REVISION" --output-json w4a4-export-audit.json
+```
+
 ## Vision and MTP inference
 
 Verify the serving image's manifest, seven-file patch guard, ARM64/SM121 GPU,
