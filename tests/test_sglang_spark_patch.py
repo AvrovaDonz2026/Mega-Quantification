@@ -7,8 +7,9 @@ import copy
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -58,7 +59,22 @@ class Qwen3_5ForCausalLMMTP(nn.Module):
         return hidden_states
 '''
 
-QUANT_SOURCE = '''class ModelOptFp4Config:
+QUANT_SOURCE = '''class ModelOptFp8LinearMethod(LinearMethodBase):
+    def __init__(self, quant_config):
+        super().__init__()
+        self.quant_config = quant_config
+        self.cutlass_fp8_supported = cutlass_fp8_supported()
+        self.enable_flashinfer_bmm = flashinfer_per_tensor_fp8_supported()
+        self.use_marlin = False
+        if is_cuda():
+            self.use_marlin = (
+                envs.SGLANG_FORCE_FP8_MARLIN.get() or can_auto_enable_marlin_fp8()
+            )
+        # The SM12x facade selects the best qualified small-M FP8 kernel.
+        cuda_capability = torch.cuda.get_device_capability() if is_cuda() else None
+        self.use_sm120_fp8 = cuda_capability is not None and cuda_capability[0] == 12
+
+class ModelOptFp4Config:
     @classmethod
     def from_config(cls, config):
         quant_config = cls()
@@ -92,11 +108,130 @@ CONFIG_SOURCE = '''class ModelConfig:
             self.hf_text_config.num_nextn_predict_layers = 1
 '''
 
+UNQUANT_SOURCE = '''class UnquantizedLinearMethod(LinearMethodBase):
+    def apply(
+        self, layer, x, bias=None,
+    ) -> torch.Tensor:
+        if use_intel_amx_backend(layer):
+            x_shapes = x.shape
+            if len(x_shapes) == 3:
+                x = x.view(-1, x.shape[-1])
+            output = torch.ops.sgl_kernel.weight_packed_linear(
+                x,
+                layer.weight,
+                bias,
+                True,  # is_vnni
+            )
+            if len(x_shapes) == 3:
+                output = output.view(x_shapes[0], x_shapes[1], -1)
+            return output
+
+        elif _use_aiter and type(layer.weight.data) is torch.Tensor:
+            return tgemm.mm(x, layer.weight, bias, otype=x.dtype)
+
+        elif (
+            get_bf16_gemm_backend().is_cutedsl()
+            and x.is_cuda
+            and x.dtype == torch.bfloat16
+            and layer.weight.dtype == torch.bfloat16
+            and (bias is None or bias.dtype == torch.bfloat16)
+            and not layer.weight.requires_grad
+            and (bias is None or not bias.requires_grad)
+        ):
+            if torch.compiler.is_compiling():
+                # The m-dependent kernel heuristic would guard on the symbolic
+                # token dim under Dynamo and recompile per shape bucket; the
+                # opaque op resolves it at runtime with concrete shapes,
+                # keeping the per-shape kernel choice.
+                return bf16_gemm_dispatch(x, layer.weight, bias)
+            return _bf16_gemm_dispatch_impl(x, layer.weight, bias)
+
+        return F.linear(x, layer.weight, bias)
+'''
+
+FLASHINFER_PATH = "srt/layers/attention/flashinfer_backend.py"
+FLASHINFER_SOURCE = '''class FlashInferAttnBackend:
+    def __init__(self, model_runner):
+        self.__dict__.update(model_runner.backend_options)
+        fmha_backend = "auto"
+
+    def init_forward_metadata(self, forward_batch: ForwardBatch):
+        swa_out_cache_loc = None
+        if forward_batch.forward_mode.is_decode_or_idle():
+            self.forward_metadata = "original-decode"
+        elif forward_batch.forward_mode.is_target_verify():
+            self.forward_metadata = "original-verify"
+        else:
+            self.forward_metadata = "original-prefill"
+
+    def init_cuda_graph_state(
+        self,
+    ):
+        return "original-graph"
+
+    def forward_extend(self, q, k, v, layer, forward_batch, save_kv_cache=True):
+        if k is not None and save_kv_cache:
+            self.token_to_kv_pool.set_kv_buffer(layer, forward_batch.out_cache_loc, k, v)
+        return self.prefill_result(q)
+
+    def forward_decode(
+        self, q, k, v, layer, forward_batch, save_kv_cache=True,
+    ):
+        decode_wrapper = self.forward_metadata.decode_wrappers[
+            self._get_wrapper_idx(layer)
+        ]
+        return decode_wrapper.forward(q, k, v, layer, forward_batch, save_kv_cache)
+
+    def _get_wrapper_idx(
+        self, layer,
+    ):
+        return 0
+
+class FlashInferIndicesUpdaterPrefill:
+    def call_begin_forward(
+        self, wrapper_ragged, wrapper_paged, req_pool_indices,
+        paged_kernel_lens, paged_kernel_lens_sum, seq_lens, prefix_lens,
+        kv_start_idx, kv_indptr, qo_indptr, use_ragged, spec_info,
+        cross_attention_custom_mask=None,
+    ):
+        bs = len(seq_lens)
+        if spec_info is None:
+            assert prefix_lens is not None
+            kv_indptr[1 : bs + 1] = torch.cumsum(paged_kernel_lens, dim=0)
+            kv_indptr = kv_indptr[: bs + 1]
+            kv_indices = torch.empty(
+                paged_kernel_lens_sum + 256,
+                dtype=torch.int32,
+                device=req_pool_indices.device,
+            )
+            self.attn_backend.kv_index_translator.fill_packed_read_stream(
+                req_pool_indices=req_pool_indices, seq_lens=paged_kernel_lens,
+                indptr=kv_indptr, total_tokens=paged_kernel_lens_sum,
+                out=kv_indices, kv_start_idx=kv_start_idx,
+            )
+            qo_indptr[1 : bs + 1] = torch.cumsum(seq_lens - prefix_lens, dim=0)
+            qo_indptr = qo_indptr[: bs + 1]
+            custom_mask = cross_attention_custom_mask
+        else:
+            return "original-spec"
+        return qo_indptr, kv_indptr, kv_indices, custom_mask
+
+class FlashInferMultiStepDraftBackend:
+    pass
+'''
+
 FIXTURES = {
     "srt/models/qwen3_vl.py": VISION_SOURCE,
     "srt/models/qwen3_5_mtp.py": MTP_SOURCE,
     "srt/layers/quantization/modelopt_quant.py": QUANT_SOURCE,
     "srt/configs/model_config.py": CONFIG_SOURCE,
+    "kernels/ops/attention/fla/fused_recurrent.py": (
+        "def packed_decode(b_val, b):\n"
+        "    beta_val = tl.sigmoid(b_val).to(b.dtype.element_ty).to(tl.float32)\n"
+        "    return beta_val\n"
+    ),
+    "srt/layers/quantization/unquant.py": UNQUANT_SOURCE,
+    FLASHINFER_PATH: FLASHINFER_SOURCE,
 }
 
 
@@ -206,6 +341,572 @@ def test_old_patch_manifest_is_rejected_before_any_write(upstream_tree):
     with pytest.raises(patch.PatchError, match="manifest or installed files"):
         patch.patch_tree(upstream_tree, "0.5.20")
     assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+
+
+def test_old_v2_manifest_cannot_skip_gdn_precision_fix(upstream_tree):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v2"
+    del manifest["files"]["kernels/ops/attention/fla/fused_recurrent.py"]
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=True)
+
+
+def test_old_v3_manifest_cannot_skip_sm121_fp8_alignment(upstream_tree):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v3"
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=True)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_old_v4_manifest_cannot_skip_sm121_ba_alignment(upstream_tree, check):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v4"
+    del manifest["files"]["srt/layers/quantization/unquant.py"]
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    before_manifest = path.read_bytes()
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=check)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert path.read_bytes() == before_manifest
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_old_v5_manifest_cannot_skip_fp8_attention_alignment(upstream_tree, check):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v5"
+    del manifest["files"][FLASHINFER_PATH]
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    before_manifest = path.read_bytes()
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=check)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert path.read_bytes() == before_manifest
+
+
+def test_seventh_attention_target_hash_drift_fails_before_any_write(upstream_tree):
+    target = upstream_tree / FLASHINFER_PATH
+    target.write_text(target.read_text() + "# upstream attention changed\n")
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="flashinfer_backend.py: upstream SHA256 mismatch"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "label"),
+    [
+        ('fmha_backend = "auto"', 'fmha_backend = "changed"', "scope"),
+        ("if forward_batch.forward_mode.is_decode_or_idle():", "if changed():", "plan"),
+        ("decode_wrapper = self.forward_metadata.decode_wrappers[", "changed = [", "forward"),
+        ("custom_mask = cross_attention_custom_mask", "custom_mask = changed", "mask"),
+    ],
+)
+def test_attention_fragment_drift_fails_before_any_write(
+    upstream_tree, monkeypatch, old, new, label
+):
+    target = upstream_tree / FLASHINFER_PATH
+    target.write_text(target.read_text().replace(old, new))
+    monkeypatch.setitem(
+        patch.UPSTREAM_SHA256, FLASHINFER_PATH, hashlib.sha256(target.read_bytes()).hexdigest()
+    )
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match=f"attention decode {label}.*expected one upstream"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+class MockSequence:
+    def __init__(self, values):
+        self.values = list(values)
+        self.device = "cuda:0"
+
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, key):
+        value = self.values[key]
+        return MockSequence(value) if isinstance(key, slice) else value
+
+    def __setitem__(self, key, value):
+        self.values[key] = value.values if isinstance(value, MockSequence) else value
+
+    def __sub__(self, other):
+        if isinstance(other, MockSequence):
+            return MockSequence(a - b for a, b in zip(self.values, other.values, strict=True))
+        return MockSequence(value - other for value in self.values)
+
+
+class MockAttentionTorch:
+    float8_e4m3fn, bool, int32 = "fp8", "bool", "int32"
+
+    def __init__(self):
+        self.capability, self.available = (12, 1), True
+        self.cuda = SimpleNamespace(
+            is_available=lambda: self.available,
+            get_device_capability=lambda device: self.capability,
+        )
+
+    def cumsum(self, values, dim):
+        assert dim == 0
+        total, result = 0, []
+        for value in values.values:
+            total += value
+            result.append(total)
+        return MockSequence(result)
+
+    def empty(self, count, dtype, device):
+        assert dtype == self.int32 and device == "cuda:0"
+        return MockSequence([0] * count)
+
+    def ones(self, count, dtype, device):
+        assert dtype == self.bool and device == "cuda:0"
+        return MockSequence([True] * count)
+
+
+class MockPrefillMetadata:
+    def __init__(self, wrappers, use_ragged, extend_no_prefix, *, swa_out_cache_loc):
+        self.prefill_wrappers = wrappers
+        self.use_ragged = use_ragged
+        self.extend_no_prefix = extend_no_prefix
+        self.swa_out_cache_loc = swa_out_cache_loc
+
+
+def _attention_fixture():
+    torch = MockAttentionTorch()
+    parallel = SimpleNamespace(attn_tp_size=1, attn_dcp_size=1)
+    config = SimpleNamespace(
+        hf_config=SimpleNamespace(model_type="qwen3_5"),
+        num_attention_heads=24,
+        kv_heads=4,
+        head_dim=256,
+    )
+    config.get_num_kv_heads = lambda tp, dcp: config.kv_heads
+    runner = SimpleNamespace(
+        model_config=config,
+        server_args=SimpleNamespace(disable_cuda_graph=True),
+        is_draft_worker=False,
+        device="cuda:0",
+        backend_options={
+            "flashinfer_kv_cache_dtype": "fp8",
+            "page_size": 1,
+            "num_wrappers": 1,
+            "skip_prefill": False,
+            "prefill_uses_dequant_workspace": False,
+            "decode_uses_dequant_workspace": False,
+        },
+    )
+    namespace = _namespace(
+        FLASHINFER_PATH,
+        torch=torch,
+        get_parallel=lambda: parallel,
+        ForwardBatch=object,
+        PrefillMetadata=MockPrefillMetadata,
+    )
+    return namespace, runner, torch, parallel
+
+
+@pytest.mark.parametrize(
+    ("owner", "attribute", "value"),
+    [
+        pytest.param(None, None, None, id="supported-sm121"),
+        pytest.param("torch", "capability", (12, 0), id="sm120"),
+        pytest.param("torch", "capability", (12, 2), id="sm122"),
+        pytest.param("torch", "capability", (9, 0), id="sm90"),
+        pytest.param("torch", "available", False, id="no-cuda"),
+        pytest.param("options", "flashinfer_kv_cache_dtype", "bf16", id="bf16-kv"),
+        pytest.param("options", "page_size", 16, id="paged-kv"),
+        pytest.param("options", "num_wrappers", 2, id="swa-or-cross-attention"),
+        pytest.param("options", "skip_prefill", True, id="skip-prefill"),
+        pytest.param("options", "prefill_uses_dequant_workspace", True, id="prefill-fp4"),
+        pytest.param("options", "decode_uses_dequant_workspace", True, id="decode-fp4"),
+        pytest.param("runner", "is_draft_worker", True, id="draft"),
+        pytest.param("config", "num_attention_heads", 32, id="different-q-heads"),
+        pytest.param("config", "kv_heads", 8, id="different-kv-heads"),
+        pytest.param("config", "head_dim", 128, id="different-head-dim"),
+        pytest.param("parallel", "attn_tp_size", 2, id="different-tp-heads"),
+        pytest.param("model", "model_type", "qwen3_5_moe", id="different-model"),
+        pytest.param("server", "disable_cuda_graph", False, id="cuda-graph"),
+    ],
+)
+def test_attention_decode_guard_is_limited_to_verified_shape(owner, attribute, value):
+    namespace, runner, torch, parallel = _attention_fixture()
+    objects = {
+        "runner": runner,
+        "torch": torch,
+        "parallel": parallel,
+        "config": runner.model_config,
+        "model": runner.model_config.hf_config,
+        "server": runner.server_args,
+    }
+    if owner == "options":
+        runner.backend_options[attribute] = value
+    elif owner is not None:
+        setattr(objects[owner], attribute, value)
+    backend = namespace["FlashInferAttnBackend"](runner)
+    assert backend._megaquant_sm121_fp8_prefill_decode is (owner is None)
+
+
+def test_attention_decode_guard_preserves_subclasses():
+    namespace, runner, _, _ = _attention_fixture()
+
+    class Derived(namespace["FlashInferAttnBackend"]):
+        pass
+
+    assert Derived(runner)._megaquant_sm121_fp8_prefill_decode is False
+
+
+@pytest.mark.parametrize("lengths", [[53], [53, 79], [1], [1, 2]])
+@pytest.mark.parametrize("decode", [False, True])
+def test_attention_query_and_kv_indices_preserve_request_boundaries(lengths, decode):
+    namespace, runner, _, _ = _attention_fixture()
+    backend = namespace["FlashInferAttnBackend"](runner)
+    wrapper = object()
+    backend.prefill_wrappers_verify = [wrapper]
+
+    def fill(**arguments):
+        offset = 0
+        for request, length in zip(
+            arguments["req_pool_indices"].values, arguments["seq_lens"].values, strict=True
+        ):
+            arguments["out"].values[offset : offset + length] = [
+                1000 * request + token for token in range(length)
+            ]
+            offset += length
+
+    backend.kv_index_translator = SimpleNamespace(fill_packed_read_stream=fill)
+    updater = namespace["FlashInferIndicesUpdaterPrefill"]()
+    updater.attn_backend = backend
+    count = len(lengths)
+    seq_lens = MockSequence(lengths)
+    query_count = 3 if decode else 1
+    original_mask = object()
+    qo, kv, indices, mask = updater.call_begin_forward(
+        None, wrapper if decode else object(), MockSequence(range(count)),
+        seq_lens, sum(lengths), seq_lens, seq_lens - query_count, None,
+        MockSequence([0] * (count + 1)), MockSequence([0] * (count + 1)),
+        False, None, cross_attention_custom_mask=original_mask,
+    )
+    assert qo.values == [query_count * request for request in range(count + 1)]
+    assert kv.values == [sum(lengths[:request]) for request in range(count + 1)]
+    assert indices.values[:sum(lengths)] == [
+        1000 * request + token for request, length in enumerate(lengths) for token in range(length)
+    ]
+    if decode:
+        assert mask.values == [True] * (3 * sum(lengths))
+    else:
+        assert mask is original_mask
+
+
+@pytest.mark.parametrize("phase", ["decode", "verify", "prefill", "idle"])
+@pytest.mark.parametrize("spec_info", [None, "draft-info"])
+def test_attention_metadata_changes_only_normal_decode(phase, spec_info):
+    namespace, runner, _, _ = _attention_fixture()
+    backend = namespace["FlashInferAttnBackend"](runner)
+    calls = []
+    backend.prefill_wrappers_verify = [object()]
+    backend.indices_updater_prefill = SimpleNamespace(update=lambda *a, **kw: calls.append((a, kw)))
+    batch = SimpleNamespace(
+        forward_mode=SimpleNamespace(
+            is_decode=lambda: phase == "decode",
+            is_decode_or_idle=lambda: phase in {"decode", "idle"},
+            is_target_verify=lambda: phase == "verify",
+        ),
+        spec_info=spec_info,
+        req_pool_indices=MockSequence([0, 1]),
+        seq_lens=MockSequence([1, 53]),
+        seq_lens_cpu=[1, 53],
+        seq_lens_sum=54,
+        encoder_lens=None,
+    )
+    backend.init_forward_metadata(batch)
+    if phase == "decode" and spec_info is None:
+        assert isinstance(backend.forward_metadata, MockPrefillMetadata)
+        assert backend.forward_metadata.prefill_wrappers is backend.prefill_wrappers_verify
+        assert backend.forward_metadata.use_ragged is False
+        assert backend.forward_metadata.extend_no_prefix is False
+        assert len(calls) == 1
+        assert calls[0][0] == (
+            batch.req_pool_indices, batch.seq_lens, batch.seq_lens_cpu, batch.seq_lens_sum,
+        )
+        assert calls[0][1]["prefix_lens"].values == [-2, 50]
+        assert calls[0][1]["spec_info"] is None
+        assert calls[0][1]["fixed_split_size"] is None
+    else:
+        expected = "decode" if phase == "idle" else phase
+        assert backend.forward_metadata == "original-" + expected
+        assert calls == []
+
+
+class MockAttentionRows:
+    def __init__(self, rows):
+        self.rows = list(rows)
+        self.shape = (len(self.rows), 24, 256)
+
+    def repeat_interleave(self, count, dim):
+        assert count == 3 and dim == 0
+        return MockAttentionRows(row for row in self.rows for _ in range(count))
+
+    def reshape(self, count, clones, width):
+        assert clones == 3 and width == -1 and len(self.rows) == count * clones
+        return self
+
+    def __getitem__(self, key):
+        assert key == (slice(None), 0)
+        return MockAttentionRows(self.rows[::3])
+
+    def contiguous(self):
+        return self
+
+
+@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize("save_kv_cache", [False, True])
+def test_attention_decode_pads_only_queries_and_writes_original_kv_once(count, save_kv_cache):
+    namespace, runner, _, _ = _attention_fixture()
+    backend = namespace["FlashInferAttnBackend"](runner)
+    backend.forward_metadata = MockPrefillMetadata([], False, False, swa_out_cache_loc=None)
+    batch = SimpleNamespace(
+        forward_mode=SimpleNamespace(is_decode=lambda: True),
+        spec_info=None,
+        out_cache_loc=object(),
+    )
+    q = MockAttentionRows(range(count))
+    k, v, layer = object(), object(), object()
+    calls, writes = [], []
+
+    def result(queries):
+        calls.append(queries.rows)
+        return MockAttentionRows(range(len(queries.rows)))
+
+    backend.prefill_result = result
+    backend.token_to_kv_pool = SimpleNamespace(set_kv_buffer=lambda *a: writes.append(a))
+    output = backend.forward_decode(q, k, v, layer, batch, save_kv_cache=save_kv_cache)
+    assert calls == [[row for row in range(count) for _ in range(3)]]
+    assert writes == ([(layer, batch.out_cache_loc, k, v)] if save_kv_cache else [])
+    assert output.rows == [3 * row for row in range(count)]
+
+
+@pytest.mark.parametrize("case", ["draft", "cpu", "sm120", "verify", "spec-decode"])
+def test_attention_decode_preserves_original_fallback(case):
+    namespace, runner, torch, _ = _attention_fixture()
+    if case == "draft":
+        runner.is_draft_worker = True
+    elif case == "cpu":
+        torch.available = False
+    elif case == "sm120":
+        torch.capability = (12, 0)
+    backend = namespace["FlashInferAttnBackend"](runner)
+    fallback, calls = object(), []
+
+    def forward(*arguments):
+        calls.append(arguments)
+        return fallback
+
+    backend.forward_metadata = SimpleNamespace(decode_wrappers=[SimpleNamespace(forward=forward)])
+    batch = SimpleNamespace(
+        forward_mode=SimpleNamespace(is_decode=lambda: case != "verify"),
+        spec_info=object() if case == "spec-decode" else None,
+    )
+    arguments = (object(), object(), object(), object(), batch, False)
+    assert backend.forward_decode(*arguments) is fallback
+    assert calls == [arguments]
+
+
+def test_attention_patch_preserves_all_original_statements():
+    source = patch.transform(FLASHINFER_PATH, FLASHINFER_SOURCE)
+    source = source.removeprefix(patch.MARKER)
+    for addition in (
+        patch.FLASHINFER_DECODE_GUARD, patch.FLASHINFER_DECODE_PLAN,
+        patch.FLASHINFER_DECODE_FORWARD, patch.FLASHINFER_DECODE_MASK,
+    ):
+        assert source.count(addition) == 1
+        source = source.replace(addition, "", 1)
+    assert source == FLASHINFER_SOURCE
+    assert ast.dump(ast.parse(source)) == ast.dump(ast.parse(FLASHINFER_SOURCE))
+
+
+def test_sixth_ba_target_hash_drift_fails_before_any_write(upstream_tree):
+    target = upstream_tree / "srt/layers/quantization/unquant.py"
+    target.write_text(target.read_text() + "# upstream BA implementation changed\n")
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="unquant.py: upstream SHA256 mismatch"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+def test_ba_fragment_drift_fails_before_any_write(upstream_tree, monkeypatch):
+    name = "srt/layers/quantization/unquant.py"
+    target = upstream_tree / name
+    target.write_text(
+        target.read_text().replace("if use_intel_amx_backend(layer):", "if changed(layer):")
+    )
+    monkeypatch.setitem(
+        patch.UPSTREAM_SHA256, name, hashlib.sha256(target.read_bytes()).hexdigest()
+    )
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="BF16 GDN BA.*expected one upstream fragment"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+@pytest.mark.parametrize(
+    ("capability", "is_cuda_device", "use_facade"),
+    [
+        ((12, 0), True, True),
+        ((12, 1), True, False),
+        ((12, 2), True, True),
+        ((9, 0), True, False),
+        (None, False, False),
+    ],
+)
+def test_fp8_constructor_uses_common_backend_only_on_sm121(capability, is_cuda_device, use_facade):
+    capability_queries = []
+
+    def get_device_capability():
+        assert is_cuda_device
+        capability_queries.append(capability)
+        return capability
+
+    namespace = _namespace(
+        "srt/layers/quantization/modelopt_quant.py",
+        torch=SimpleNamespace(cuda=SimpleNamespace(get_device_capability=get_device_capability)),
+        is_cuda=lambda: is_cuda_device,
+        cutlass_fp8_supported=lambda: True,
+        flashinfer_per_tensor_fp8_supported=lambda: True,
+        envs=SimpleNamespace(SGLANG_FORCE_FP8_MARLIN=SimpleNamespace(get=lambda: False)),
+        can_auto_enable_marlin_fp8=lambda: False,
+    )
+    config = object()
+    method = namespace["ModelOptFp8LinearMethod"](config)
+    assert method.use_sm120_fp8 is use_facade
+    assert method.quant_config is config
+    assert method.cutlass_fp8_supported is True
+    assert method.enable_flashinfer_bmm is True
+    assert method.use_marlin is False
+    assert capability_queries == ([capability] if is_cuda_device else [])
+
+
+@pytest.mark.parametrize(
+    ("changes", "use_persistent"),
+    [
+        pytest.param({}, True, id="sm121-m1"),
+        pytest.param({"rows": 3}, True, id="sm121-m3"),
+        pytest.param({"capability": (12, 0)}, False, id="sm120"),
+        pytest.param({"capability": (12, 2)}, False, id="sm122"),
+        pytest.param({"capability": (9, 0)}, False, id="sm90"),
+        pytest.param({"is_cuda": False}, False, id="cpu"),
+        pytest.param(
+            {"prefix": "model.layers.2.linear_attn.in_proj_a"}, False, id="other-projection"
+        ),
+        pytest.param({"prefix": "in_proj_ba"}, False, id="bare-prefix"),
+        pytest.param({"dtype": "fp16"}, False, id="fp16-input"),
+        pytest.param({"weight_dtype": "fp16"}, False, id="fp16-weight"),
+        pytest.param({"ndim": 3}, False, id="rank3-input"),
+        pytest.param({"bias": True}, False, id="bias"),
+        pytest.param({"requires_grad": True}, False, id="input-grad"),
+        pytest.param({"weight_requires_grad": True}, False, id="weight-grad"),
+    ],
+)
+def test_ba_apply_uses_fixed_triton_only_for_sm121_inference(monkeypatch, changes, use_persistent):
+    arguments = {
+        "rows": 1,
+        "capability": (12, 1),
+        "is_cuda": True,
+        "prefix": "model.layers.2.linear_attn.in_proj_ba",
+        "dtype": "bf16",
+        "weight_dtype": "bf16",
+        "ndim": 2,
+        "bias": False,
+        "requires_grad": False,
+        "weight_requires_grad": False,
+        **changes,
+    }
+    calls, capability_queries = [], []
+    persistent_output, fallback_output, transposed_weight = object(), object(), object()
+
+    def persistent(**kwargs):
+        calls.append(("persistent", kwargs))
+        return persistent_output
+
+    def linear(*args):
+        calls.append(("fallback", args))
+        return fallback_output
+
+    def capability(device):
+        capability_queries.append(device)
+        return arguments["capability"]
+
+    module_name = "sglang.srt.batch_invariant_ops.batch_invariant_ops"
+    module = ModuleType(module_name)
+    module._matmul_persistent_triton = persistent
+    monkeypatch.setitem(sys.modules, module_name, module)
+    namespace = _namespace(
+        "srt/layers/quantization/unquant.py",
+        torch=SimpleNamespace(
+            Tensor=object,
+            bfloat16="bf16",
+            cuda=SimpleNamespace(get_device_capability=capability),
+        ),
+        _is_cuda=True,
+        _use_aiter=False,
+        F=SimpleNamespace(linear=linear),
+        use_intel_amx_backend=lambda layer: False,
+        get_bf16_gemm_backend=lambda: SimpleNamespace(is_cutedsl=lambda: False),
+    )
+    x = SimpleNamespace(
+        is_cuda=arguments["is_cuda"],
+        ndim=arguments["ndim"],
+        shape=(arguments["rows"], 5120),
+        dtype=arguments["dtype"],
+        requires_grad=arguments["requires_grad"],
+        device="cuda:0",
+    )
+    weight = SimpleNamespace(
+        is_cuda=arguments["is_cuda"],
+        ndim=2,
+        dtype=arguments["weight_dtype"],
+        requires_grad=arguments["weight_requires_grad"],
+        t=lambda: transposed_weight,
+    )
+    layer = SimpleNamespace(prefix=arguments["prefix"], weight=weight)
+    bias = object() if arguments["bias"] else None
+    result = namespace["UnquantizedLinearMethod"]().apply(layer, x, bias)
+    if use_persistent:
+        assert result is persistent_output
+        assert calls == [("persistent", {"a": x, "b": transposed_weight, "out_dtype": x.dtype})]
+    else:
+        assert result is fallback_output
+        assert calls == [("fallback", (x, weight, bias))]
+    assert capability_queries == ([x.device] if use_persistent or "capability" in changes else [])
+
+
+def test_ba_patch_preserves_all_original_fallback_statements():
+    original = ast.parse(UNQUANT_SOURCE).body[0].body[0]
+    source = patch.transform("srt/layers/quantization/unquant.py", UNQUANT_SOURCE)
+    patched = ast.parse(source).body[0].body[0]
+    # Only the new guarded dispatch precedes the original apply implementation.
+    assert isinstance(patched.body[0], ast.If)
+    assert ast.dump(ast.Module(body=patched.body[1:], type_ignores=[])) == ast.dump(
+        ast.Module(body=original.body, type_ignores=[])
+    )
 
 
 def test_vision_uses_explicit_quantization_without_mutating_text_config():

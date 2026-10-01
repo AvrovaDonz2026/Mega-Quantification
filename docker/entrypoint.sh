@@ -49,6 +49,10 @@ if [[ "${1:-}" == "host-check" ]]; then
   exec /opt/megaquant/docker/host-check.sh
 fi
 
+if [[ "${MEGAQUANT_VERIFY_CONTAINER:-0}" == "1" ]]; then
+  python scripts/container_manifest.py verify
+fi
+
 # SGLang FP8 JIT on sm_120 needs host g++/cc1plus on PATH.
 if command -v "${CXX:-g++}" >/dev/null 2>&1; then
   _cc1plus="$("${CXX:-g++}" -print-prog-name=cc1plus 2>/dev/null || true)"

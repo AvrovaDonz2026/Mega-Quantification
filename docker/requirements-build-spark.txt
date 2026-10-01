@@ -1,0 +1,8 @@
+# Fixed wheel build backend shared by the Spark PTQ and SGLang images.
+# Install with --no-deps before installing this repository with
+# --no-deps --no-build-isolation. No editable source mounting is required.
+hatchling==1.29.0
+packaging==26.2
+pathspec==1.1.1
+pluggy==1.6.0
+trove-classifiers==2026.9.21.13

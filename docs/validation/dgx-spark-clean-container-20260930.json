@@ -1,0 +1,1267 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-30",
+  "complete": true,
+  "status": "passed",
+  "quantization_runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+  "serving_runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+  "source_archives_sha256": {
+    "quantization_and_original_serving": "5716b7ed292d7be27ce035158363121849753a2fd8dc797006e1da5bf60c8968",
+    "corrected_serving": "cb5cbe73d05fa2259b3e9a330c0a3935aa9c52d5e30888fb778637cbda7f455d",
+    "serving_v4": "a6eae547194cbde33d5c51708acc0cc16bab1f60a31032298d6cbdc2e7ec6cb4",
+    "serving_v5": "4749b63443b374209b0bfc9eeb1730213fa101bb2c01e326a0420a5e178f9da9",
+    "final_serving_v6": "f66994238301b977235f8bb2ccfa73a4cc5fd2261cc8bbb81f1fe3ea68b43415"
+  },
+  "full_ptq_repeated_at_serving_revision": false,
+  "pr": "https://github.com/AvrovaDonz2026/Mega-Quantification/pull/47",
+  "scope": {
+    "architecture": "aarch64",
+    "gpu": "NVIDIA GB10",
+    "compute_capability": [
+      12,
+      1
+    ],
+    "tensor_parallel_size": 1,
+    "physical_hosts": 1,
+    "public_registry_publication": false
+  },
+  "inputs": {
+    "model": "Qwen3.8-27B",
+    "source_shards": 18,
+    "source_shard_checksums_recorded": true,
+    "source_index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+    "source_tensors": 1199,
+    "source_tensor_groups": {
+      "language": 851,
+      "vision": 333,
+      "mtp": 15
+    },
+    "calibration_rows": 256,
+    "calibration_images_verified": 128,
+    "calibration_jsonl_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+    "seed": 42,
+    "batch_size": 1,
+    "max_seq_length": 1024
+  },
+  "images": {
+    "ptq": {
+      "runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+      "base_image": "nvcr.io/nvidia/pytorch:26.08-py3@sha256:3becd068f49bd2ad38f90db5f9a4803019a76933a24e63d821376c44e7a9200a",
+      "tag": "megaquant:clean-ptq-15561d8",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "explicit_wheelhouse": true,
+      "editable_install": false,
+      "live_code_recipe_mounts": false,
+      "container_manifest_sha256": "418d877c13fce8b7e4a8b836f3acb87dfa4253401a1385bfcd80661a0def00b9",
+      "repeat_container_manifest_equal": true,
+      "byte_identical_image": false,
+      "docker_inspect_id_type": "OCI image index",
+      "docker_inspect_id": "sha256:39d6859eb7a7fe2a9195441f6df4cfa9236d17258c55f3abf0eae6a3c8dab180",
+      "platform_manifest_digest": "sha256:fff20c025f3aec4e1068bf4e01ced8b2d210e3cef43fcdf1e480bc4a627ea228",
+      "configuration_digest": "sha256:40076366742fc7eb88086bdb50450eb6a8d9549d3554be23ff6d8f57e5f814de",
+      "repeat_image_index_digest": "sha256:32b6e68d4597923a7a289b32491da957865c568be7ba4f90626332e32e8c2ff2",
+      "repeat_platform_manifest_digest": "sha256:2af7430782e82fdb1d1de027e8635f10af536ef44c2ecf59f0beb081ad7a4e86",
+      "repeat_configuration_digest": "sha256:c06178f980cfe90b1a11c4e7d93ae7a47d9384526d26d1427aefb41841a29dac",
+      "portable_archive_roundtrip_passed": true,
+      "portable_archive_sha256": "458712cbca8906b0daee4c43b76239aa8f8151cb9a69873a1d30b076901ebc58",
+      "portable_archive_bytes": 12038956032,
+      "portable_loaded_configuration_digest": "sha256:40076366742fc7eb88086bdb50450eb6a8d9549d3554be23ff6d8f57e5f814de"
+    },
+    "sglang_v2": {
+      "runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+      "historical_validation": true,
+      "base_image": "lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f",
+      "base_blob_digests_verified": true,
+      "base_verified_blob_count": 71,
+      "base_compressed_bytes": 14714398493,
+      "base_platform_manifest_digest": "sha256:b0d8718a4424bb22e448e04407ab3ce5f7399a4c5fc702d6fbe36c3772ec8862",
+      "base_configuration_digest": "sha256:3ec36384d5eadedb920086d6e1b874e0bedf1d7bb773d2f56c3ccbacbb26d7bb",
+      "tag": "megaquant:clean-sglang-15561d8",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "container_manifest_sha256": "c62626c2a8d4a7d015b4b4d7ccce74d811c2b4891d8538320a1687eb9447b015",
+      "repeat_container_manifest_equal": true,
+      "repeat_cpu_check_records_byte_equal": true,
+      "cpu_manifest_verified": true,
+      "loader_patch_verified": true,
+      "loader_patch_id": "megaquant-spark-v2",
+      "docker_inspect_id_type": "OCI image index",
+      "docker_inspect_id": "sha256:42c9f3a1cda593163e0cbb4a05cbba570c6642c5853ee5ced5e64550b8108aa0",
+      "platform_manifest_digest": "sha256:485d55a0c9daa4fa46e5ba7591376895f106d0a74e38df6cce07492fe202f5d2",
+      "configuration_digest": "sha256:d08371600aa50f0c44fd46c1a1779fddb36e736cf1aa15a730e72665cc1a4954",
+      "repeat_image_index_digest": "sha256:796fcdc592a051adf711905770452d4798bdb74dd9444ec22f7fe220a6755336",
+      "repeat_platform_manifest_digest": "sha256:44775da3526e2863cd7e9401195a4f8edf3544d1b4b9237f17914a54f6a3802d",
+      "repeat_configuration_digest": "sha256:f99743f0d0fe88617e2134cc8a48b0d74d40eeff577d478cb4dacf2168181131",
+      "byte_identical_image": false,
+      "versions": {
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "nvidia-modelopt": "0.46.1",
+        "sglang": "0.5.20",
+        "sglang-kernel": "0.4.7",
+        "flashinfer-python": "0.6.18"
+      },
+      "portable_archive_roundtrip_passed": true,
+      "portable_archive_sha256": "d227794ebbc56bdc051fb9cc535f352c4412e6c8d2f52161217a1fd3e4871862",
+      "portable_archive_bytes": 14752670208,
+      "portable_loaded_configuration_digest": "sha256:d08371600aa50f0c44fd46c1a1779fddb36e736cf1aa15a730e72665cc1a4954",
+      "gpu_serving_started": true,
+      "gpu_preflight_passed": null
+    },
+    "sglang_v3": {
+      "historical_validation": true,
+      "runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
+      "base_image": "lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f",
+      "tag": "megaquant:clean-sglang-44bf3d7",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "explicit_wheelhouse": true,
+      "editable_install": false,
+      "live_code_recipe_mounts": false,
+      "container_manifest_sha256": "5aaca3e443652d7057b8c261570ad7352fe56ccbcf364a73667b1d415fe2ed6a",
+      "repeat_container_manifest_equal": true,
+      "cpu_manifest_verified": true,
+      "loader_patch_verified": true,
+      "loader_patch_id": "megaquant-spark-v3",
+      "docker_inspect_id_type": "OCI image index",
+      "docker_inspect_id": "sha256:05ae15d7873b6ea52fda4628b85a5a1fb0ccabb53f56232f8ac76f941f86cc72",
+      "repeat_image_index_digest": "sha256:63eb53dd495d37f4b1f4e79024e3a32f8b7572fba619d3c198a42ac939b2a798",
+      "platform_manifest_digest": null,
+      "configuration_digest": "sha256:0bf34831245ef6cd700b9e1ffdb60f92225e2eebb8260868133e814e727609af",
+      "repeat_platform_manifest_digest": null,
+      "repeat_configuration_digest": null,
+      "byte_identical_image": false,
+      "versions": {
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "nvidia-modelopt": "0.46.1",
+        "sglang": "0.5.20",
+        "sglang-kernel": "0.4.7",
+        "flashinfer-python": "0.6.18"
+      },
+      "serving_preflight_exit_code": 0,
+      "gpu_preflight_passed": true,
+      "gdn_gpu_regression_passed": true,
+      "portable_archive_roundtrip_passed": true,
+      "portable_archive_sha256": "60a061d248899b2da0582dcd045d93724ca187ba281985275a6969a58ceee837",
+      "portable_archive_bytes": 14752680448,
+      "portable_loaded_configuration_digest": "sha256:0bf34831245ef6cd700b9e1ffdb60f92225e2eebb8260868133e814e727609af",
+      "full_visual_mtp_validation_passed": false
+    },
+    "sglang": {
+      "runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "base_image": "lmsysorg/sglang:v0.5.20-cu130@sha256:06e4f2ed21afde4ff513cda65070124e727ba23ccaeff7712b8c40e1097d611f",
+      "tag": "megaquant:clean-sglang-7d1daea",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "explicit_wheelhouse": true,
+      "editable_install": false,
+      "live_code_recipe_mounts": false,
+      "container_manifest_sha256": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+      "repeat_container_manifest_equal": true,
+      "cpu_manifest_verified": true,
+      "loader_patch_verified": true,
+      "loader_patch_id": "megaquant-spark-v6",
+      "guarded_installed_files": 7,
+      "docker_inspect_id_type": "OCI image index",
+      "docker_inspect_id": "sha256:909c4cabb46bb2632dddce7f7a58e58d919a6a8696739b658324bd8d6c50262b",
+      "repeat_image_index_digest": "sha256:1ab17822e16dd4a335ab24a4706b38c59c821e09624aa5766bca851f0a62cca2",
+      "platform_manifest_digest": null,
+      "configuration_digest": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+      "repeat_platform_manifest_digest": null,
+      "repeat_configuration_digest": null,
+      "byte_identical_image": false,
+      "versions": {
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "nvidia-modelopt": "0.46.1",
+        "sglang": "0.5.20",
+        "sglang-kernel": "0.4.7",
+        "flashinfer-python": "0.6.18"
+      },
+      "gpu_preflight_passed": true,
+      "gpu_preflight_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "gpu_preflight_checks": [
+        "manifest",
+        "CUDA matmul",
+        "GDN decode/verify",
+        "FP8 batch invariance",
+        "BF16 BA batch invariance and CPU FP64 reference",
+        "four actual-backend attention decode/verify cases"
+      ],
+      "portable_archive_roundtrip_passed": true,
+      "portable_archive_sha256": "bc9566e0dd638d44a783d029f6de74ecc729a5a21e656b5222b083c50d82a86b",
+      "portable_archive_bytes": 14752742912,
+      "portable_loaded_configuration_digest": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+      "full_visual_mtp_validation_passed": true
+    }
+  },
+  "original_portable_roundtrip": {
+    "complete": true,
+    "initial_attempt_isolated": false,
+    "initial_attempt_limitation": "Shared host containerd socket and network namespace; Moby bridge disabling removed host docker0; superseded by isolated reruns",
+    "host_bridge_restored_without_container_restart": true,
+    "private_mount_network_and_containerd_rerun_passed": true,
+    "isolated_empty_docker_stores": true,
+    "same_configuration_and_layers_after_load": true,
+    "no_live_source_recipe_mounts": true,
+    "validation_container_network": "none",
+    "gpu_requested": false,
+    "host_bridge_identity_preserved": true,
+    "all_three_original_containers_not_restarted": true,
+    "original_container_gateway_reachable_before_and_after": true,
+    "scope": "15561d8 images on the same physical ARM64 host/kernel; a revised serving image requires its own checks"
+  },
+  "ptq_preflight": {
+    "passed": true,
+    "git_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "manifest_verified": true,
+    "cuda_matmul": "passed",
+    "gdn_export_fallback_cuda_forward": "passed",
+    "compiled_cuda": "13.4",
+    "versions": {
+      "torch": "2.14.0a0+4fdf77b940.nv26.8.63802676",
+      "transformers": "5.12.1",
+      "nvidia-modelopt": "0.47.0",
+      "accelerate": "1.14.0",
+      "Pillow": "12.3.0"
+    }
+  },
+  "revised_serving_portable_roundtrip": {
+    "runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
+    "complete": true,
+    "isolated_empty_docker_store": true,
+    "private_mount_namespace": true,
+    "private_network_namespace": true,
+    "private_containerd": true,
+    "same_configuration_and_layers_after_load": true,
+    "no_live_source_recipe_mounts": true,
+    "validation_container_network": "none",
+    "gpu_requested": false,
+    "host_bridge_identity_and_addresses_preserved": true,
+    "all_three_original_containers_not_restarted": true,
+    "all_three_original_container_networks_preserved": true,
+    "original_container_gateway_reachable_before_and_after": true,
+    "baked_patch_and_baseline_mtp_commands_verified": true,
+    "scope": "44bf3d7 serving image on the same physical ARM64 host/kernel; a subsequent serving image requires its own checks"
+  },
+  "reproduced_failure": {
+    "revision": "03949ba71d431b4155929e7dd7390fe2d2399758",
+    "format": "w4a8",
+    "quantization_exit_code": 0,
+    "quantization_elapsed_seconds": 775.21,
+    "audit_exit_code": 1,
+    "audit_passed": false,
+    "root_cause": "Suffix heuristic wrote provenance beside an existing dotted export directory; Git revision was null in the image without a checkout",
+    "initial_export_tensors": 2544,
+    "initial_export_shards": 3,
+    "initial_vision_quantizers": {
+      "count": 165,
+      "min_calls": 128,
+      "max_calls": 128
+    },
+    "initial_mtp_quantizers": {
+      "count": 8,
+      "min_calls": 256,
+      "max_calls": 256
+    },
+    "initial_finite_scales_scanned": 1345,
+    "fixed_in_tested_runtime": true,
+    "new_provenance_regression_tests": 22,
+    "final_hardware_export_audit_passed": true
+  },
+  "tests": {
+    "required_ci_push_passed": true,
+    "required_ci_pr_passed": true,
+    "ci_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "ci_push_run_id": 36683975984,
+    "ci_pr_run_id": 36683982505,
+    "ci_tests_passed": 312,
+    "ci_tests_skipped": 1,
+    "ci_skip_reason": "ModelOpt not installed in GitHub CPU CI",
+    "ci_elapsed_seconds": 22.67,
+    "final_serving_ci": {
+      "revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "required_ci_push_passed": true,
+      "required_ci_pr_passed": true,
+      "ci_push_run_id": 36718607380,
+      "ci_pr_run_id": 36718613590,
+      "passed": 394,
+      "skipped": 1,
+      "skip_reason": "ModelOpt not installed in GitHub CPU CI",
+      "elapsed_seconds": 18.81
+    },
+    "actual_modelopt_mtp_cpu": {
+      "passed": 5,
+      "skipped": 0,
+      "image_revision": "03949ba71d431b4155929e7dd7390fe2d2399758",
+      "installed_wheel_exercised": true,
+      "gpu_attached": false,
+      "cuda_available": false,
+      "test_mount_read_only": true,
+      "test_runner_disposable": true,
+      "final_image_modified": false,
+      "positive_finite_mtp_activation_ranges": 8
+    }
+  },
+  "final_quantization": {
+    "runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "w4a8": {
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 773.692,
+      "audit_passed": true,
+      "audit_exit_code": 0,
+      "audit_elapsed_seconds": 24.6,
+      "audit_errors": [],
+      "audit_warnings": [],
+      "provenance_git_sha": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+      "export_tensors": 2544,
+      "export_shards": 3,
+      "projection_counts": {
+        "language": {
+          "NVFP4": 193,
+          "FP8": 208
+        },
+        "vision": {
+          "NVFP4": 110
+        },
+        "mtp": {
+          "NVFP4": 4,
+          "FP8": 4
+        }
+      },
+      "calibration_coverage": {
+        "vision": {
+          "quantizers": 165,
+          "min_calls": 128,
+          "max_calls": 128
+        },
+        "mtp": {
+          "quantizers": 8,
+          "min_calls": 256,
+          "max_calls": 256
+        }
+      },
+      "finite_scales_scanned": 1345,
+      "scale_payload_bytes_streamed": 1197496120
+    },
+    "w4a4": {
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 779.28,
+      "audit_passed": true,
+      "audit_exit_code": 0,
+      "audit_elapsed_seconds": 34.154,
+      "audit_errors": [],
+      "audit_warnings": [],
+      "provenance_git_sha": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+      "export_tensors": 2756,
+      "export_shards": 2,
+      "projection_counts": {
+        "language": {
+          "NVFP4": 401
+        },
+        "vision": {
+          "NVFP4": 110
+        },
+        "mtp": {
+          "NVFP4": 8
+        }
+      },
+      "calibration_coverage": {
+        "vision": {
+          "quantizers": 165,
+          "min_calls": 128,
+          "max_calls": 128
+        },
+        "mtp": {
+          "quantizers": 8,
+          "min_calls": 256,
+          "max_calls": 256
+        }
+      },
+      "finite_scales_scanned": 1557,
+      "scale_payload_bytes_streamed": 1654937400
+    },
+    "w4a8_initial_vs_final_safetensors": {
+      "checked": true,
+      "initial_revision": "03949ba71d431b4155929e7dd7390fe2d2399758",
+      "final_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+      "method": "CPU-only streaming SHA256 over complete safetensors files in read-only mounts",
+      "byte_identical": true,
+      "initial_total_bytes": 20701792184,
+      "final_total_bytes": 20701792184,
+      "elapsed_seconds": 54.555,
+      "files": [
+        {
+          "name": "model-00001-of-00003.safetensors",
+          "initial_size_bytes": 9944305992,
+          "final_size_bytes": 9944305992,
+          "initial_sha256": "436d06084875c03404195e7554c7fd0069113242cbe55ce4b66a9a9767b6c5d1",
+          "final_sha256": "436d06084875c03404195e7554c7fd0069113242cbe55ce4b66a9a9767b6c5d1",
+          "byte_identical": true
+        },
+        {
+          "name": "model-00002-of-00003.safetensors",
+          "initial_size_bytes": 9757514560,
+          "final_size_bytes": 9757514560,
+          "initial_sha256": "b6077b19a82043b0ebb8e07c5ce8ac5313737ecb65dd5d24e7d315192ad1e7a8",
+          "final_sha256": "b6077b19a82043b0ebb8e07c5ce8ac5313737ecb65dd5d24e7d315192ad1e7a8",
+          "byte_identical": true
+        },
+        {
+          "name": "model-00003-of-00003.safetensors",
+          "initial_size_bytes": 999971632,
+          "final_size_bytes": 999971632,
+          "initial_sha256": "b4517400f567e7da03e0070c614f829447e44a207a9892ad0bb97ef091ca9917",
+          "final_sha256": "b4517400f567e7da03e0070c614f829447e44a207a9892ad0bb97ef091ca9917",
+          "byte_identical": true
+        }
+      ]
+    }
+  },
+  "initial_fresh_export_serving": {
+    "runtime_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "loader_patch_id": "megaquant-spark-v2",
+    "recipe": "recipes/eval-gpqa-diamond.spark.yaml",
+    "mtp_recipe": "recipes/eval-gpqa-diamond.spark-mtp.yaml",
+    "client": "scripts/check_sglang_multimodal.py",
+    "mamba_ssm_dtype": "float32",
+    "quantized_embedded_mtp": true,
+    "external_draft_checkpoint": false,
+    "w4a8": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "all_output_logprobs_finite": true,
+      "color_counterfactual_passed": true,
+      "exact_output_ids": true,
+      "output_tokens_per_mode": 205,
+      "verification_steps": 71,
+      "accepted_drafts": 137,
+      "proposed_drafts": 142,
+      "accept_rate": 0.9647887323943662,
+      "python_accepted_drafts": 127,
+      "python_proposed_drafts": 130,
+      "python_accept_rate": 0.9769230769230769
+    },
+    "w4a4": {
+      "baseline_passed": true,
+      "mtp_passed": false,
+      "mtp_functional_passed": true,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "all_output_logprobs_finite": true,
+      "color_counterfactual_passed": true,
+      "exact_output_ids": false,
+      "exact_output_id_cases": [
+        "arithmetic",
+        "red_square",
+        "blue_square",
+        "ocr_3729"
+      ],
+      "output_tokens_per_mode": 205,
+      "verification_steps": 70,
+      "accepted_drafts": 138,
+      "proposed_drafts": 140,
+      "accept_rate": 0.9857142857142858,
+      "python_accepted_drafts": 127,
+      "python_proposed_drafts": 128,
+      "python_accept_rate": 0.9921875,
+      "python_first_mismatch_index": 16,
+      "baseline_token_at_mismatch": 449,
+      "mtp_token_at_mismatch": 264,
+      "mtp_client_exit_code": 1,
+      "repeat_baseline_matches_original": [
+        true,
+        true
+      ],
+      "repeat_mtp_matches_original": [
+        true,
+        true
+      ],
+      "repeat_baseline_tokens": [
+        192,
+        192
+      ],
+      "repeat_mtp_tokens": [
+        192,
+        192
+      ],
+      "repeat_cached_tokens": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "repeat_candidate_logprobs_at_index_16": {
+        "baseline": {
+          "449": -0.629574716091156,
+          "264": -1.7545747756958008
+        },
+        "mtp": {
+          "449": -1.1769373416900635,
+          "264": -1.0519373416900635
+        },
+        "same_for_both_repeats_in_each_mode": true
+      }
+    }
+  },
+  "v3_fresh_export_serving": {
+    "runtime_revision": "44bf3d7e3a5679c722f27b27e04d3bfb26784d8b",
+    "weights_quantization_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "loader_patch_id": "megaquant-spark-v3",
+    "recipe": "recipes/eval-gpqa-diamond.spark.yaml",
+    "mtp_recipe": "recipes/eval-gpqa-diamond.spark-mtp.yaml",
+    "client": "scripts/check_sglang_multimodal.py",
+    "mamba_ssm_dtype": "float32",
+    "quantized_embedded_mtp": true,
+    "external_draft_checkpoint": false,
+    "w4a8": {
+      "baseline_passed": true,
+      "mtp_passed": false,
+      "mtp_functional_passed": true,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "all_output_logprobs_finite": true,
+      "color_counterfactual_passed": true,
+      "exact_output_ids": false,
+      "exact_output_id_cases": [
+        "arithmetic",
+        "red_square",
+        "blue_square",
+        "ocr_3729"
+      ],
+      "exact_short_output_ids": 13,
+      "output_tokens_per_mode": 205,
+      "verification_steps": 71,
+      "accepted_drafts": 137,
+      "proposed_drafts": 142,
+      "accept_rate": 0.9647887323943662,
+      "python_accepted_drafts": 127,
+      "python_proposed_drafts": 130,
+      "python_accept_rate": 0.9769230769230769,
+      "python_first_mismatch_index": 16,
+      "baseline_token_at_mismatch": 264,
+      "mtp_token_at_mismatch": 449,
+      "python_tokens_per_mode": 192
+    },
+    "w4a4": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "all_output_logprobs_finite": true,
+      "color_counterfactual_passed": true,
+      "exact_output_ids": true,
+      "output_tokens_per_mode": 205,
+      "verification_steps": 70,
+      "accepted_drafts": 138,
+      "proposed_drafts": 140,
+      "accept_rate": 0.9857142857142858,
+      "python_accepted_drafts": 127,
+      "python_proposed_drafts": 128,
+      "python_accept_rate": 0.9921875
+    }
+  },
+  "fresh_export_serving": {
+    "runtime_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+    "weights_quantization_revision": "15561d8c445ab6e5637b78f3207e683fcc7c3869",
+    "loader_patch_id": "megaquant-spark-v6",
+    "recipe": "recipes/eval-gpqa-diamond.spark.yaml",
+    "mtp_recipe": "recipes/eval-gpqa-diamond.spark-mtp.yaml",
+    "client": "scripts/check_sglang_multimodal.py",
+    "mamba_ssm_dtype": "float32",
+    "quantized_embedded_mtp": true,
+    "external_draft_checkpoint": false,
+    "w4a8": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "functional_cases_per_mode": 5,
+      "color_counterfactual_passed": true,
+      "all_output_logprobs_finite": true,
+      "exact_output_ids": true,
+      "matching_output_id_count": 205,
+      "accepted_drafts": 136,
+      "proposed_drafts": 146,
+      "verification_steps": 73,
+      "aggregate_acceptance_rate": 0.9315068493150684,
+      "client_elapsed_seconds": {
+        "baseline": 28.361,
+        "mtp": 17.329
+      },
+      "response_sha256": {
+        "baseline": "7c59a3d64af4da0a49c4d911b4bbaa3c256dc6cca2e2997309ab0a6dc663efad",
+        "mtp": "9c56c7bbe2151dc185f78c6be036173865af888abb21b0dcc9241e11a0182ca0"
+      }
+    },
+    "w4a4": {
+      "baseline_passed": true,
+      "mtp_passed": true,
+      "functional_cases_per_mode": 5,
+      "color_counterfactual_passed": true,
+      "all_output_logprobs_finite": true,
+      "exact_output_ids": true,
+      "matching_output_id_count": 205,
+      "accepted_drafts": 137,
+      "proposed_drafts": 142,
+      "verification_steps": 71,
+      "aggregate_acceptance_rate": 0.9647887323943662,
+      "client_elapsed_seconds": {
+        "baseline": 25.988,
+        "mtp": 15.59
+      },
+      "response_sha256": {
+        "baseline": "9eba982e9ec201f3efe7dc1c7a81db0207afd8246e4b11f7cec5cb497fa3b34f",
+        "mtp": "92b2e8e6b8abc71a628464d4f973b1b436e4cd1da8178f4e81806ae6af0c09bd"
+      }
+    },
+    "status": "passed",
+    "normal_baked_entrypoint_verified": true,
+    "live_code_recipe_mounts": false,
+    "cases": [
+      "arithmetic",
+      "python_code",
+      "red_square",
+      "blue_square",
+      "ocr_3729"
+    ],
+    "output_ids_per_mode": 205,
+    "all_four_client_exit_codes": 0
+  },
+  "serving_repair_history": {
+    "v4": {
+      "runtime_revision": "4897adb63227e4ce62ba68042ccd21e2dbb5de19",
+      "patch_id": "megaquant-spark-v4",
+      "repair": "Align SM121 static FP8 decode and verification backends",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "container_manifest_sha256": "c7d5ea85551dd23e71c1db9942f3a3a8d120cfbd4cf6a6ba24e9d41a481c506b",
+      "repeat_container_manifest_equal": true,
+      "cpu_manifest_and_patch_verified": true,
+      "image_index_digest": "sha256:bbac0d24b96728905cfb5c716a5561f6b5b66c4b6bfaef3aa6727b4055a84796",
+      "repeat_image_index_digest": "sha256:081abacb0d9b138d53bf828c88fbe7e90a93cdab161c99644575fb3ed827c97f",
+      "gpu_preflight_passed": true,
+      "w4a8": {
+        "baseline_functional_cases": 5,
+        "mtp_functional_cases": 5,
+        "all_output_logprobs_finite": true,
+        "output_tokens_per_mode": 205,
+        "exact_output_ids": false,
+        "python_first_mismatch_index": 16,
+        "exact_short_output_ids": 13,
+        "verification_steps": 71,
+        "accepted_drafts": 137,
+        "proposed_drafts": 142,
+        "mtp_client_exit_code": 1,
+        "strict_validation_passed": false
+      },
+      "portable_roundtrip_passed": null,
+      "same_hidden_gate_hash_proof": {
+        "scope": "First generated token for fixed Python request, output cap 32",
+        "decode_batch_rows": 1,
+        "verify_batch_rows": 3,
+        "position": 52,
+        "input_id": 71093,
+        "identical_hidden_rows_at_layer_indices": [
+          0,
+          1,
+          2
+        ],
+        "first_gate_difference_layer_index": 2,
+        "different_gate": "a",
+        "other_gates_equal": [
+          "b",
+          "qkv"
+        ],
+        "raw_tensor_retained": false,
+        "complete_model_cause_established": false
+      }
+    },
+    "gate_weight_gpu_comparison": {
+      "comparisons": 54,
+      "layers": 3,
+      "seeds": [
+        42,
+        11,
+        0,
+        7,
+        19,
+        29
+      ],
+      "original_changed_rows": 18,
+      "original_max_abs_difference": 0.0078125,
+      "fixed_all_bitwise_equal": true,
+      "initial_harness_attempt_passed": false,
+      "initial_harness_failure": "Assertion rejected the original enabled backend before comparison",
+      "scope": "Actual BF16 gate weights with seeded inputs; isolated operation comparison"
+    },
+    "gate_checker_gpu_comparison": {
+      "evidence": "ba_preflight.json",
+      "scope": "Bounded seeded BF16 weights and inputs through installed UnquantizedLinearMethod; separate candidate image",
+      "passed": true,
+      "compared_rows": 30,
+      "seeds": [
+        42,
+        11
+      ],
+      "batch_sizes": [
+        3,
+        12
+      ],
+      "all_bitwise_equal": true,
+      "nonfinite_elements": 0,
+      "independent_reference": "CPU FP64",
+      "reference_within_budget": true,
+      "reference_outside_tolerance_elements": 0,
+      "reference_rtol": 0.00400625,
+      "reference_atol": 0.001,
+      "weight_bound": 0.125,
+      "input_bound": 2
+    },
+    "gate_repair_full_model_candidate": {
+      "clean_build_identity_claimed": false,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "strict_validation_passed": false,
+      "python_first_mismatch_index": 16,
+      "exact_short_output_ids": 13,
+      "verification_steps": 73,
+      "accepted_drafts": 136,
+      "proposed_drafts": 146
+    },
+    "v5": {
+      "runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+      "patch_id": "megaquant-spark-v5",
+      "repair": "Keep BF16 GDN gate reductions invariant across decode and verification batch sizes",
+      "clean_build_passed": true,
+      "repeat_build_passed": true,
+      "build_no_cache": true,
+      "build_network": "none",
+      "container_manifest_sha256": "2a449292f25da864861e63bef08100a3d406fa7793324f5256f96fd14e99a058",
+      "repeat_container_manifest_equal": true,
+      "cpu_manifest_and_patch_verified": true,
+      "image_index_digest": "sha256:231b0aecce3161dbbe0156f2e61cb09597843fefa225adbef96d8b841e31d82d",
+      "repeat_image_index_digest": "sha256:8de68795847eed70ef1f75e1cb33a95046afd745bb85decd8a4ed02861be1640",
+      "full_gpu_preflight_evidence_recorded": true,
+      "gpu_preflight_passed": true,
+      "gpu_preflight_checks": [
+        "manifest",
+        "CUDA matmul",
+        "GDN decode/verify",
+        "FP8 batch invariance",
+        "BF16 BA batch invariance and CPU FP64 reference"
+      ],
+      "full_visual_mtp_validation_passed": null,
+      "portable_roundtrip_passed": true,
+      "portable_archive_bytes": 14752694272,
+      "portable_archive_sha256": "39467f466895ff7fc00bbb219f8817a8d796caede6bdf1e6a2726bed4907491a",
+      "portable_loaded_configuration_digest": "sha256:6a08b0129170d95597fb1091d4388c06b7b9ad16e283071149e600646c1d8628",
+      "portable_isolated_empty_store": true,
+      "portable_private_network_mount_and_containerd": true,
+      "portable_same_configuration_and_layers": true,
+      "portable_all_three_original_containers_not_restarted": true,
+      "portable_all_three_original_container_networks_preserved": true,
+      "portable_host_bridge_identity_and_addresses_preserved": true,
+      "portable_gateway_reachable_before_and_after": true,
+      "portable_scope": "CPU only, same physical ARM64 host/kernel, no network or live source/recipe mounts",
+      "raw_trace_comparison": {
+        "baseline_files": 378,
+        "mtp_files": 378,
+        "comparisons": 1176,
+        "identical_comparisons": 593,
+        "different_comparisons": 583,
+        "earliest_recorded_difference": {
+          "layer_index": 4,
+          "stage": "before_conv",
+          "field": "a",
+          "position": 52,
+          "input_id": 71093,
+          "nonzero_elements": 36,
+          "elements": 48,
+          "max_abs_difference": 0.015625,
+          "nonfinite_difference_count": 0
+        },
+        "limitations": [
+          "Common token/position does not prove an identical earlier prefix or accepted draft",
+          "State-before for non-root verify rows uses that row's saved parent snapshot",
+          "Warmup traces must be excluded; prefill selected states are compared after core"
+        ]
+      },
+      "raw_trace_cleanup": {
+        "raw_tensor_retained": false,
+        "deleted_files": 756,
+        "deleted_bytes": 2853597144,
+        "baseline_deleted_files": 378,
+        "baseline_deleted_bytes": 843724152,
+        "mtp_deleted_files": 378,
+        "mtp_deleted_bytes": 2009872992,
+        "comparison_and_cleanup_summaries_retained": true,
+        "comparison_replay_from_deleted_raw_tensors_possible": false
+      }
+    },
+    "official_deterministic_mode_candidate": {
+      "runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+      "flag": "--enable-deterministic-inference",
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "python_first_mismatch_index": 16,
+      "exact_short_output_ids": 13,
+      "verification_steps": 73,
+      "accepted_drafts": 136,
+      "proposed_drafts": 146,
+      "full_model_gate_passed": false,
+      "enabled_by_default": false
+    },
+    "bf16_kv_candidate": {
+      "runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+      "override": {
+        "kv_cache_dtype": "bfloat16"
+      },
+      "other_serving_options_unchanged": true,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "baseline_client_exit_code": 0,
+      "mtp_client_exit_code": 1,
+      "all_output_logprobs_finite": true,
+      "output_tokens_per_mode": 205,
+      "strict_validation_passed": false,
+      "python_first_mismatch_index": 16,
+      "exact_short_output_ids": 13,
+      "verification_steps": 72,
+      "accepted_drafts": 138,
+      "proposed_drafts": 144,
+      "kv_scale_semantics_verified": true,
+      "kv_scale_verification_scope": "Inspected layer 3 in both current W4A8/W4A4 export indexes and installed BaseKV processing; absent scale keys resolve to unit scales or unquantized None",
+      "nonunit_checkpoint_kv_scale_confound_excluded_for_inspected_exports": true,
+      "bf16_cache_correctness_or_quality_claimed": false,
+      "response_evidence": "Full public-client response JSON, logs and command/container records"
+    },
+    "attention_trace_observation": {
+      "evidence_origin": "Retained local comparison summary; token observation reported by GPU worker",
+      "comparison_count": 126,
+      "difference_count": 48,
+      "missing_count": 0,
+      "layer_index": 3,
+      "position": 52,
+      "input_id": 71093,
+      "same_tensors": [
+        "input",
+        "qkv",
+        "rotary_position_output",
+        "gate"
+      ],
+      "attention_output_nonzero_elements": 1217,
+      "attention_output_elements": 6144,
+      "attention_output_max_abs_difference": 0.0078125,
+      "baseline_token_at_prior_mismatch_position": 449,
+      "mtp_token_at_prior_mismatch_position": 449,
+      "original_token_failure_reproduced": false,
+      "raw_attention_trace_downloaded": false,
+      "raw_attention_trace_temporarily_retained_for_wrapper_replay": false,
+      "raw_attention_trace_cleanup_pending": false,
+      "raw_attention_trace_cleanup": {
+        "deleted_tensor_files": 140,
+        "deleted_tensor_bytes": 25353760,
+        "remaining_tensor_files_in_trace_root": 0,
+        "raw_tensor_retained": false,
+        "local_tensor_downloaded": false,
+        "comparison_replay_and_cleanup_summaries_retained": true
+      },
+      "separate_gdn_and_attention_cleanup_totals": {
+        "deleted_tensor_files": 896,
+        "deleted_tensor_bytes": 2878950904
+      },
+      "previous_raw_gdn_run_reproduced_python_token_failure": true,
+      "complete_attention_repair_passed": false,
+      "limitations": [
+        "Only common absolute position and input token rows are compared",
+        "Common token does not prove equal preceding draft ancestry",
+        "Observers add synchronization and allocations; original output divergence must be reproduced"
+      ]
+    },
+    "flashinfer_wrapper_replay": {
+      "gpu_replay_performed": true,
+      "device_capability": [
+        12,
+        1
+      ],
+      "flashinfer_version": "0.6.18",
+      "torch_version": "2.13.0+cu130",
+      "layer_index": 3,
+      "position": 52,
+      "input_id": 71093,
+      "q_heads": 24,
+      "kv_heads": 4,
+      "head_dim": 256,
+      "prefix_tokens": 52,
+      "verify_tokens": 3,
+      "page_size": 1,
+      "k_scale": 1.0,
+      "v_scale": 1.0,
+      "same_prefill_and_first_query_input_values_and_dtypes": true,
+      "storage_byte_equivalence_checked": false,
+      "fp8_observed_decode_reproduced_with_zero_numeric_difference": true,
+      "fp8_observed_verify_reproduced_with_zero_numeric_difference": true,
+      "fp8_single_vs_three_queries": {
+        "different_elements": 1217,
+        "elements": 6144,
+        "max_abs_difference": 0.0078125
+      },
+      "bf16_single_vs_three_queries": {
+        "different_elements": 749,
+        "elements": 6144,
+        "max_abs_difference": 0.00390625
+      },
+      "causal_vs_custom_mask_same_query_count_numeric_equal": true,
+      "masked_future_kv_entries_leave_single_query_output_unchanged": true,
+      "scale_resolution": {
+        "checkpoint_verified": true,
+        "loaded_scale_keys": [],
+        "missing_scales_default_to_one": true,
+        "general_kv_scale_guarantee_claimed": false
+      },
+      "repeated_identical_query_control_pending": false,
+      "repeated_identical_query_control": {
+        "query_count": 3,
+        "visible_kv_entries": 53,
+        "extended_kv_entries_with_future_masked": 55,
+        "bf16_first_output_equals_original_mtp_first_output_numeric": true,
+        "fp8_first_output_equals_original_mtp_first_output_numeric": true,
+        "kv53_and_masked_kv55_outputs_equal_numeric": true
+      },
+      "complete_serving_parity_established": false,
+      "limitations": [
+        "One observed first query; complete serving parity is not established",
+        "Linear verification chain; branched speculative trees are not covered",
+        "BF16 wrapper arithmetic uses unit scales independently of checkpoint KV quantization"
+      ]
+    },
+    "prefill_decode_full_model_candidate": {
+      "clean_build_identity_claimed": false,
+      "baseline_functional_cases": 5,
+      "mtp_functional_cases": 5,
+      "all_output_logprobs_finite": true,
+      "output_tokens_per_mode": 205,
+      "strict_validation_passed": false,
+      "python_first_mismatch_index": 16,
+      "exact_short_output_ids": 13,
+      "verification_steps": 73,
+      "accepted_drafts": 136,
+      "proposed_drafts": 146,
+      "accept_rate": 0.9315068493150684,
+      "final_repair_verified": false
+    },
+    "padded_three_query_decode_candidate": {
+      "base_runtime_revision": "fc8925db4b59187bfacc920fefbc0192bf3593d1",
+      "derived_experimental_image": true,
+      "clean_build_identity_claimed": false,
+      "added_backend_file": "srt/layers/attention/flashinfer_backend.py",
+      "added_backend_file_sha256": "8303031e53acb916c426194f0b9f3ce7b65bcccb7df796eaf87b455f2b41bc4a",
+      "complete_four_run_status_passed": true,
+      "w4a8": {
+        "baseline_functional_cases": 5,
+        "mtp_functional_cases": 5,
+        "all_output_logprobs_finite": true,
+        "output_tokens_per_mode": 205,
+        "exact_output_ids": true,
+        "strict_validation_passed": true,
+        "verification_steps": 73,
+        "accepted_drafts": 136,
+        "proposed_drafts": 146,
+        "accept_rate": 0.9315068493150684
+      },
+      "w4a4": {
+        "baseline_functional_cases": 5,
+        "mtp_functional_cases": 5,
+        "all_output_logprobs_finite": true,
+        "output_tokens_per_mode": 205,
+        "exact_output_ids": true,
+        "strict_validation_passed": true,
+        "verification_steps": 71,
+        "accepted_drafts": 137,
+        "proposed_drafts": 142,
+        "accept_rate": 0.9647887323943662
+      },
+      "actual_backend_gpu_regression": {
+        "passed": true,
+        "synthetic_inputs": true,
+        "actual_backend_forward_decode_exercised": true,
+        "case_count": 4,
+        "decode_kv_lengths": [
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            53
+          ],
+          [
+            2,
+            127
+          ]
+        ],
+        "cloned_queries_per_request": 3,
+        "all_output_bytes_equal_to_verification": true,
+        "all_outputs_finite": true,
+        "first_query_ignores_two_poisoned_future_tokens": true,
+        "kv_write_calls_per_case": 1,
+        "only_real_kv_rows_written": true,
+        "scope": "Four synthetic cases; all context lengths and prompts are not established"
+      },
+      "final_clean_revision_verified": false
+    },
+    "next_validation": "Completed: final v6 guarded clean builds/repeat, GPU preflight, fresh W4A8/W4A4 visual/MTP validation and private portable roundtrip all passed"
+  },
+  "retained_evidence_sha256": {
+    "initial_ptq_preflight.json": "e319ee1cdfc890b453cf8b8189183454c38ee1b23df2e5085b662278a11b0e96",
+    "initial_quantize_w4a8.run.json": "a2909efa9ac98ae704868d80e77f921edd5f41ab71591675479fd7e997db7301",
+    "initial_audit_w4a8.run.json": "a93303c6ebdf36af235873e367ff85d88f604b547b0349e6bea941b2bbd51fb8",
+    "initial_w4a8.audit.json": "5a2244c5a80a9fa450cfb24f6328138d72ced5a24d785dd45933ea6f50819f92",
+    "mtp_modelopt_cpu.log": "d8d2e5f5ef8f4c5cd7491ab913103eacec539601e0a0c7351dc638b9aba0e8bc",
+    "mtp_modelopt_cpu.xml": "7c22bfe78f9368e0e67d35717187365e0407cdea1d05a70bf46076679790afaf",
+    "final_w4a8_recalibration_sha256.json": "2d4910fe3c6ca992a9ef2ebb58eb6369ea7a29d6f92b92cedb0da05cf2df2899",
+    "final_w4a8.audit.json": "ce33550a62132205c63d09c158619ced070ed44e01f90929e30a96f60ce34b8b",
+    "final_quantize_w4a8.run.json": "dad8db8deed757c02743d331c9b81a978b4cef4e6613691a91176130ad55857c",
+    "final_audit_w4a8.run.json": "cf671cc6fd7aee6f64cca68c0b3eea0c44e6ed5051d81888c01bad33287976a6",
+    "final_w4a4.audit.json": "0ba21c3af8ca8b879af65cdaa3e4670e24b8982e4ef9e29a2d3c72338c7a145f",
+    "final_quantize_w4a4.run.json": "8225315f83b0481a6d97387e0eb16c0f0927f4d60a1835e63921e0f7ece6687b",
+    "final_audit_w4a4.run.json": "f798041a848d6acb748deb79292637e5bec8f5927ba1f76d990242822d0b299c",
+    "verified_official_sglang_base.json": "49181eea2c75676dcc66435d55b290709abc930df695784ff158ed2fa84783ab",
+    "sglang_image_cpu_check.json": "241ffebad919ee57102b88015e5bd407a6a28a256c3e5666952fb6a6cbd4affd",
+    "sglang_image_cpu_check_repeat.json": "241ffebad919ee57102b88015e5bd407a6a28a256c3e5666952fb6a6cbd4affd",
+    "sglang_repeat_build.json": "8aaebca7996f7c1c6f28651577120404d88843626e30e36466aad47b49503000",
+    "build_sglang.log": "a7ae205768ac4a0db9d3eded0520bcf1aff38e4ba2575ed075ed08b6d62c4600",
+    "build_sglang_repeat.log": "a848ae72e911c337d91553cb497293c7f3b975317f9d5358717d8ec057bde6c4",
+    "ptq_portable_private_report.json": "39927a78cd925642adf5c6b371a7c24700cf45853359d59ce1c56693a2f5d96e",
+    "sglang_portable_private_report.json": "12af7742440d1bd01a3cdb7821f4bfffdaaa221b7ee9165f55a2482cd13a7215",
+    "w4a8_baseline.json": "ebad5e0c0be62fd0139ac0df35d300fad8cfdb347f0b39e6aff906ca5817cf15",
+    "w4a8_mtp.json": "761c95fd410943f855350ab15839d0067553024873ab6a0051d958ccc8cf5b9f",
+    "w4a4_baseline.json": "ff2cfa94c41d878dfc5d7faed05fa14f930b60a9fa04828a0bae205a0cf93432",
+    "w4a4_mtp.json": "dd154702d3b068d298d45f1ef5e105391015dcb62369213e3d91cc60d06c2693",
+    "w4a4_baseline_repeat_0.json": "296261f9f4d8e0bc98735affce6125f44fd92facf798422b475443c20dbace62",
+    "w4a4_baseline_repeat_1.json": "780ec70f5026da93cc08b155958883d492e9ed255a8b9edddee99c164caf4519",
+    "w4a4_mtp_repeat_0.json": "95a8c1f13a8a7ffb810234600fd46be770bc3a25960c20d78fdf6bed1a0b7372",
+    "w4a4_mtp_repeat_1.json": "0972c23b2591774808b8a1c1da9b524840f3d61594ad1ba6f9d3a3f82f1843ac",
+    "sglang_v3_build.run.json": "5247b375e24ef3611bf259f7d0ef9b43b7cd33281fab2706f82ac48ed4d5891a",
+    "sglang_v3_build_repeat.run.json": "7ababf8b1d1c85c70afd0d37a2c9b913dfa23ee451b807b07a93c45f99fbe0b1",
+    "sglang_v3_build.image.json": "53ff8674ed24d8c2a446f48c2210cb91ab8d0e8c8b4a3dd469c1d331427c64c4",
+    "sglang_v3_build_repeat.image.json": "7efa20f370d052c3701887dfa90eaeaac23c6a7a5ea9e0e8e08007f3da333f3f",
+    "sglang_v3_build.manifest.json": "5aaca3e443652d7057b8c261570ad7352fe56ccbcf364a73667b1d415fe2ed6a",
+    "sglang_v3_build_repeat.manifest.json": "5aaca3e443652d7057b8c261570ad7352fe56ccbcf364a73667b1d415fe2ed6a",
+    "sglang_v3_build.verify.json": "eafbfc0ea2bd2952c14b6c3362b7891aeafe7bcb99a4cb0c5e71c2ba899469db",
+    "sglang_v3_build_repeat.verify.json": "eafbfc0ea2bd2952c14b6c3362b7891aeafe7bcb99a4cb0c5e71c2ba899469db",
+    "sglang_v3_build.patch.json": "a406839eb5dd870681ebd1bbb5337efcac2cd932be969ee0cc71e7e7997f4780",
+    "sglang_v3_build_repeat.patch.json": "a406839eb5dd870681ebd1bbb5337efcac2cd932be969ee0cc71e7e7997f4780",
+    "sglang_v3_repeat_build_compare.json": "63f3d9fccc0020c861f252fdbf9ffc819ab517604a40c6a37b90c2404ee8b9e1",
+    "sglang_v3_preflight.run.json": "ab7bd5558ccbf674a02091ba6d0d2cdc2f7587fc74d651f5b320cfb51b98e073",
+    "v3_w4a8_baseline.json": "4b40aaf245aecd16d4b93e205fdbc1b4b099bd3cfad929a541e5f21ebf2dcadb",
+    "v3_w4a8_mtp.json": "4b36c69fc3295f48868e02d3f07b25e71832c1e0743dba59f8e74b6b2a3c1ad1",
+    "v3_w4a4_baseline.json": "91a84c693bf08a1503482a2e0c3b07c761daa8080b803078fffb4d8af94a821c",
+    "v3_w4a4_mtp.json": "325faa725dfc9b0bd1af45ba99ea96e2223ba7540bae7f7a025fbfa046523ede",
+    "sglang_v3_portable_private_report.json": "34a967c98d0259ce10ab2e0c8d11f6d7ad16006c7bc3542d1a6d7b457374af39",
+    "sglang_v4_repeat_build_compare.json": "d57ec17ff5510375334bdfa0e384810e013db0a4fdb7513bcd83c72954b9cf02",
+    "sglang_v4_build.manifest.json": "c7d5ea85551dd23e71c1db9942f3a3a8d120cfbd4cf6a6ba24e9d41a481c506b",
+    "sglang_v4_build_repeat.manifest.json": "c7d5ea85551dd23e71c1db9942f3a3a8d120cfbd4cf6a6ba24e9d41a481c506b",
+    "v4_ba_input_hash_proof.json": "af7d4b94b4b3a21b2eeecfff5798153883d59720d43fefec6038124960062437",
+    "v4_ba_kernel_triton_final.jsonl": "4d453ca50b02bd942e529c7723a4f00b7ed410e20ee58f250570fb6ab5ee649b",
+    "v4_w4a8_baseline.response.json": "a9c30c001a4823ec1867b132dd50cfb2242907f44d660a4ec11ad31f8895504f",
+    "v4_w4a8_mtp.response.json": "1904ab91fb31c5f449635c59211e2a0c11553f909900f56d4db7824f259e2e02",
+    "v4_w4a8_mtp_check.run.json": "e8c7776a0c693448f7a9e1da1a0b3b8dcf2cbeb2c29b9b384c515b8335996a35",
+    "sglang_v5_repeat_build_compare.json": "5c5df0398568868254cb6851287dae2813ed4c0afc31050e4ba7914a67d97411",
+    "sglang_v5_build.manifest.json": "2a449292f25da864861e63bef08100a3d406fa7793324f5256f96fd14e99a058",
+    "sglang_v5_build_repeat.manifest.json": "2a449292f25da864861e63bef08100a3d406fa7793324f5256f96fd14e99a058",
+    "v5_raw_trace_compare.json": "479808d0c0e9c8846d7040743efac377d950714bc95fd2f1b8d902f32d524c77",
+    "v5_raw_trace_cleanup.json": "fed9c1f86768eec4c3378e98e2e76f3767555266a1aaf512f666e0ec00154f59",
+    "ba_preflight.json": "a4c3be0432c1ca0a3ed1ad7bc5653b4d4c60f26c2066d5f85d547f6d0e4c2c2c",
+    "ba_candidate_w4a8_baseline.response.json": "b11acfd8d47406a25d3e5d6af4df8d4309d31864df9913b3d16b4b001a9f1e9b",
+    "ba_candidate_w4a8_mtp.response.json": "f633aaf7310921745cd8a9e851526fe0f6130b03bf3de53b117ca900179d18b0",
+    "det_candidate_w4a8_baseline.response.json": "9d84929d7da164f4883779529b5d3189118049387081c08d9b924e84de7f0a64",
+    "det_candidate_w4a8_mtp.response.json": "441c967f644da69a15e430c53a65573123cd76c2c0dcb1c401ec032b807332e2",
+    "sglang_v5_portable_report.json": "26814efd9afdeaf49fbf42bc8b4dc7e3130a965c6498b09f086ff07b26e21651",
+    "bf16kv_serving.status.json": "f65d56324b97631b5a323b03ca21c7199dbcca704df043de79810f9c7df9492b",
+    "bf16kv_w4a8_baseline_check.run.json": "fd388de0ca4c426473c0c2f3ff6e1966227d6eaae45bcd76232fcae58e0c1317",
+    "bf16kv_w4a8_mtp_check.run.json": "589d540d34db7d9741af95df6c3e441dce5f153450ee1e905141dabca9d7afd5",
+    "bf16kv_w4a8_baseline_check.log": "a86521e0bfd85214d0c3f16fdfad4ddf729b05e005ff9196e82fa045c2fbd91b",
+    "bf16kv_w4a8_mtp_check.log": "4c4f53bf494457f0ab1b06909951040b123a49dbc385b3a1179bf2d75abbb2aa",
+    "bf16kv_w4a8_baseline.container.json": "322a528e75359951e7b140513ada36b4e1ae0576be884f4a1be1a1aca358af23",
+    "bf16kv_w4a8_mtp.container.json": "66d247b0cb9eb9302a959078e97901f97b7cc4d8bf35ad357f441cbbb5c1e8b9",
+    "v5_bf16kv_preflight.log": "6dcdc7ab0a3a4e6470d6a8814fa1ac57a5cc76b0456635fd41e3a7f84249d8ac",
+    "v5_bf16kv_preflight.run.json": "f98c30343140289d646ee98d98d1b3befa3983563feddf18fb3bc902c859bedc",
+    "bf16kv_w4a8_baseline.json": "d2fcc4c17a448ec519054618c58a83555a54ab99f85095ad0c644f32fefc45f2",
+    "bf16kv_w4a8_mtp.json": "222737e25cef12e3735000e14ee82be5a73c2c359dc788f1b3725748f5ef7a24",
+    "v5_attn_trace_compare.json": "ce864bee086e95280f1d0daae3302e632bb092f559c1c99c2603a39eea7f29a9",
+    "v5_flashinfer_replay.json": "488f2bd44467fad82df02b156ec13ec694d3911b08062bcaee594ef99468f5ce",
+    "prefilldecode_w4a8_baseline.json": "256368ac20f5df8f8e96bd65fa59d528685f12eaa6265e3f64bc36abf220a05b",
+    "prefilldecode_w4a8_mtp.json": "587de371845c6b460bc77673a6ca922034ab32009f8f2bbe8a060c65df72e326",
+    "prefilldecode_w4a8_mtp_check.run.json": "a8d0d62f45fb33ccf153fdbd4f33a6a38d897d5f8a6f10864e057857d0d125c9",
+    "prefilldecode_serving.status.json": "f65d56324b97631b5a323b03ca21c7199dbcca704df043de79810f9c7df9492b",
+    "v5_attn_trace_cleanup.json": "ed65ab7533ad9f38a02fc81d8b45ddb7b0872158ad3d069bd295c008b004e2b0",
+    "v5_flashinfer_repeatq_replay.json": "5c0c5800dce9c6512203718eb7185df40dde55bfaf7c23b98be39687f8a83660",
+    "paddecode_w4a8_baseline.json": "7c74322b29be2912dc30e1ef10a05ca94d26eb192be7e22f6cc9adb3376bad9f",
+    "paddecode_w4a8_mtp.json": "d700db18635d73e466d6c573d56317159d1d974a4e5f995538a38c77ea61d8dd",
+    "paddecode_w4a4_baseline.json": "98cec89d702b79e604804537289a349656bde5610ba640ac5def8566acaa6a88",
+    "paddecode_w4a4_mtp.json": "19fd56d508b3062ee6ac71bf4051f55bf55e37851368f9fd08b80eb032dce13d",
+    "paddecode_serving.status.json": "0f9732071aabc96662979198c067859ad0bf8058fe95745ce8da23df1428a44c",
+    "paddecode_attention_preflight.json": "813a94741d1db4a59f5a7d0237395a12b20b83c3b8f3ea776013ce654022c679",
+    "sglang_v6_build.run.json": "b9280ab33c9726b0f265c198adbd2f131e557c7b9ec9802e84d4a84967b4fd9e",
+    "sglang_v6_build_repeat.run.json": "71f038b8d84a301c8f4b8f84ff33449a991d25b2640cd0778d039320e4754064",
+    "sglang_v6_build.image.json": "e1acd530724608fdc384c65033a803edb690344478926f3b315142817fd6a9ab",
+    "sglang_v6_build_repeat.image.json": "3122d5872f241b2319aa3b6451ef6dc126c96bc93390b200e4f56f7db5e6652d",
+    "sglang_v6_build.manifest.json": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+    "sglang_v6_build_repeat.manifest.json": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+    "sglang_v6_build.verify.json": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_build_repeat.verify.json": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_build.patch.json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_build_repeat.patch.json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_repeat_build_compare.json": "e296d70d9aaf76b85ca587ad9131148e0ad9c7f93dbdae11c0bc6f50dcc4c3cc",
+    "v6_sglang_preflight.log": "65aaa8f789d761fba8f026a235933763ee3b62f080ab3b74da199d5bb3569f30",
+    "v6_ci.log": "7271255ab8cc6a8656124aa26f33a5355d24e0ffa6141cbb37214ea921078f88",
+    "sglang_v6_results_v6_w4a8_baseline_json": "7c59a3d64af4da0a49c4d911b4bbaa3c256dc6cca2e2997309ab0a6dc663efad",
+    "sglang_v6_results_w4a8_baseline_container_json": "8354c743663da59471cf35bb98becc4eb20881f41a334b3aeb66c8470f97916a",
+    "sglang_v6_results_w4a8_baseline_check_run_json": "5ecd30a1c2527d36b679f84e82618cf4870c822e5b1738e46d8b556cd2495625",
+    "sglang_v6_results_w4a8_baseline_stop_run_json": "e7bb5d42450fbae6d0bc6fe615614bec489db471922359643992536691ab0364",
+    "sglang_v6_results_w4a8_baseline_remove_run_json": "b65a8b7330c57b9a0e562b2ab98f620d7c54b27df797a70340d265ccc4bb717a",
+    "sglang_v6_results_v6_w4a8_mtp_json": "9c56c7bbe2151dc185f78c6be036173865af888abb21b0dcc9241e11a0182ca0",
+    "sglang_v6_results_w4a8_mtp_container_json": "767b1558aa0e58d77187ce867be84fa80bb49f99e0df20a3368916dd93573b6c",
+    "sglang_v6_results_w4a8_mtp_check_run_json": "c7fa8e442cc48399a5272615ae58643e8468dc266046648fd71502eb6d3b02a1",
+    "sglang_v6_results_w4a8_mtp_stop_run_json": "7fbee31943fb3a6dcce1e54c4d998a9011caed418cf64d6c8111f02cf359e8ed",
+    "sglang_v6_results_w4a8_mtp_remove_run_json": "62989b43269c6bab4afab154cc9d9e69a76b2876cc9f79a689bc5aa3387aa451",
+    "sglang_v6_results_v6_w4a4_baseline_json": "9eba982e9ec201f3efe7dc1c7a81db0207afd8246e4b11f7cec5cb497fa3b34f",
+    "sglang_v6_results_w4a4_baseline_container_json": "d2c2a6695fb6735cd87a14c829f8712070127e4b16c81f3a0efface350a7dadf",
+    "sglang_v6_results_w4a4_baseline_check_run_json": "a70d040e5f53638a16e4db66ffd7571623bcb79ef8578938c01d89bb80500890",
+    "sglang_v6_results_w4a4_baseline_stop_run_json": "af4a00b6fc3811a9497208f9fdbf6527aea5ea4c6df10e0eb44a64942d06d577",
+    "sglang_v6_results_w4a4_baseline_remove_run_json": "30ce24da58361a5ed7e4e035c430f356ded4af57ac2987419d14065e5a0a4f25",
+    "sglang_v6_results_v6_w4a4_mtp_json": "92b2e8e6b8abc71a628464d4f973b1b436e4cd1da8178f4e81806ae6af0c09bd",
+    "sglang_v6_results_w4a4_mtp_container_json": "416951a90a28a14f0a58ae52905bc0625b7a48c80fdf5cf50e945cece48c3d71",
+    "sglang_v6_results_w4a4_mtp_check_run_json": "aeda3c216bb3564731b9223feee89223e1d5f477419fb21507719aff0a42f735",
+    "sglang_v6_results_w4a4_mtp_stop_run_json": "ef790a7318fc091ad1b82eb8322fd2ba5b62aaa3d4e674469b945223d06df98f",
+    "sglang_v6_results_w4a4_mtp_remove_run_json": "bddf464234cfc6df19bdfade522810d1ab11fab45ad768404d3aef2147b39de6",
+    "sglang_v6_results_serving_status_json": "0f9732071aabc96662979198c067859ad0bf8058fe95745ce8da23df1428a44c",
+    "sglang_v6_portable_results_portable_report_json": "6c1346a7a463da764ecaa80eabe134cdddfc0729435432cf79d29b9601e60475",
+    "sglang_v6_portable_results_original_image_json": "e1acd530724608fdc384c65033a803edb690344478926f3b315142817fd6a9ab",
+    "sglang_v6_portable_results_loaded_image_json": "c7635a30ff925f9b89cba3ae01c6fe5c6c6da1eb121b06dc7bc15fba69db8501",
+    "sglang_v6_portable_results_loaded_image_after_runs_json": "c7635a30ff925f9b89cba3ae01c6fe5c6c6da1eb121b06dc7bc15fba69db8501",
+    "sglang_v6_portable_results_original_containers_before_json": "823494af6c58993209a5c9070643da77b529a020a495aa7f53eb3dda2e4030a4",
+    "sglang_v6_portable_results_original_containers_after_json": "823494af6c58993209a5c9070643da77b529a020a495aa7f53eb3dda2e4030a4",
+    "sglang_v6_portable_results_host_docker0_before_json": "da85733e04ab914419a839132b7e6faad166fd4857cd8da75a7ec88fb28ada01",
+    "sglang_v6_portable_results_host_docker0_after_json": "da85733e04ab914419a839132b7e6faad166fd4857cd8da75a7ec88fb28ada01",
+    "sglang_v6_portable_results_host_docker0_address_before_json": "08f8468f2931ae74b614841e2dd8de5562434fb00b0ae1435c0e6aeed663b62c",
+    "sglang_v6_portable_results_host_docker0_address_after_json": "08f8468f2931ae74b614841e2dd8de5562434fb00b0ae1435c0e6aeed663b62c",
+    "sglang_v6_portable_results_manifest_verify_txt": "301e1ebaf79e19680be4445782f4621e59fb4fa16b88555e1a65a718e9b407b7",
+    "sglang_v6_portable_results_patch_check_json": "4d544886733446deed458c469ba0ff433a726e8902b8cbaab6e3029fa36296c2",
+    "sglang_v6_portable_results_host_netns_txt": "fe50dd5e5a7f72627cc0c52a6cb6ca6c043032fd15edfa678477400ba07a9e86",
+    "sglang_v6_portable_results_private_netns_txt": "ab5cd8d59f94541e5adb1428f6f27db3b6066b0b8515c1f148cfaf235f7a1e40",
+    "sglang_v6_portable_results_host_mountns_txt": "7580c3a20f1c14e57ed67f2d36b14788a7f48660c7bdb96d977faadcb984f423",
+    "sglang_v6_portable_results_private_mountns_txt": "e983bfd5fa06b7046c6a2b43d197e71db6692f17c406223906d4d636166f2f85"
+  },
+  "not_verified": [
+    "TP2 or a second physical host",
+    "Video, general quality, long-context or concurrent performance",
+    "Full GPQA score or controlled MTP speedup",
+    "Public registry publication"
+  ],
+  "final_serving_portable_roundtrip": {
+    "status": "passed",
+    "git_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+    "original_store_digest": "sha256:909c4cabb46bb2632dddce7f7a58e58d919a6a8696739b658324bd8d6c50262b",
+    "selected_image_config_sha256": "42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+    "loaded_image_id": "sha256:42adfadca130480d537148fb2d4c2391edd41877f0e8706b186ce0e7aef2083f",
+    "archive_bytes": 14752742912,
+    "archive_sha256": "bc9566e0dd638d44a783d029f6de74ecc729a5a21e656b5222b083c50d82a86b",
+    "architecture": "arm64",
+    "container_manifest": {
+      "status": "verified",
+      "kind": "sglang",
+      "git_revision": "7d1daea3b18d3e30e4e727e8c5b0942e4909b7b6",
+      "manifest_sha256": "6e129f186cf9279b44fbe75f28dbf07d92a3db5892413e560a5998ca493b0e74",
+      "errors": []
+    },
+    "isolated_empty_docker_store": true,
+    "private_containerd": true,
+    "private_network_namespace": true,
+    "private_mount_namespace": true,
+    "host_bridge_identity_preserved": true,
+    "host_bridge_addresses_preserved": true,
+    "all_three_original_containers_not_restarted": true,
+    "all_three_original_container_networks_preserved": true,
+    "original_container_gateway_reachable_before_and_after": true,
+    "same_image_config_and_layers_after_load": true,
+    "network_for_validation_containers": "none",
+    "gpu_requested": false,
+    "host_source_or_recipe_mounts": false,
+    "sglang_patch": {
+      "status": "already-patched",
+      "patch": "megaquant-spark-v6",
+      "sglang": "0.5.20",
+      "files": {
+        "srt/models/qwen3_vl.py": {
+          "upstream_sha256": "a32ac0793e0526c8951f2ad3936bd8b002b7ad00a291c442ad2f215b9064a80f",
+          "patched_sha256": "3be98419e08552f82b650f6932fdb02d0b26cea4d77bcff209a3c55d6d7f00b1"
+        },
+        "srt/models/qwen3_5_mtp.py": {
+          "upstream_sha256": "1ebc9643333046d5621ad8b1bd6bd005686988c0104576bd1ea6c3d5e51acf24",
+          "patched_sha256": "870d294b97caa43a73ce31fa4568a19c7d96b69345e52b2bfe1d214c1821fd88"
+        },
+        "srt/layers/quantization/modelopt_quant.py": {
+          "upstream_sha256": "afe1315c27e37dac2ecad87fe867217081609d7be4b43f0cf5eb42401d6d5d8e",
+          "patched_sha256": "017a0319e7f9c5550c1cdb940ff8ddb92428e34804b477da16fff7e3d761ac40"
+        },
+        "srt/configs/model_config.py": {
+          "upstream_sha256": "85c36b134e3e4a39bce382d9172aa4fe4819f02996d55cbdf779846da4cfb8c8",
+          "patched_sha256": "b89b317cb94ac0d3c7af52f709f4c037f5332f5b220d8a83478ff5a72e0bc346"
+        },
+        "kernels/ops/attention/fla/fused_recurrent.py": {
+          "upstream_sha256": "35a928d24bf6cc3ca56d73e4b729ec004ec8a34760e2425e2f04d6ef783db9f8",
+          "patched_sha256": "b90bb5b144e4815ebc3fbba074b06aecac4c6db8b27bef8e43c74e7ddfd6d2cd"
+        },
+        "srt/layers/quantization/unquant.py": {
+          "upstream_sha256": "9f071f09eba9522e8d2b3e26fa0f12c0a6564da22b8062d5c8a12df9db4202bb",
+          "patched_sha256": "5fb4a36edbd365cb350c0fc2fa27d3fc5661f3170090c01144b0760b6ccf2431"
+        },
+        "srt/layers/attention/flashinfer_backend.py": {
+          "upstream_sha256": "dce9594f150664cd12c2fb3cfddb37a955759b32a312bc27b0538c1435e82294",
+          "patched_sha256": "337d14ac88c5cb21d5d6ddcad5b0c20ff0f2773b9486317ebab25440d86e6d52"
+        }
+      }
+    },
+    "checks": [
+      "archive SHA256 before and after load",
+      "installed package and source/config manifest",
+      "v6 SGLang patch guard verifies all seven pinned installed files including FP32 packed decode gate, SM121 FP8 dispatch, batch-invariant BF16 BA projection and padded three-query attention routing",
+      "baked multimodal FP32 baseline command",
+      "baked embedded EAGLE MTP command",
+      "installed SGLang/Torch/Transformers/Pillow/CLI imports and SGL kernel presence",
+      "baked multimodal checker CLI"
+    ],
+    "limits": [
+      "Same physical ARM64 host and host kernel",
+      "No GPU PTQ or inference in the isolated store; the root task tests those separately"
+    ]
+  },
+  "completion_cleanup": {
+    "four_validation_services_stop_and_remove_exit_codes": 0,
+    "original_three_containers_and_networks_preserved": true,
+    "raw_trace_tensor_files_remaining": 0,
+    "raw_trace_files_deleted": 896,
+    "raw_trace_bytes_deleted": 2878950904,
+    "raw_tensors_downloaded": false,
+    "private_validation_daemons_stopped": true,
+    "final_remote_state_observed_by_gpu_worker": true
+  }
+}

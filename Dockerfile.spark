@@ -1,22 +1,23 @@
-# syntax=docker/dockerfile:1.7
 #
 # DGX Spark / GB10 ARM64 PTQ image.
 #
-# The Spark host already has a CUDA 13 + PyTorch image.  Keep the base
-# configurable so the same Dockerfile can use the locally verified image:
+# The official multi-architecture NVIDIA base and the complete Python
+# dependency graph are fixed. No preconfigured quant-env image is required:
 #
-#   docker build --build-arg BASE_IMAGE=quant-env:gb10 \
-#     -f Dockerfile.spark -t megaquant:gb10 .
-#
-# A clean build can use the multi-architecture NGC image instead:
-#
-#   docker build --build-arg BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3 \
-#     -f Dockerfile.spark -t megaquant:gb10 .
+#   docker build --platform linux/arm64 -f Dockerfile.spark \
+#     --build-arg GIT_REVISION=$(git rev-parse HEAD) -t megaquant:gb10 .
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.08-py3@sha256:3becd068f49bd2ad38f90db5f9a4803019a76933a24e63d821376c44e7a9200a
 FROM ${BASE_IMAGE}
 
-ARG INSTALL_SPARK_DEPS=1
+ARG BASE_IMAGE
+ARG GIT_REVISION=unknown
+ARG PIP_NO_INDEX=0
+
+LABEL org.opencontainers.image.source="https://github.com/AvrovaDonz2026/Mega-Quantification" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.version="0.1.2" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -27,7 +28,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_CACHE=/cache/huggingface/transformers \
     HF_DATASETS_CACHE=/cache/huggingface/datasets \
     MEGAQUANT_ROOT=/opt/megaquant \
-    PYTHONPATH=/opt/megaquant/src \
+    MEGAQUANT_VERIFY_CONTAINER=1 \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     TORCH_CUDA_ARCH_LIST=12.1 \
@@ -36,25 +37,31 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /opt/megaquant
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY docker/requirements-gpu-spark.txt /tmp/requirements-gpu-spark.txt
+COPY docker/requirements-build-spark.txt /tmp/requirements-build-spark.txt
+COPY docker/wheelhouse /tmp/wheelhouse
 COPY src ./src
 COPY recipes ./recipes
 COPY docs ./docs
 COPY docker ./docker
 COPY scripts ./scripts
 
-# The verified quant-env:gb10 base already carries these packages.  A clean
-# NGC build installs the Spark pins; INSTALL_SPARK_DEPS=0 keeps an offline
-# build from replacing its ARM64 CUDA wheels.
-RUN if [ "${INSTALL_SPARK_DEPS}" = "1" ]; then \
-      python -m pip install --no-cache-dir -r /tmp/requirements-gpu-spark.txt; \
-    fi \
-    && python -m pip install --no-cache-dir --no-deps -e . \
+# Every direct and transitive dependency is listed explicitly. --no-deps
+# prevents pip from fetching an unpinned package or replacing NVIDIA's ARM64
+# Torch/CUDA stack. The Torch entry must already exist in the immutable base.
+# Disable build isolation after installing the pinned build backend so an
+# implicit Hatchling environment cannot introduce floating dependencies.
+# PIP_NO_INDEX=1 plus the prepared wheelhouse permits --network=none builds.
+RUN python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-build-spark.txt \
+    && python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-gpu-spark.txt \
+    && python -m pip install --no-cache-dir --no-deps --no-build-isolation . \
     && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models \
     && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/docker/host-check.sh \
-          /opt/megaquant/scripts/*.sh
+          /opt/megaquant/scripts/*.sh \
+    && python scripts/container_manifest.py record --kind ptq \
+         --base-image "${BASE_IMAGE}" --revision "${GIT_REVISION}"
 
 WORKDIR /opt/megaquant
 ENTRYPOINT ["/opt/megaquant/docker/entrypoint.sh"]
-CMD ["plan", "-c", "recipes/qwen3.8-27b-nvfp4-w4a4.yaml"]
+CMD ["plan", "-c", "recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml"]

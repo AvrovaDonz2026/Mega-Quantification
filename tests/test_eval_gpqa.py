@@ -78,10 +78,12 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert serve["disable_cuda_graph"] is True
     assert serve["attention_backend"] == "flashinfer"
     assert serve["sampling_backend"] is None
+    assert serve["enable_deterministic_inference"] is False
     default_argv = sglang_serve_argv_from_recipe(recipe)
     assert "--attention-backend" in default_argv
     assert default_argv[default_argv.index("--attention-backend") + 1] == "flashinfer"
     assert "--sampling-backend" not in default_argv
+    assert "--enable-deterministic-inference" not in default_argv
     plan = describe_eval(recipe)
     assert plan["engine"] == "sglang"
     assert plan["base_url"] is None
@@ -210,6 +212,26 @@ def test_sglang_recipe_honors_quantization_and_multimodal_options(quantization) 
         assert argv[argv.index("--quantization") + 1] == quantization
     recipe.serve.enable_multimodal = True
     assert "--enable-multimodal" in sglang_serve_argv_from_recipe(recipe)
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_sglang_deterministic_setting_maps_once_and_does_not_leak_to_vllm(enabled) -> None:
+    flag = "--enable-deterministic-inference"
+    argv = sglang_serve_argv("/ckpt", enable_deterministic_inference=enabled)
+    assert argv.count(flag) == int(enabled)
+    recipe = load_eval_recipe(RECIPE)
+    recipe.serve.enable_deterministic_inference = enabled
+    assert sglang_serve_argv_from_recipe(recipe).count(flag) == int(enabled)
+    recipe.serve.engine = "vllm"
+    assert flag not in serve_argv_from_recipe(recipe)
+    assert flag not in vllm_serve_argv_from_recipe(recipe)
+
+
+@pytest.mark.parametrize("name", ["eval-gpqa-diamond.spark", "eval-gpqa-diamond.spark-mtp"])
+def test_spark_recipes_leave_deterministic_inference_disabled(name) -> None:
+    recipe = load_eval_recipe(REPO / "recipes" / f"{name}.yaml")
+    assert recipe.serve.enable_deterministic_inference is False
+    assert "--enable-deterministic-inference" not in serve_argv_from_recipe(recipe)
 
 
 def test_sglang_recipe_can_opt_into_embedded_mtp() -> None:
@@ -451,6 +473,7 @@ def test_sglang_argv_matches_cookbook_and_hicache() -> None:
     assert "--fp4-gemm-backend" not in argv
     assert "--linear-attn-backend" not in argv
     assert "--sampling-backend" not in argv
+    assert "--enable-deterministic-inference" not in argv
     default_recipe = load_eval_recipe(RECIPE)
     assert sglang_serve_environ(default_recipe) == {}
     with_graphs_off = sglang_serve_argv("/ckpt", disable_cuda_graph=True)
