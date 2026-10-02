@@ -35,16 +35,27 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 ## SGLang inference and GPQA
 
-推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩下的 262144 上下文，`continue_on_length` 一直续到 EOS，最多 8 次续写。HTTP 超时 21600 秒。完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，按 `item_id` 续写。198 行都在、并且 `summary.json` 也在时，分数才是 `correct/198`。截断和解析失败算错。
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090 和 6000D 配方的上下文是 262144，Spark 配方是 32768；`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。HTTP 超时 21600 秒。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
 跑完的两次：
 
 | 权重 | 采样 | 分数 | 机器 | 日期 |
 |---|---|---|---|---|
-| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0，其余同 thinking 卡 | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
+| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0（历史记录） | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
 | 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
 
 混合权重还没有跑完的 temperature 0 总分。第一行是 temperature 1 的测量，当前 YAML 发的是 0。
+
+Spark 的混合 W4A8 和均匀 W4A4 都使用
+[`recipes/eval-gpqa-diamond.spark.yaml`](../recipes/eval-gpqa-diamond.spark.yaml)
+做 temperature 0 的完整 198 题基线评测：seed 0、选项洗牌、thinking 开启并
+保留、`xhigh`、32k 上下文、4 并发，GPQA 时关闭 MTP。这两份 Spark 权重的
+视觉及 MTP 已量化，不能与上表的历史权重混为一谈。完整启动、顺序切换两份
+权重及验分命令见 [Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
+每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用
+`--output`。`scripts/check_gpqa_results.py` 从原始官方 CSV 重建选项和正确答案，
+检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
+验证 JSON。原始 CSV 中的重复选项需要保留。当前还没有完整 Spark GPQA 分数。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -485,20 +496,20 @@ vLLM support for that combo is limited.
 
 比特布局和三份机器配方在 [Quantization format](#quantization-format) 和 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。这里是采样锁和启动时容易踩的地方。
 
-每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。生成长度保持 262144 的剩余窗口，512 或 2048 的截断不是这张卡的协议。
+每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。默认、5090 和 6000D 配方使用 262144 的剩余窗口；Spark 因共享内存使用 32768，详见 [Spark GPQA 协议](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。512 或 2048 的输出上限不是这些完整评测配方的协议。
 
 | Knob | Value |
 |---|---|
 | Sampling | `temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true`. Published Qwen / NVIDIA cards use temperature 1.0. |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
-| Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
-| Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
+| Context | Default / 5090 / 6000D: `context-length=262144`; Spark: `32768`. `max_new_tokens=0` means the remaining window of the selected recipe. |
+| Truncation | Fill remaining context; `continue_on_length` continues while budget remains, up to 8 continuations. A final length finish counts as wrong. |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
 | Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); both CUDA 12.8 SM120 recipes use Triton attn + Marlin NVFP4, `SGLANG_FORCE_FP8_MARLIN=1`, and `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. The 32 GB recipe disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). The 80 GB recipe keeps CUDA graph, leaves KV on GPU, and uses CUTLASS FP8 (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
-| Headline | `correct/198` once `summary.json` exists and the journal has every row. Truncated and unparsed rows count as wrong. |
+| Headline | `correct/198` once `summary.json` exists and the checker verifies exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. |
 
 分数见上面的 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。32 GB 上 262k 窗口放不进 HBM，用 HiCache 把 KV 放到主机内存，保持 `max_new_tokens`。Qwen 的 GPQA 轨迹会到几万 token。宿主机上的 `docker-compose.override.yml`（不进 git）如果写死了 `sglang` argv，要和配方一致：`--hicache-size 64`、`--max-mamba-cache-size 96`、`--mamba-ssm-dtype bfloat16`，否则 YAML 到不了进程。journal 按 `item_id` 续写，保留 `gpqa_diamond.jsonl` 里已有的行。
 
@@ -533,6 +544,22 @@ keeps the NVIDIA GB300 vLLM flags on port 8000.
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local
 CSV with the Hub columns (`Question`, `Correct Answer`,
 `Incorrect Answer 1/2/3`, `Record ID`).
+
+The official public download is available through `bash scripts/fetch_gpqa.sh`;
+its default output is `data/dataset/gpqa_diamond.csv`. With the repository
+installed, verify a completed temperature-0 run without GPU or network access:
+
+```bash
+python scripts/check_gpqa_results.py --csv data/dataset/gpqa_diamond.csv \
+  --run-dir outputs/gpqa-spark-20261002/W4A8 \
+  --output-json outputs/gpqa-spark-20261002/W4A8-verification.json --seed 0
+```
+
+Use the actual dated run directory for each format. This checker reads the CSV,
+journal and summary without modifying them; it exits nonzero for incomplete or
+inconsistent evidence. The original v0.1.2 baked GPQA client predates the raw
+HTTP repair, so rebuild from the current checkout or use the updated CPU client
+described in the Spark runbook before starting a new run.
 
 ## Troubleshooting
 

@@ -229,6 +229,114 @@ provide a GPQA score, a general vision quality result, controlled throughput,
 video support, long-context coverage or TP2 validation. High draft acceptance
 alone is not a measured speedup.
 
+## Full GPQA Diamond at temperature 0
+
+Evaluate both exports sequentially with
+`recipes/eval-gpqa-diamond.spark.yaml`. This is the baseline recipe: embedded
+MTP is disabled during GPQA, although the exported vision and MTP tensors remain
+in each checkpoint. The earlier text/image/MTP checks do not establish a
+complete Spark GPQA result.
+
+| Setting | Spark GPQA protocol |
+|---|---|
+| Dataset | Official GPQA Diamond CSV, all 198 rows, no `--limit` |
+| Sampling | `temperature=0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1` |
+| Thinking | Enabled and preserved, `reasoning_effort=xhigh` |
+| Seed and choices | Seed 0, shuffled choices |
+| Context and output | 32768 context; `max_new_tokens=0` fills its remaining window; `continue_on_length=true` |
+| Serving | TP1, four requests, FP8 KV, FP32 SSM state, 0.70 memory fraction, FlashInfer attention |
+| Disabled | MTP, HiCache, host KV offload and CUDA graphs |
+
+The Spark context is **32768**, whereas the default, 5090 and 6000D recipes use
+262144. Continuation is bounded by the remaining context and at most eight
+follow-up requests; it does not create a larger context. A final length finish
+counts as incorrect even if the text contains the gold letter. Record this
+context difference when comparing Spark results with the historical scores or
+published model cards.
+
+Use a serving image built from the current checkout for the Compose client
+below. The original v0.1.2 image predates the GPQA client repair: SGLang extensions
+must be top-level JSON fields, rather than a nested SDK `extra_body` object.
+The repaired client also reserves chat-template tokens and counts truncated
+answers as wrong. When retaining an older serving image and using a separate
+updated CPU client, record both source revisions and the serving image digest.
+
+Fetch the official CSV on the host into `DATA_DIR`; the Spark input mount is
+read only inside the containers. `GPQA_CSV` below is the **container** path.
+Keep the CSV unchanged, including any repeated answer options.
+
+```bash
+set -e
+GPQA_DIR="$DATA_DIR" bash scripts/fetch_gpqa.sh
+export GPQA_CSV=/data/dataset/gpqa_diamond.csv
+export SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark.yaml
+export SGLANG_SPARK_PORT="${SGLANG_SPARK_PORT:-30000}"
+export GPQA_RUN="outputs/gpqa-spark-$(date -u +%Y%m%dT%H%M%SZ)"
+
+# The checker overrides the entrypoint, so verify its baked image explicitly.
+docker compose --profile spark run --rm --entrypoint python eval-gpqa-spark \
+  scripts/container_manifest.py verify
+
+for format in W4A8 W4A4; do
+  export SPARK_EVAL_MODEL="outputs/Qwen3.8-27B-NVFP4-${format}-spark"
+  docker compose --profile spark run --rm eval-gpqa-spark \
+    eval -c "$SPARK_EVAL_RECIPE" --model "$SPARK_EVAL_MODEL" \
+    --output "$GPQA_RUN/$format" --dry-run
+
+  docker compose --profile spark up -d serve-sglang-spark
+  timeout 600 bash -c 'until curl -fsS "http://127.0.0.1:${SGLANG_SPARK_PORT}/health" >/dev/null; do sleep 5; done'
+  docker compose --profile spark run --rm eval-gpqa-spark \
+    eval -c "$SPARK_EVAL_RECIPE" --model "$SPARK_EVAL_MODEL" \
+    --output "$GPQA_RUN/$format"
+  docker compose --profile spark run --rm --entrypoint python eval-gpqa-spark \
+    scripts/check_gpqa_results.py --csv "$GPQA_CSV" \
+    --run-dir "$GPQA_RUN/$format" \
+    --output-json "$GPQA_RUN/$format-verification.json" --seed 0
+  docker compose --profile spark stop serve-sglang-spark
+done
+```
+
+Run these commands in Bash so a failed evaluation or checker stops the
+sequence. Stop an existing MTP service before loading the baseline on the
+single GPU. The HTTP client and checker attach no GPU. The two journals and
+summaries appear under `OUTPUTS_DIR/gpqa-spark-<timestamp>/W4A8` and `W4A4`.
+Keep `GPQA_RUN` fixed when resuming an interrupted run: the client skips saved
+`item_id` values. Start a new directory when changing weights, temperature,
+context, seed, choice shuffle, server settings or client version.
+
+For a CPU client outside the serving image, install the current repository in
+a Python 3.10+ environment; a local CSV does not require Torch or Hub datasets.
+Inside the same loop above, replace the Compose evaluation and checker commands
+with the host commands below. This keeps the selected format, serving settings
+and dated run directory the same:
+
+```bash
+python3 -m venv .venv-gpqa
+.venv-gpqa/bin/python -m pip install .
+
+# With the corresponding baseline server already ready inside the loop:
+MEGAQUANT_SKIP_GPU_REPORT=1 GPQA_CSV="$DATA_DIR/dataset/gpqa_diamond.csv" \
+  .venv-gpqa/bin/megaquant eval -c recipes/eval-gpqa-diamond.spark.yaml \
+  --model "$SPARK_EVAL_MODEL" \
+  --base-url "http://127.0.0.1:${SGLANG_SPARK_PORT}/v1" \
+  --output "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$format"
+.venv-gpqa/bin/python scripts/check_gpqa_results.py \
+  --csv "$DATA_DIR/dataset/gpqa_diamond.csv" \
+  --run-dir "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$format" \
+  --output-json "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$format-verification.json" --seed 0
+```
+
+Create the CPU environment before starting the loop. A score is publishable
+only after `summary.json` exists and the
+checker passes: it requires exactly 198 unique dataset-matching records,
+rebuilds shuffled choices and gold letters from the CSV, reparses responses,
+counts truncated/unparsed rows as wrong, and compares the recomputed scores
+with the summary. Its JSON contains aggregate checks and file hashes, without
+questions, answers, item IDs or local paths. Retain raw journals, the CSV,
+server logs and run metadata locally; publish the sanitized verification
+report and actual protocol with the final score. No complete Spark score is
+claimed by these instructions.
+
 ## Transfer a built image
 
 The images contain the code and recipes, while weights and calibration remain

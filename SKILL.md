@@ -15,7 +15,7 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 ## Hard rules
 
 - `megaquant plan` and eval/serve `--dry-run` must not download the 27B checkpoint.
-- A GPQA score is `correct/198` only when `summary.json` exists and the journal has 198 rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal.
+- A GPQA score is `correct/198` only when `summary.json` exists and the journal has exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal. For temperature-0 runs, require `scripts/check_gpqa_results.py` to pass against the actual CSV, seed and choice-shuffle policy before publishing a score.
 - Do not commit `.env`, `.oss.env`, `docker-compose.override.yml`, SSH material, bucket names, tenant DNS, or host paths.
 - Do not publish the `*-draft` directory as scheme `w4a8`, `w4a4`, or `mixed`.
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
@@ -57,20 +57,38 @@ tests, not a general quality or determinism guarantee.
 
 ## Eval
 
-Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on, `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144 context. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, resume by `item_id`.
+Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on and preserved, `reasoning_effort=xhigh`). Default, 5090 and 6000D recipes use 262144 context; Spark uses 32768. `max_new_tokens: 0` fills the selected recipe's remaining window. Continuations cannot enlarge that window; final length finishes count as wrong. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, or an explicit `--output` directory, resume by `item_id`.
+
+Spark full GPQA uses `recipes/eval-gpqa-diamond.spark.yaml` for both mixed W4A8
+and uniform W4A4, with seed 0, shuffled choices, four requests and MTP disabled.
+Run the two exports sequentially on the single GPU. Use separate dated output
+directories for both formats and every changed protocol; resume only the same
+run with the same inputs and settings. Keep the official CSV unchanged,
+including repeated answer options. Commands and limits are in
+`docs/DGX_SPARK.md#full-gpqa-diamond-at-temperature-0`.
+
+The original v0.1.2 baked eval client predates the raw HTTP parameter repair.
+Use a current client that sends SGLang extensions as top-level JSON fields,
+reserves chat-template tokens and applies strict truncation scoring. An older
+serving image may use a separate updated CPU client; record both source
+revisions and the serving image digest. The stdlib result checker accepts
+`--csv`, `--run-dir`, `--output-json`, `--seed` and `--no-shuffle-choices`; it
+requires complete evidence and emits hashes/aggregate checks without dataset
+questions, response text, item IDs or local paths. Do not publish raw journals.
 
 Finished journals:
 
 - Mixed / default W4A8, temperature **1.0**, 80 GB SM120, SGLang 64-way, 2026-09-22: **178/198** (truncated 0, unparsed 0). Not a rerun of the temperature-0 YAML.
 - Uniform W4A4, temperature **0**, Marlin, 2026-09-22: **172/198** (truncated 4, unparsed 6).
 - No finished 198-row mixed score at temperature 0.
+- No finished 198-row Spark score for either quantized-vision/MTP export.
 
 | Box | Recipe |
 |---|---|
 | CUDA ≥ 12.9 | `recipes/eval-gpqa-diamond.yaml` (FlashInfer, HiCache 12 GiB, concurrency 1) |
 | 32 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.5090.yaml` (Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off) |
 | 80 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.6000d.yaml` (Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off) |
-| DGX Spark ARM64 / SM121 / CUDA 13 | `recipes/eval-gpqa-diamond.spark.yaml` (32k context, vision, 4 requests, 0.70 memory, no HiCache/CUDA graphs; optional embedded EAGLE MTP) |
+| DGX Spark ARM64 / SM121 / CUDA 13 | `recipes/eval-gpqa-diamond.spark.yaml` (32k context, vision, 4 requests, 0.70 memory, no HiCache/CUDA graphs, GPQA baseline without MTP); `eval-gpqa-diamond.spark-mtp.yaml` is the separate embedded EAGLE validation recipe |
 
 Compose default image is CUDA **12.8.1**. That build does not include a CUDA 13 FlashInfer toolchain. Optional rebuild: `SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04`. Leave the 12.8 default in place unless asked.
 
