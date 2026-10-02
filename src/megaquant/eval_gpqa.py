@@ -910,16 +910,16 @@ def openai_chat_complete(
         "max_tokens": int(max_tokens),
         "seed": seed,
         "stream": False,
-        "extra_body": {
-            "top_k": sampling.top_k,
-            "min_p": sampling.min_p,
-            "repetition_penalty": sampling.repetition_penalty,
-            "chat_template_kwargs": {
-                "enable_thinking": thinking.enable,
-                "preserve_thinking": thinking.preserve,
-            },
-            "reasoning_effort": thinking.reasoning_effort,
+        # Raw HTTP has no OpenAI SDK to merge an ``extra_body`` argument.
+        # SGLang expects these extensions directly in the JSON request.
+        "top_k": sampling.top_k,
+        "min_p": sampling.min_p,
+        "repetition_penalty": sampling.repetition_penalty,
+        "chat_template_kwargs": {
+            "enable_thinking": thinking.enable,
+            "preserve_thinking": thinking.preserve,
         },
+        "reasoning_effort": thinking.reasoning_effort,
     }
     current_max = int(max_tokens)
     data: dict[str, Any] | None = None
@@ -1046,6 +1046,11 @@ def generate_untruncated(
     )
 
 
+def _result_is_correct(row: ItemResult) -> bool:
+    """Apply the scoring rule instead of trusting a cached journal flag."""
+    return not row.truncated and row.predicted is not None and row.predicted == row.gold
+
+
 def score_items(
     items: Iterable[GPQAItem],
     results: Iterable[ItemResult],
@@ -1053,7 +1058,7 @@ def score_items(
     items_list = list(items)
     rows = list(results)
     n = len(items_list)
-    correct = sum(1 for row in rows if row.correct)
+    correct = sum(1 for row in rows if _result_is_correct(row))
     truncated = sum(1 for row in rows if row.truncated)
     unparsed = sum(1 for row in rows if row.predicted is None)
     return {
@@ -1105,6 +1110,10 @@ def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
             row = ItemResult(**kwargs)
         except TypeError:
             continue
+        # Older clients could mark a matching letter as correct even when its
+        # reasoning was truncated. Normalize replayed rows without rewriting
+        # the original trace bytes.
+        row.correct = _result_is_correct(row)
         rows[row.item_id] = row
     return rows, None
 
@@ -1196,7 +1205,7 @@ def run_gpqa(
             item_id=item.item_id,
             gold=item.gold,
             predicted=predicted,
-            correct=predicted == item.gold,
+            correct=not gen.truncated and predicted is not None and predicted == item.gold,
             truncated=gen.truncated,
             finish_reason=gen.finish_reason,
             prompt_tokens=gen.prompt_tokens,
