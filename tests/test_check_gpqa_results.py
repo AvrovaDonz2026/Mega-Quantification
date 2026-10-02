@@ -116,6 +116,32 @@ def test_correct_looking_truncated_and_unparsed_responses_count_wrong(run_fixtur
     assert report["scores"]["correct"] == 196
 
 
+def test_repeated_wrong_options_in_the_dataset_are_accepted(run_fixture):
+    dataset, run_dir, rows, _, save = run_fixture
+    with dataset.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames
+        dataset_rows = list(reader)
+    # The official Diamond CSV contains a row with repeated option strings.
+    # Verification must preserve the source choices rather than reject them.
+    dataset_rows[0]["Incorrect Answer 2"] = dataset_rows[0]["Incorrect Answer 1"]
+    with dataset.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(dataset_rows)
+    item = load_gpqa_diamond(csv_path=dataset, seed=0, shuffle=True)[0]
+    rows[0].update(
+        gold=item.gold,
+        choices=item.choices,
+        predicted=item.gold,
+        text=f"Answer: {item.gold}",
+    )
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+    assert report["scores"]["headline"] == "198/198"
+
+
 @pytest.mark.parametrize("defect", ["missing", "duplicate", "extra", "unexpected"])
 def test_missing_duplicate_and_unexpected_items_never_publish_score(run_fixture, defect):
     dataset, run_dir, rows, _, save = run_fixture

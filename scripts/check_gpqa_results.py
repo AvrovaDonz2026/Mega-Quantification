@@ -19,7 +19,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from megaquant.eval_gpqa import LETTERS, ItemResult, build_gpqa_item, extract_choice
+from megaquant.eval_gpqa import ItemResult, build_gpqa_item, extract_choice
 
 DIAMOND_ITEMS = 198
 TRUNCATED_FINISH_REASONS = {"length", "max_tokens"}
@@ -100,10 +100,9 @@ def verify_results(
         not item.question
         or not item.item_id
         or any(not choice for choice in item.choices.values())
-        or len(set(item.choices.values())) != len(LETTERS)
         for item in items
     ):
-        errors.append("csv: empty question, ID, or option, or duplicate options")
+        errors.append("csv: empty question, ID, or option")
     if errors:
         return report
     expected = {item.item_id: item for item in items}
