@@ -242,6 +242,14 @@ rerun. The 32k uniform W4A4 trial was stopped and has no completed score.
 The new **262144-context W4A8 and W4A4 results are both pending**; no completed
 256k score or absence of truncation is established yet.
 
+The new W4A8 run started from an empty journal at **2026-10-02 12:57:50 UTC**.
+The baked client/profile revision is `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`.
+The live server reports 262144 context, a 16-request limit and a KV pool of
+1,565,460 tokens, which accommodates one full 256k request. The two formats
+share the same protocol and run sequentially; W4A4 starts after W4A8 completes
+and passes verification. These startup checks establish the deployed settings;
+the new accuracy results require the complete journals.
+
 Evaluate both exports sequentially with
 `recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
 MTP is disabled during GPQA, although the exported vision and MTP tensors remain
