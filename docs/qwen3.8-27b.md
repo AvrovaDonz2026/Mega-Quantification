@@ -37,14 +37,15 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090 和 6000D 配方的上下文是 262144，Spark 配方是 32768；`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。HTTP 超时 21600 秒。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
-跑完的两次：
+已完成的测量：
 
 | 权重 | 采样 | 分数 | 机器 | 日期 |
 |---|---|---|---|---|
 | 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0（历史记录） | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
 | 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
+| 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
 
-混合权重还没有跑完的 temperature 0 总分。第一行是 temperature 1 的测量，当前 YAML 发的是 0。
+Spark 混合 W4A8 的 temperature 0 评测已完整结束，198 个唯一题目、选项和计分均通过独立校验，见[结果证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分。上表历史测量使用不同权重、后端或上下文；Spark 均匀 W4A4 仍在评测中。
 
 Spark 的混合 W4A8 和均匀 W4A4 都使用
 [`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
@@ -56,7 +57,7 @@ Spark 的混合 W4A8 和均匀 W4A4 都使用
 每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用
 `--output`。`scripts/check_gpqa_results.py` 从原始官方 CSV 重建选项和正确答案，
 检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
-验证 JSON。原始 CSV 中的重复选项需要保留。当前还没有完整 Spark GPQA 分数。
+验证 JSON。原始 CSV 中的重复选项需要保留。Spark 混合 W4A8 成绩见上表；均匀 W4A4 完整结束后再补充成绩。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|

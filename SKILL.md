@@ -83,8 +83,8 @@ Finished journals:
 
 - Mixed / default W4A8, temperature **1.0**, 80 GB SM120, SGLang 64-way, 2026-09-22: **178/198** (truncated 0, unparsed 0). Not a rerun of the temperature-0 YAML.
 - Uniform W4A4, temperature **0**, Marlin, 2026-09-22: **172/198** (truncated 4, unparsed 6).
-- No finished 198-row mixed score at temperature 0.
-- No finished 198-row Spark score for either quantized-vision/MTP export.
+- Spark mixed W4A8 with quantized vision/MTP, temperature **0**, GB10 TP1, FlashInfer, 16 requests, 32768 context, MTP disabled during GPQA, 2026-10-02: **157/198 (79.29%)**, truncated 30, unparsed 32 (overlapping counts). All 198 dataset-matching records and the summary passed the strict checker. Evidence: `docs/validation/dgx-spark-gpqa-w4a8-20261002.json`.
+- The Spark uniform W4A4 run is still pending completion; do not publish its partial score.
 
 | Box | Recipe |
 |---|---|

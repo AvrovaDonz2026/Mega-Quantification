@@ -231,6 +231,13 @@ alone is not a measured speedup.
 
 ## Full GPQA Diamond at temperature 0
 
+The completed Spark mixed W4A8 run on 2026-10-02 scored **157/198 (79.29%)**.
+All 198 unique dataset-matching records and the summary passed the strict
+checker. There were 30 truncated and 32 unparsed responses; those counts
+overlap, and each affected response counts as wrong. See the
+[verified evidence](validation/dgx-spark-gpqa-w4a8-20261002.json).
+The uniform W4A4 run is still in progress and has no published partial score.
+
 Evaluate both exports sequentially with
 `recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
 MTP is disabled during GPQA, although the exported vision and MTP tensors remain
@@ -341,8 +348,8 @@ counts truncated/unparsed rows as wrong, and compares the recomputed scores
 with the summary. Its JSON contains aggregate checks and file hashes, without
 questions, answers, item IDs or local paths. Retain raw journals, the CSV,
 server logs and run metadata locally; publish the sanitized verification
-report and actual protocol with the final score. No complete Spark score is
-claimed by these instructions.
+report and actual protocol with the final score. The completed W4A8 measurement
+above uses this protocol; publish W4A4 only after its full run passes.
 
 ## Transfer a built image
 
