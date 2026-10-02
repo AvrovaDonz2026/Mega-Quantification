@@ -30,9 +30,13 @@ change when a hardware profile is added. Groups below are the public index.
 | `eval-gpqa-diamond.5090.yaml` | 32 GB SM120 / CUDA 12.8. Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off. |
 | `eval-gpqa-diamond.6000d.yaml` | 80 GB SM120 / CUDA 12.8. Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on. |
 | `eval-gpqa-diamond.spark.yaml` | DGX Spark ARM64 / CUDA 13 / SM121. Vision enabled, 32k context, 4 requests, CUDA graphs and HiCache off; optional embedded MTP. |
-| `eval-gpqa-diamond.spark-gpqa.yaml` | Full GPQA baseline on a 128 GB Spark: 16 requests, 64 FP32 SSM slots, 32k context, temperature 0, MTP disabled. Check available shared memory before loading. |
+| `eval-gpqa-diamond.spark-gpqa.yaml` | Full GPQA baseline on a 128 GB Spark: 262144 context, full remaining output budget, 16 requests, 64 FP32 SSM slots, temperature 0, thinking preserved with `xhigh`, MTP disabled. Check available shared memory before loading. |
 | `eval-gpqa-diamond.spark-mtp.yaml` | Same Spark FP32 SSM configuration with quantized embedded EAGLE MTP enabled; no external draft checkpoint. |
 
 采样和比特布局在 `docs/qwen3.8-27b.md`。跑完的分数是 journal 里 198 行都在之后的 `correct/198`。代理从仓库根目录的 `SKILL.md` 读硬约定。
+
+Spark 的历史 32k W4A8 试跑为 157/198，含长度截断；它不代表新的 262144
+上下文结果。32k W4A4 试跑已停止。两份权重按新 256k 协议完整评测并通过
+严格校验后再公布新成绩，使用独立日期目录，保留旧 journal 和证据不变。
 
 Generated `recipes/*.pod.yaml` files are local and gitignored.

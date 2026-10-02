@@ -15,6 +15,7 @@ from megaquant.eval_gpqa import (
     CHAT_TEMPLATE_TOKEN_RESERVE,
     DEFAULT_EVAL_BASE_URL,
     DEFAULT_EVAL_RECIPE,
+    DEFAULT_HTTP_TIMEOUT_SECONDS,
     DEFAULT_MAX_MODEL_LEN,
     NVIDIA_SGLANG_SERVE,
     QWEN_THINKING_SAMPLING,
@@ -60,6 +61,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert recipe.generation.continue_on_length is True
     assert recipe.generation.max_model_len == DEFAULT_MAX_MODEL_LEN
     assert recipe.generation.seed == 0
+    assert recipe.generation.http_timeout_seconds == 86400.0
     samp = recipe.sampling.model_dump()
     assert samp["temperature"] == 0.0
     for key, value in QWEN_THINKING_SAMPLING.items():
@@ -89,6 +91,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert "--enable-deterministic-inference" not in default_argv
     plan = describe_eval(recipe)
     assert plan["engine"] == "sglang"
+    assert plan["generation"]["http_timeout_seconds"] == 86400.0
     assert plan["base_url"] is None
     assert "remaining context" in plan["max_new_tokens_policy"]
     assert plan["kv_offloading_backend"] == "hicache"
@@ -438,6 +441,55 @@ def test_run_gpqa_concurrency_fans_out(tmp_path: Path) -> None:
     assert len(lines) == 4
 
 
+def test_run_gpqa_request_failure_preserves_other_inflight_results(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE, overrides={"output_dir": str(tmp_path), "concurrency": 3}
+    )
+    items = [
+        GPQAItem(key, key, {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+        for key in ("failing", "success-1", "success-2")
+    ]
+    # All three requests begin together. The successes finish after the failed
+    # request so they exercise preserving work while reporting a real failure.
+    barrier = threading.Barrier(3, timeout=5)
+    delay = threading.Event()
+
+    def complete(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        barrier.wait()
+        if "\nfailing\n" in prompt:
+            raise EvalError("transient request failure")
+        delay.wait(0.1)
+        return GenerationResult(
+            text="Answer: A", finish_reason="stop", prompt_tokens=8, completion_tokens=4
+        )
+
+    # Stale output must not advertise a finished score after an interrupted run.
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"scores": {"headline": "3/3"}}\n')
+    with pytest.raises(EvalError, match="completed rows saved"):
+        run_gpqa(recipe, items=items, complete=complete)
+    rows = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")
+    assert set(rows) == {"success-1", "success-2"}
+    assert all(row.correct for row in rows.values())
+    assert not summary_path.exists()
+
+    retried: list[str] = []
+
+    def recover(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        retried.append(prompt)
+        return GenerationResult(
+            text="Answer: A", finish_reason="stop", prompt_tokens=8, completion_tokens=4
+        )
+
+    summary = run_gpqa(recipe, items=items, complete=recover)
+    assert len(retried) == 1
+    assert "\nfailing\n" in retried[0]
+    assert summary["scores"]["headline"] == "3/3"
+    assert len(load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")) == 3
+
+
 def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
     items = [
         GPQAItem("a", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A"),
@@ -505,7 +557,7 @@ def test_openai_http_serializes_sglang_extensions_at_top_level(
 
     def urlopen(request, timeout):
         assert request.full_url == "http://sglang.local/v1/chat/completions"
-        assert timeout == 21600.0
+        assert timeout == DEFAULT_HTTP_TIMEOUT_SECONDS
         body = json.loads(request.data)
         requests.append(body)
         if retry_context_overflow and len(requests) == 1:
@@ -561,6 +613,72 @@ def test_openai_http_serializes_sglang_extensions_at_top_level(
     assert result.text == "<think>\ntrace\n</think>\nAnswer: B"
     assert result.completion_tokens == 4
     assert result.truncated is False
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+def test_recipe_rejects_invalid_http_timeout(timeout: float) -> None:
+    with pytest.raises(EvalError):
+        load_eval_recipe(RECIPE, overrides={"generation": {"http_timeout_seconds": timeout}})
+
+
+def test_run_gpqa_uses_configured_http_timeout_for_continuations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "base_url": "http://sglang.local/v1",
+            "generation": {"http_timeout_seconds": 43210.5, "max_new_tokens": 32},
+        },
+    )
+    timeouts: list[float] = []
+
+    def complete(**kwargs):
+        assert kwargs["base_url"] == recipe.base_url
+        timeouts.append(kwargs["timeout"])
+        if len(timeouts) == 1:
+            return GenerationResult(
+                text="<think>trace",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=32,
+                truncated=True,
+            )
+        return GenerationResult(
+            text="</think>\nAnswer: A",
+            finish_reason="stop",
+            prompt_tokens=150,
+            completion_tokens=4,
+        )
+
+    monkeypatch.setattr("megaquant.eval_gpqa.openai_chat_complete", complete)
+    item = GPQAItem("a", "q", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    summary = run_gpqa(recipe, items=[item])
+    assert timeouts == [43210.5, 43210.5]
+    assert summary["plan"]["generation"]["http_timeout_seconds"] == 43210.5
+    assert summary["scores"]["headline"] == "1/1"
+
+
+def test_openai_http_timeout_reports_configured_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    recipe = load_eval_recipe(RECIPE)
+
+    def urlopen(_request, timeout):
+        assert timeout == 43210.5
+        raise TimeoutError("socket timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    with pytest.raises(EvalError, match="timed out after 43210.5 seconds"):
+        openai_chat_complete(
+            base_url="http://sglang.local/v1",
+            model="test-model",
+            messages=[{"role": "user", "content": "Question"}],
+            sampling=recipe.sampling,
+            thinking=recipe.thinking,
+            max_tokens=512,
+            seed=0,
+            timeout=43210.5,
+        )
 
 
 def test_sglang_argv_matches_cookbook_and_hicache() -> None:

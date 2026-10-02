@@ -35,7 +35,7 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 ## SGLang inference and GPQA
 
-推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090 和 6000D 配方的上下文是 262144，Spark 配方是 32768；`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。HTTP 超时 21600 秒。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
 已完成的测量：
 
@@ -43,21 +43,24 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 |---|---|---|---|---|
 | 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0（历史记录） | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
 | 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
-| 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
+| 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化；历史 32k 试跑） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
 
-Spark 混合 W4A8 的 temperature 0 评测已完整结束，198 个唯一题目、选项和计分均通过独立校验，见[结果证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分。上表历史测量使用不同权重、后端或上下文；Spark 均匀 W4A4 仍在评测中。
+Spark 混合 W4A8 的历史 32k 试跑已结束，198 个唯一题目、选项和计分均通过独立校验，见[结果证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分，这个长度限制下的分数不能当作用户要求的 262144 上下文结果。32k 的 Spark 均匀 W4A4 试跑已停止，没有完整成绩。新的 W4A8 和 W4A4 256k 完整结果均待评测及验证完成；上表保留历史测量，不表示新协议已经跑完。
 
 Spark 的混合 W4A8 和均匀 W4A4 都使用
 [`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
 做 temperature 0 的完整 198 题基线评测：seed 0、选项洗牌、thinking 开启并
-保留、`xhigh`、32k 上下文、16 并发、64 个 FP32 SSM slot，GPQA 时关闭 MTP。
-视觉/MTP 功能验证仍使用原来的 4 并发配方。这两份 Spark 权重的
+保留、`xhigh`、262144（256k）上下文、16 并发、64 个 FP32 SSM slot，
+`max_new_tokens=0` 使用完整剩余上下文预算，GPQA 时关闭 MTP。
+视觉/MTP 功能验证仍使用原来的 32k、4 并发配方。这两份 Spark 权重的
 视觉及 MTP 已量化，不能与上表的历史权重混为一谈。完整启动、顺序切换两份
 权重及验分命令见 [Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
 每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用
 `--output`。`scripts/check_gpqa_results.py` 从原始官方 CSV 重建选项和正确答案，
 检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
-验证 JSON。原始 CSV 中的重复选项需要保留。Spark 混合 W4A8 成绩见上表；均匀 W4A4 完整结束后再补充成绩。
+验证 JSON。原始 CSV 中的重复选项需要保留。两份 256k 的新结果使用独立目录
+`w4a8-temp0-ctx262144-c16` 和 `w4a4-temp0-ctx262144-c16`，不能复用历史
+32k journal。完整结束并通过校验后再补充两份新成绩。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -498,13 +501,13 @@ vLLM support for that combo is limited.
 
 比特布局和三份机器配方在 [Quantization format](#quantization-format) 和 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。这里是采样锁和启动时容易踩的地方。
 
-每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。默认、5090 和 6000D 配方使用 262144 的剩余窗口；Spark 因共享内存使用 32768，详见 [Spark GPQA 协议](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。512 或 2048 的输出上限不是这些完整评测配方的协议。
+每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。默认、5090、6000D 和 Spark 完整 GPQA 配方都使用 262144 的剩余窗口；Spark 32k 只保留在视觉/MTP 功能验证配方和历史试跑中，详见 [Spark GPQA 协议](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。512 或 2048 的输出上限不是这些完整评测配方的协议。
 
 | Knob | Value |
 |---|---|
 | Sampling | `temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true`. Published Qwen / NVIDIA cards use temperature 1.0. |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
-| Context | Default / 5090 / 6000D: `context-length=262144`; Spark: `32768`. `max_new_tokens=0` means the remaining window of the selected recipe. |
+| Context | Full GPQA recipes, including Spark: `context-length=262144`. Spark vision/MTP checks remain at `32768`. `max_new_tokens=0` means the remaining window of the selected recipe. |
 | Truncation | Fill remaining context; `continue_on_length` continues while budget remains, up to 8 continuations. A final length finish counts as wrong. |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
@@ -553,8 +556,8 @@ installed, verify a completed temperature-0 run without GPU or network access:
 
 ```bash
 python scripts/check_gpqa_results.py --csv data/dataset/gpqa_diamond.csv \
-  --run-dir outputs/gpqa-spark-20261002/W4A8 \
-  --output-json outputs/gpqa-spark-20261002/W4A8-verification.json --seed 0
+  --run-dir outputs/spark-gpqa-256k-20261002/w4a8-temp0-ctx262144-c16 \
+  --output-json outputs/spark-gpqa-256k-20261002/w4a8-verification.json --seed 0
 ```
 
 Use the actual dated run directory for each format. This checker reads the CSV,

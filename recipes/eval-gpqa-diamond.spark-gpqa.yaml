@@ -1,6 +1,8 @@
 # DGX Spark / GB10 (SM121), ARM64, CUDA 13, full GPQA baseline.
 # Sixteen requests on a 128 GB shared-memory Spark. Check free memory before
 # loading the checkpoint; 64 FP32 SSM slots serve 16 concurrent request chains.
+# Each request can use the model's native 262,144-token context. Requests share
+# a bounded KV pool; the scheduler can retract requests as the pool fills.
 # A single Spark has one GPU and 128 GB shared CPU/GPU memory. Leave room
 # for the vision encoder, image processing and the OS; do not create a
 # second host HiCache pool from the same physical memory.
@@ -30,9 +32,10 @@ sampling:
   do_sample: true
 
 generation:
-  max_model_len: 32768
+  max_model_len: 262144
   max_new_tokens: 0
   continue_on_length: true
+  http_timeout_seconds: 86400
   seed: 0
 
 serve:
