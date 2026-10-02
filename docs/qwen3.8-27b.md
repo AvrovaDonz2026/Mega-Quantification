@@ -47,9 +47,10 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 混合权重还没有跑完的 temperature 0 总分。第一行是 temperature 1 的测量，当前 YAML 发的是 0。
 
 Spark 的混合 W4A8 和均匀 W4A4 都使用
-[`recipes/eval-gpqa-diamond.spark.yaml`](../recipes/eval-gpqa-diamond.spark.yaml)
+[`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
 做 temperature 0 的完整 198 题基线评测：seed 0、选项洗牌、thinking 开启并
-保留、`xhigh`、32k 上下文、4 并发，GPQA 时关闭 MTP。这两份 Spark 权重的
+保留、`xhigh`、32k 上下文、16 并发、64 个 FP32 SSM slot，GPQA 时关闭 MTP。
+视觉/MTP 功能验证仍使用原来的 4 并发配方。这两份 Spark 权重的
 视觉及 MTP 已量化，不能与上表的历史权重混为一谈。完整启动、顺序切换两份
 权重及验分命令见 [Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
 每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用

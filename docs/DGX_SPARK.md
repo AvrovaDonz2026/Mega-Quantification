@@ -232,7 +232,7 @@ alone is not a measured speedup.
 ## Full GPQA Diamond at temperature 0
 
 Evaluate both exports sequentially with
-`recipes/eval-gpqa-diamond.spark.yaml`. This is the baseline recipe: embedded
+`recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
 MTP is disabled during GPQA, although the exported vision and MTP tensors remain
 in each checkpoint. The earlier text/image/MTP checks do not establish a
 complete Spark GPQA result.
@@ -244,7 +244,7 @@ complete Spark GPQA result.
 | Thinking | Enabled and preserved, `reasoning_effort=xhigh` |
 | Seed and choices | Seed 0, shuffled choices |
 | Context and output | 32768 context; `max_new_tokens=0` fills its remaining window; `continue_on_length=true` |
-| Serving | TP1, four requests, FP8 KV, FP32 SSM state, 0.70 memory fraction, FlashInfer attention |
+| Serving | TP1, 16 requests, 64 FP32 SSM slots, FP8 KV, 0.70 memory fraction, FlashInfer attention |
 | Disabled | MTP, HiCache, host KV offload and CUDA graphs |
 
 The Spark context is **32768**, whereas the default, 5090 and 6000D recipes use
@@ -253,6 +253,13 @@ follow-up requests; it does not create a larger context. A final length finish
 counts as incorrect even if the text contains the gold letter. Record this
 context difference when comparing Spark results with the historical scores or
 published model cards.
+
+The GPQA recipe increases concurrency from the four requests used by the
+vision/MTP validation recipes to 16. It reserves 64 FP32 SSM slots and keeps the
+same 0.70 memory fraction. Check available shared RAM and the server's actual
+KV/Mamba allocations before starting; loading a recipe does not establish that
+a full 198-item run succeeds. Use a new output directory when changing
+concurrency instead of mixing rows from four- and 16-request runs.
 
 Use a serving image built from the current checkout for the Compose client
 below. The original v0.1.2 image predates the GPQA client repair: SGLang extensions
@@ -269,7 +276,7 @@ Keep the CSV unchanged, including any repeated answer options.
 set -e
 GPQA_DIR="$DATA_DIR" bash scripts/fetch_gpqa.sh
 export GPQA_CSV=/data/dataset/gpqa_diamond.csv
-export SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark.yaml
+export SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark-gpqa.yaml
 export SGLANG_SPARK_PORT="${SGLANG_SPARK_PORT:-30000}"
 export GPQA_RUN="outputs/gpqa-spark-$(date -u +%Y%m%dT%H%M%SZ)"
 
@@ -316,7 +323,7 @@ python3 -m venv .venv-gpqa
 
 # With the corresponding baseline server already ready inside the loop:
 MEGAQUANT_SKIP_GPU_REPORT=1 GPQA_CSV="$DATA_DIR/dataset/gpqa_diamond.csv" \
-  .venv-gpqa/bin/megaquant eval -c recipes/eval-gpqa-diamond.spark.yaml \
+  .venv-gpqa/bin/megaquant eval -c recipes/eval-gpqa-diamond.spark-gpqa.yaml \
   --model "$SPARK_EVAL_MODEL" \
   --base-url "http://127.0.0.1:${SGLANG_SPARK_PORT}/v1" \
   --output "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$format"
