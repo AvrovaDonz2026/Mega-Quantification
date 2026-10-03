@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import json
 import threading
+import urllib.error
 from dataclasses import asdict
 from pathlib import Path
 
@@ -13,6 +15,7 @@ from megaquant.eval_gpqa import (
     CHAT_TEMPLATE_TOKEN_RESERVE,
     DEFAULT_EVAL_BASE_URL,
     DEFAULT_EVAL_RECIPE,
+    DEFAULT_HTTP_TIMEOUT_SECONDS,
     DEFAULT_MAX_MODEL_LEN,
     NVIDIA_SGLANG_SERVE,
     QWEN_THINKING_SAMPLING,
@@ -29,6 +32,7 @@ from megaquant.eval_gpqa import (
     gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
+    openai_chat_complete,
     remaining_new_tokens,
     resolve_eval_recipe_path,
     run_gpqa,
@@ -57,6 +61,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert recipe.generation.continue_on_length is True
     assert recipe.generation.max_model_len == DEFAULT_MAX_MODEL_LEN
     assert recipe.generation.seed == 0
+    assert recipe.generation.http_timeout_seconds == 86400.0
     samp = recipe.sampling.model_dump()
     assert samp["temperature"] == 0.0
     for key, value in QWEN_THINKING_SAMPLING.items():
@@ -86,6 +91,7 @@ def test_recipe_matches_qwen_and_nvidia_cards() -> None:
     assert "--enable-deterministic-inference" not in default_argv
     plan = describe_eval(recipe)
     assert plan["engine"] == "sglang"
+    assert plan["generation"]["http_timeout_seconds"] == 86400.0
     assert plan["base_url"] is None
     assert "remaining context" in plan["max_new_tokens_policy"]
     assert plan["kv_offloading_backend"] == "hicache"
@@ -435,6 +441,55 @@ def test_run_gpqa_concurrency_fans_out(tmp_path: Path) -> None:
     assert len(lines) == 4
 
 
+def test_run_gpqa_request_failure_preserves_other_inflight_results(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE, overrides={"output_dir": str(tmp_path), "concurrency": 3}
+    )
+    items = [
+        GPQAItem(key, key, {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+        for key in ("failing", "success-1", "success-2")
+    ]
+    # All three requests begin together. The successes finish after the failed
+    # request so they exercise preserving work while reporting a real failure.
+    barrier = threading.Barrier(3, timeout=5)
+    delay = threading.Event()
+
+    def complete(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        barrier.wait()
+        if "\nfailing\n" in prompt:
+            raise EvalError("transient request failure")
+        delay.wait(0.1)
+        return GenerationResult(
+            text="Answer: A", finish_reason="stop", prompt_tokens=8, completion_tokens=4
+        )
+
+    # Stale output must not advertise a finished score after an interrupted run.
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"scores": {"headline": "3/3"}}\n')
+    with pytest.raises(EvalError, match="completed rows saved"):
+        run_gpqa(recipe, items=items, complete=complete)
+    rows = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")
+    assert set(rows) == {"success-1", "success-2"}
+    assert all(row.correct for row in rows.values())
+    assert not summary_path.exists()
+
+    retried: list[str] = []
+
+    def recover(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        retried.append(prompt)
+        return GenerationResult(
+            text="Answer: A", finish_reason="stop", prompt_tokens=8, completion_tokens=4
+        )
+
+    summary = run_gpqa(recipe, items=items, complete=recover)
+    assert len(retried) == 1
+    assert "\nfailing\n" in retried[0]
+    assert summary["scores"]["headline"] == "3/3"
+    assert len(load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")) == 3
+
+
 def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
     items = [
         GPQAItem("a", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A"),
@@ -448,6 +503,182 @@ def test_score_counts_truncated_and_unparsed_against_full_denominator() -> None:
     assert scores["headline"] == "1/2"
     assert scores["truncated"] == 1
     assert scores["unparsed"] == 1
+
+
+def test_score_recomputes_cached_correct_flags() -> None:
+    items = [
+        GPQAItem(key, "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A")
+        for key in ("valid", "truncated", "unparsed", "wrong")
+    ]
+    rows = [
+        ItemResult("valid", "A", "A", False, False, "stop", 1, 1, 0, "Answer: A", {}),
+        ItemResult("truncated", "A", "A", True, True, "length", 1, 1, 0, "Answer: A", {}),
+        ItemResult("unparsed", "A", None, True, False, "stop", 1, 1, 0, "", {}),
+        ItemResult("wrong", "A", "B", True, False, "stop", 1, 1, 0, "Answer: B", {}),
+    ]
+    scores = score_items(items, rows)
+    assert scores["headline"] == "1/4"
+    assert scores["truncated"] == 1
+    assert scores["unparsed"] == 1
+
+
+@pytest.mark.parametrize("truncated,text", [(True, "Answer: A"), (False, "")])
+def test_run_gpqa_never_scores_truncated_or_unparsed_answers_correct(
+    tmp_path: Path, truncated: bool, text: str
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    recipe.generation.continue_on_length = False
+    item = GPQAItem("a", "q", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    summary = run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_k: GenerationResult(
+            text=text,
+            finish_reason="length" if truncated else "stop",
+            prompt_tokens=8,
+            completion_tokens=4,
+            truncated=truncated,
+        ),
+    )
+    assert summary["scores"]["headline"] == "0/1"
+    row = json.loads((tmp_path / "gpqa_diamond.jsonl").read_text())
+    assert row["correct"] is False
+
+
+@pytest.mark.parametrize("retry_context_overflow", [False, True])
+def test_openai_http_serializes_sglang_extensions_at_top_level(
+    monkeypatch: pytest.MonkeyPatch, retry_context_overflow: bool
+) -> None:
+    recipe = load_eval_recipe(RECIPE)
+    recipe.sampling.min_p = 0.1
+    recipe.sampling.repetition_penalty = 1.2
+    recipe.thinking.preserve = False
+    requests: list[dict] = []
+
+    def urlopen(request, timeout):
+        assert request.full_url == "http://sglang.local/v1/chat/completions"
+        assert timeout == DEFAULT_HTTP_TIMEOUT_SECONDS
+        body = json.loads(request.data)
+        requests.append(body)
+        if retry_context_overflow and len(requests) == 1:
+            detail = (
+                "maximum context length of 256 tokens: "
+                "100 tokens from the input messages and 512 tokens for the completion"
+            )
+            raise urllib.error.HTTPError(
+                request.full_url, 400, "context overflow", None, io.BytesIO(detail.encode())
+            )
+        return io.BytesIO(
+            json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {"reasoning_content": "trace", "content": "Answer: B"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 4},
+                }
+            ).encode()
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    messages = [{"role": "user", "content": "Question"}]
+    result = openai_chat_complete(
+        base_url="http://sglang.local/v1",
+        model="test-model",
+        messages=messages,
+        sampling=recipe.sampling,
+        thinking=recipe.thinking,
+        max_tokens=512,
+        seed=0,
+    )
+    assert len(requests) == (2 if retry_context_overflow else 1)
+    for body in requests:
+        assert "extra_body" not in body
+        assert body["model"] == "test-model"
+        assert body["messages"] == messages
+        assert body["temperature"] == 0.0
+        assert body["top_p"] == 0.95
+        assert body["top_k"] == 20
+        assert body["min_p"] == 0.1
+        assert body["repetition_penalty"] == 1.2
+        assert body["chat_template_kwargs"] == {
+            "enable_thinking": True,
+            "preserve_thinking": False,
+        }
+        assert body["reasoning_effort"] == "xhigh"
+    if retry_context_overflow:
+        assert requests[1] == {**requests[0], "max_tokens": 148}
+    assert result.text == "<think>\ntrace\n</think>\nAnswer: B"
+    assert result.completion_tokens == 4
+    assert result.truncated is False
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+def test_recipe_rejects_invalid_http_timeout(timeout: float) -> None:
+    with pytest.raises(EvalError):
+        load_eval_recipe(RECIPE, overrides={"generation": {"http_timeout_seconds": timeout}})
+
+
+def test_run_gpqa_uses_configured_http_timeout_for_continuations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "base_url": "http://sglang.local/v1",
+            "generation": {"http_timeout_seconds": 43210.5, "max_new_tokens": 32},
+        },
+    )
+    timeouts: list[float] = []
+
+    def complete(**kwargs):
+        assert kwargs["base_url"] == recipe.base_url
+        timeouts.append(kwargs["timeout"])
+        if len(timeouts) == 1:
+            return GenerationResult(
+                text="<think>trace",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=32,
+                truncated=True,
+            )
+        return GenerationResult(
+            text="</think>\nAnswer: A",
+            finish_reason="stop",
+            prompt_tokens=150,
+            completion_tokens=4,
+        )
+
+    monkeypatch.setattr("megaquant.eval_gpqa.openai_chat_complete", complete)
+    item = GPQAItem("a", "q", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    summary = run_gpqa(recipe, items=[item])
+    assert timeouts == [43210.5, 43210.5]
+    assert summary["plan"]["generation"]["http_timeout_seconds"] == 43210.5
+    assert summary["scores"]["headline"] == "1/1"
+
+
+def test_openai_http_timeout_reports_configured_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    recipe = load_eval_recipe(RECIPE)
+
+    def urlopen(_request, timeout):
+        assert timeout == 43210.5
+        raise TimeoutError("socket timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    with pytest.raises(EvalError, match="timed out after 43210.5 seconds"):
+        openai_chat_complete(
+            base_url="http://sglang.local/v1",
+            model="test-model",
+            messages=[{"role": "user", "content": "Question"}],
+            sampling=recipe.sampling,
+            thinking=recipe.thinking,
+            max_tokens=512,
+            seed=0,
+            timeout=43210.5,
+        )
 
 
 def test_sglang_argv_matches_cookbook_and_hicache() -> None:
@@ -747,6 +978,29 @@ def test_load_gpqa_journal_skips_truncated_last_line(tmp_path: Path, capsys) -> 
     assert "warning" in err
     assert "dropping truncated journal line" in err
     assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+@pytest.mark.parametrize("truncated,predicted", [(True, "A"), (False, None)])
+def test_run_gpqa_rescores_invalid_cached_answers_without_rewriting_journal(
+    tmp_path: Path, truncated: bool, predicted: str | None
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    row = _journal_item("done")
+    row.truncated = truncated
+    row.predicted = predicted
+    row.finish_reason = "length" if truncated else "stop"
+    original = (json.dumps(asdict(row)) + "\n").encode()
+    journal = tmp_path / "gpqa_diamond.jsonl"
+    journal.write_bytes(original)
+    assert load_gpqa_journal(journal)["done"].correct is False
+
+    def unexpected_generation(**_kwargs):
+        pytest.fail("A complete cached row must not be regenerated")
+
+    item = GPQAItem("done", "q", row.choices, row.gold)
+    summary = run_gpqa(recipe, items=[item], complete=unexpected_generation)
+    assert summary["scores"]["headline"] == "0/1"
+    assert journal.read_bytes() == original
 
 
 def test_load_gpqa_journal_truncate_keeps_earlier_bytes(tmp_path: Path) -> None:
