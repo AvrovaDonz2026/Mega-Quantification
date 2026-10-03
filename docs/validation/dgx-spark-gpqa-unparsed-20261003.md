@@ -14,4 +14,6 @@ The client synthesizes the journal's thinking delimiters when combining `reasoni
 
 Scoring remains unchanged: an empty final answer counts as wrong. Tentative choices inside reasoning do not become final answers. Passive diagnostics have been attached to the existing evaluation client's responses to record `matched_stop`, reasoning/answer lengths, token counts and hashes. The diagnostics add no GPU requests, change no sampling parameters, and do not store raw responses. The W4A4 client will receive the same diagnostics when it starts.
 
+A separate rerun of these three original W4A8 cases is queued to start after both formal 198-case runs finish and pass verification. It uses the same frozen image, weights, prompts, shuffled choices, seed 0, temperature 0, preserved xhigh thinking and 262144 context. The retry has three concurrent requests, so its actual batch differs from the formal run. It saves the raw responses, token IDs and `matched_stop` in private diagnostic files, with an independent three-case summary. The original formal results remain the benchmark record.
+
 [Sanitized CPU and historical comparison evidence](dgx-spark-gpqa-unparsed-20261003.json) includes source/template hashes and aggregate case details, without questions, record IDs, raw traces or private deployment paths.
