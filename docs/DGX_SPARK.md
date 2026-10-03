@@ -250,6 +250,12 @@ share the same protocol and run sequentially; W4A4 starts after W4A8 completes
 and passes verification. These startup checks establish the deployed settings;
 the new accuracy results require the complete journals.
 
+At the 194-record snapshot on 2026-10-03, three W4A8 responses stopped without
+a final answer. CPU checks found no evidence of an emitted final answer being
+discarded by the parser; the records do not retain the actual stopping tokens.
+See the [investigation and evidence](validation/dgx-spark-gpqa-unparsed-20261003.md).
+The scoring rule remains unchanged, and the complete 256k results are pending.
+
 Evaluate both exports sequentially with
 `recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
 MTP is disabled during GPQA, although the exported vision and MTP tensors remain
