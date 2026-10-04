@@ -35,16 +35,50 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 ## SGLang inference and GPQA
 
-推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。`max_new_tokens: 0` 用完剩下的 262144 上下文，`continue_on_length` 一直续到 EOS，最多 8 次续写。HTTP 超时 21600 秒。完整轨迹在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，按 `item_id` 续写。198 行都在、并且 `summary.json` 也在时，分数才是 `correct/198`。截断和解析失败算错。
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
-跑完的两次：
+Spark 完整 256k 评测已完成，两份权重各 198 个唯一题目和 summary 均通过严格
+校验，整套顺序评测于 **2026-10-03 13:12:33 UTC（北京时间 21:12:33）**完成：
+
+| Spark 权重（视觉/MTP 已量化） | 采样与服务 | 分数 | 截断 | 解析失败 |
+|---|---|---|---|---|
+| 混合 W4A8 | temperature 0，262144 上下文，GB10 TP1，FlashInfer，16 并发，MTP 关闭 | **177/198（89.39%）** | 0 | 4 |
+| 均匀 W4A4 | 同上 | **174/198（87.88%）** | 0 | 4 |
+
+两组都使用 seed 0、选项洗牌、thinking 开启并保留、`reasoning_effort=xhigh`。
+解析失败算错，正式 journal 和分数没有被重试覆盖。环境、协议和校验记录见
+[完整报告](validation/dgx-spark-gpqa-256k-20261002.md)与
+[结果证据](validation/dgx-spark-gpqa-256k-20261002.json)。
+
+历史测量保留如下，使用的权重、后端或上下文与上述正式结果不同：
 
 | 权重 | 采样 | 分数 | 机器 | 日期 |
 |---|---|---|---|---|
-| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0，其余同 thinking 卡 | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
+| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0（历史记录） | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
 | 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
+| 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化；历史 32k 试跑） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
 
-混合权重还没有跑完的 temperature 0 总分。第一行是 temperature 1 的测量，当前 YAML 发的是 0。
+Spark 混合 W4A8 的历史 32k 试跑已结束，198 个唯一题目、选项和计分均通过独立校验，见[历史证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分，这个长度限制下的分数不能当作 262144 上下文结果。32k 的 Spark 均匀 W4A4 试跑已停止，没有完整成绩；两组正式 256k 成绩见上面的新表。
+
+三条 W4A8 无最终答案响应另做了诊断重试，三条都给出答案，其中两条正确、
+一条错误。重试并发为 3，正式评测并发为 16，因此它不证明逐 token 相同，
+也不替换正式记录或提高正式分数。保存的旧响应没有实际停止 token，尚不能
+据此确定量化或 kernel 导致提前停止；见[诊断记录](validation/dgx-spark-gpqa-unparsed-20261003.md)。
+
+Spark 的混合 W4A8 和均匀 W4A4 都使用
+[`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
+做 temperature 0 的完整 198 题基线评测：seed 0、选项洗牌、thinking 开启并
+保留、`xhigh`、262144（256k）上下文、16 并发、64 个 FP32 SSM slot，
+`max_new_tokens=0` 使用完整剩余上下文预算，GPQA 时关闭 MTP。
+视觉/MTP 功能验证仍使用原来的 32k、4 并发配方。这两份 Spark 权重的
+视觉及 MTP 已量化，不能与上表的历史权重混为一谈。完整启动、顺序切换两份
+权重及验分命令见 [Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
+每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用
+`--output`。`scripts/check_gpqa_results.py` 从原始官方 CSV 重建选项和正确答案，
+检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
+验证 JSON。原始 CSV 中的重复选项需要保留。两份 256k 的新结果使用独立目录
+`w4a8-temp0-ctx262144-c16` 和 `w4a4-temp0-ctx262144-c16`，不能复用历史
+32k journal。两份完整 journal 均已结束并通过校验，成绩见上面的正式结果表。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -485,20 +519,20 @@ vLLM support for that combo is limited.
 
 比特布局和三份机器配方在 [Quantization format](#quantization-format) 和 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。这里是采样锁和启动时容易踩的地方。
 
-每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。生成长度保持 262144 的剩余窗口，512 或 2048 的截断不是这张卡的协议。
+每份 NVFP4 导出都在 SGLang 上评（NVIDIA Qwen3.8 cookbook 的旗标）。这份 eval 发 temperature 0，其余字段跟 Qwen thinking 卡一致。公开卡是 temperature 1.0。默认、5090、6000D 和 Spark 完整 GPQA 配方都使用 262144 的剩余窗口；Spark 32k 只保留在视觉/MTP 功能验证配方和历史试跑中，详见 [Spark GPQA 协议](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。512 或 2048 的输出上限不是这些完整评测配方的协议。
 
 | Knob | Value |
 |---|---|
 | Sampling | `temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true`. Published Qwen / NVIDIA cards use temperature 1.0. |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
-| Context | `context-length=262144`; `max_new_tokens=0` means the remaining window |
-| Truncation | fill remaining context; `continue_on_length` keeps going until EOS (up to 8 continuations) |
+| Context | Full GPQA recipes, including Spark: `context-length=262144`. Spark vision/MTP checks remain at `32768`. `max_new_tokens=0` means the remaining window of the selected recipe. |
+| Truncation | Fill remaining context; `continue_on_length` continues while budget remains, up to 8 continuations. A final length finish counts as wrong. |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |
 | Attention / GEMM | default FlashInfer (`eval-gpqa-diamond.yaml`); both CUDA 12.8 SM120 recipes use Triton attn + Marlin NVFP4, `SGLANG_FORCE_FP8_MARLIN=1`, and `SGLANG_DISABLE_SILU_FP4_QUANT_FUSION=1`. The 32 GB recipe disables CUDA graph and uses HiCache 64 GiB (`eval-gpqa-diamond.5090.yaml`). The 80 GB recipe keeps CUDA graph, leaves KV on GPU, and uses CUTLASS FP8 (`eval-gpqa-diamond.6000d.yaml`). |
 | Compose eval | no GPU (`NVIDIA_VISIBLE_DEVICES=""`, no `gpus:`); client talks to `serve-sglang:30000` |
-| Headline | `correct/198` once `summary.json` exists and the journal has every row. Truncated and unparsed rows count as wrong. |
+| Headline | `correct/198` once `summary.json` exists and the checker verifies exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. |
 
 分数见上面的 [SGLang inference and GPQA](#sglang-inference-and-gpqa)。32 GB 上 262k 窗口放不进 HBM，用 HiCache 把 KV 放到主机内存，保持 `max_new_tokens`。Qwen 的 GPQA 轨迹会到几万 token。宿主机上的 `docker-compose.override.yml`（不进 git）如果写死了 `sglang` argv，要和配方一致：`--hicache-size 64`、`--max-mamba-cache-size 96`、`--mamba-ssm-dtype bfloat16`，否则 YAML 到不了进程。journal 按 `item_id` 续写，保留 `gpqa_diamond.jsonl` 里已有的行。
 
@@ -533,6 +567,22 @@ keeps the NVIDIA GB300 vLLM flags on port 8000.
 `Idavidrein/gpqa` is gated. Set `HF_TOKEN` or point `GPQA_CSV` at a local
 CSV with the Hub columns (`Question`, `Correct Answer`,
 `Incorrect Answer 1/2/3`, `Record ID`).
+
+The official public download is available through `bash scripts/fetch_gpqa.sh`;
+its default output is `data/dataset/gpqa_diamond.csv`. With the repository
+installed, verify a completed temperature-0 run without GPU or network access:
+
+```bash
+python scripts/check_gpqa_results.py --csv data/dataset/gpqa_diamond.csv \
+  --run-dir outputs/spark-gpqa-256k-20261002/w4a8-temp0-ctx262144-c16 \
+  --output-json outputs/spark-gpqa-256k-20261002/w4a8-verification.json --seed 0
+```
+
+Use the actual dated run directory for each format. This checker reads the CSV,
+journal and summary without modifying them; it exits nonzero for incomplete or
+inconsistent evidence. The original v0.1.2 baked GPQA client predates the raw
+HTTP repair, so rebuild from the current checkout or use the updated CPU client
+described in the Spark runbook before starting a new run.
 
 ## Troubleshooting
 

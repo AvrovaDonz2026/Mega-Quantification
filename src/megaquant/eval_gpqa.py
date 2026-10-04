@@ -57,6 +57,9 @@ from megaquant.sglang_export import sglang_quant_snapshot
 
 LETTERS = ("A", "B", "C", "D")
 DEFAULT_MAX_MODEL_LEN = 262144
+# A full 256K completion on Spark can take more than six hours. This is the
+# socket timeout for each non-streaming HTTP request, not a whole-run deadline.
+DEFAULT_HTTP_TIMEOUT_SECONDS = 86400.0
 # Qwen thinking traces on GPQA can run tens of thousands of tokens; never
 # default to a 512/2048-style cap.
 UNLIMITED = 0
@@ -135,6 +138,9 @@ class EvalGeneration(StrictModel):
     max_new_tokens: int = UNLIMITED
     continue_on_length: bool = True
     seed: int = 0
+    http_timeout_seconds: float = Field(
+        default=DEFAULT_HTTP_TIMEOUT_SECONDS, gt=0, allow_inf_nan=False
+    )
 
 
 class EvalServe(StrictModel):
@@ -895,9 +901,7 @@ def openai_chat_complete(
     thinking: EvalThinking,
     max_tokens: int,
     seed: int,
-    # xhigh traces at ~20 tok/s run well past one hour. 21600 matches the
-    # 80 GB GPQA client that already scored this checkpoint.
-    timeout: float = 21600.0,
+    timeout: float = DEFAULT_HTTP_TIMEOUT_SECONDS,
 ) -> GenerationResult:
     url = base_url.rstrip("/") + "/chat/completions"
     body: dict[str, Any] = {
@@ -910,16 +914,16 @@ def openai_chat_complete(
         "max_tokens": int(max_tokens),
         "seed": seed,
         "stream": False,
-        "extra_body": {
-            "top_k": sampling.top_k,
-            "min_p": sampling.min_p,
-            "repetition_penalty": sampling.repetition_penalty,
-            "chat_template_kwargs": {
-                "enable_thinking": thinking.enable,
-                "preserve_thinking": thinking.preserve,
-            },
-            "reasoning_effort": thinking.reasoning_effort,
+        # Raw HTTP has no OpenAI SDK to merge an ``extra_body`` argument.
+        # SGLang expects these extensions directly in the JSON request.
+        "top_k": sampling.top_k,
+        "min_p": sampling.min_p,
+        "repetition_penalty": sampling.repetition_penalty,
+        "chat_template_kwargs": {
+            "enable_thinking": thinking.enable,
+            "preserve_thinking": thinking.preserve,
         },
+        "reasoning_effort": thinking.reasoning_effort,
     }
     current_max = int(max_tokens)
     data: dict[str, Any] | None = None
@@ -953,6 +957,8 @@ def openai_chat_complete(
             current_max = retried
         except urllib.error.URLError as exc:
             raise EvalError(f"chat completion failed: {exc}") from exc
+        except TimeoutError as exc:
+            raise EvalError(f"chat completion timed out after {timeout:g} seconds") from exc
     if data is None:
         raise EvalError(f"chat completion HTTP 400: {last_detail[:500]}")
 
@@ -1046,6 +1052,11 @@ def generate_untruncated(
     )
 
 
+def _result_is_correct(row: ItemResult) -> bool:
+    """Apply the scoring rule instead of trusting a cached journal flag."""
+    return not row.truncated and row.predicted is not None and row.predicted == row.gold
+
+
 def score_items(
     items: Iterable[GPQAItem],
     results: Iterable[ItemResult],
@@ -1053,7 +1064,7 @@ def score_items(
     items_list = list(items)
     rows = list(results)
     n = len(items_list)
-    correct = sum(1 for row in rows if row.correct)
+    correct = sum(1 for row in rows if _result_is_correct(row))
     truncated = sum(1 for row in rows if row.truncated)
     unparsed = sum(1 for row in rows if row.predicted is None)
     return {
@@ -1105,6 +1116,10 @@ def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
             row = ItemResult(**kwargs)
         except TypeError:
             continue
+        # Older clients could mark a matching letter as correct even when its
+        # reasoning was truncated. Normalize replayed rows without rewriting
+        # the original trace bytes.
+        row.correct = _result_is_correct(row)
         rows[row.item_id] = row
     return rows, None
 
@@ -1160,7 +1175,11 @@ def run_gpqa(
         base = recipe.base_url or ""
         if recipe.backend in {"auto", "openai"} and base:
             def complete(**kwargs: Any) -> GenerationResult:
-                return openai_chat_complete(base_url=base, **kwargs)
+                return openai_chat_complete(
+                    base_url=base,
+                    timeout=recipe.generation.http_timeout_seconds,
+                    **kwargs,
+                )
         else:
             raise EvalError(
                 "Set --base-url to an OpenAI-compatible SGLang server "
@@ -1196,7 +1215,7 @@ def run_gpqa(
             item_id=item.item_id,
             gold=item.gold,
             predicted=predicted,
-            correct=predicted == item.gold,
+            correct=not gen.truncated and predicted is not None and predicted == item.gold,
             truncated=gen.truncated,
             finish_reason=gen.finish_reason,
             prompt_tokens=gen.prompt_tokens,
@@ -1230,15 +1249,40 @@ def run_gpqa(
                 rows.append(prior[item.item_id])
                 continue
             pending.append(item)
+        if pending:
+            # A prior summary must not make an interrupted rerun look complete.
+            (out_dir / "summary.json").unlink(missing_ok=True)
         if workers > 1 and len(pending) > 1:
             print(
                 f"[gpqa] concurrency={workers} pending={len(pending)}/{len(items)}",
                 flush=True,
             )
+            first_error: Exception | None = None
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futs = [pool.submit(eval_one, item) for item in pending]
                 for fut in as_completed(futs):
-                    write_row(fut.result())
+                    if fut.cancelled():
+                        continue
+                    try:
+                        row = fut.result()
+                    except Exception as exc:
+                        if first_error is None:
+                            first_error = exc
+                            # Keep results from requests already running, but
+                            # stop queued requests after the first failure.
+                            for other in futs:
+                                other.cancel()
+                            print(
+                                f"[gpqa] request failed; saving in-flight results: {exc}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        continue
+                    write_row(row)
+            if first_error is not None:
+                raise EvalError(
+                    f"GPQA request failed; completed rows saved to {journal_path}: {first_error}"
+                ) from first_error
         else:
             for item in pending:
                 write_row(eval_one(item))

@@ -1,0 +1,499 @@
+{
+  "kind": "gpqa_unparsed_investigation",
+  "journal_rows_at_snapshot": 194,
+  "parser_source_sha256": "70205d08d5af84039c444e9dab4f98cd9783374cf18ce74917a5fbf73ead75fa",
+  "openai_serving_source_sha256": "047e4391dc87816a62da34392eea9379fcb1f93025e70c3b327de8b596f59b09",
+  "chat_template_sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+  "prompt_tail": "<|im_start|>assistant\n<think>\n",
+  "eos_token_id": 248046,
+  "markers": {
+    "<think>": {
+      "ids": [
+        248068
+      ],
+      "decoded_skip": "<think>"
+    },
+    "</think>": {
+      "ids": [
+        248069
+      ],
+      "decoded_skip": "</think>"
+    },
+    "<|im_end|>": {
+      "ids": [
+        248046
+      ],
+      "decoded_skip": ""
+    },
+    "<|endoftext|>": {
+      "ids": [
+        248044
+      ],
+      "decoded_skip": ""
+    }
+  },
+  "cases": [
+    {
+      "case": "balanced",
+      "reasoning": "working it out",
+      "content": "\nAnswer: B"
+    },
+    {
+      "case": "prefilled_open",
+      "reasoning": "working it out",
+      "content": "\nAnswer: B"
+    },
+    {
+      "case": "unclosed_no_answer",
+      "reasoning": "working it out then early stop",
+      "content": ""
+    },
+    {
+      "case": "unclosed_answer",
+      "reasoning": "working it out\nAnswer: B",
+      "content": ""
+    },
+    {
+      "case": "closed_no_answer",
+      "reasoning": "working it out",
+      "content": ""
+    },
+    {
+      "case": "unclosed_eos",
+      "reasoning": "working it out<|im_end|>",
+      "content": ""
+    },
+    {
+      "case": "closed_eos",
+      "reasoning": "working it out",
+      "content": "\nAnswer: B<|im_end|>"
+    }
+  ],
+  "failed_rows": [
+    {
+      "completion_tokens": 21468,
+      "finish_reason": "stop",
+      "truncated": false,
+      "continued": 0,
+      "journal_prompt_tokens": 450,
+      "reconstructed_prompt_tokens": 450,
+      "prompt_count_matches": true,
+      "reasoning_chars": 57515,
+      "final_chars": 0,
+      "reasoning_open_markers": 0,
+      "reasoning_close_markers": 0,
+      "reasoning_strict_answer_lines": 0,
+      "reasoning_bare_answer_lines": 0,
+      "reasoning_boxed_letters": 0,
+      "trailing_U_chars": 1,
+      "retokenized_reasoning_tokens": 21463,
+      "completion_minus_retokenized": 5,
+      "reparsed_content_chars": 0,
+      "reparsed_reasoning_equal": true,
+      "reasoning_sha256": "f362afb760cd503aed73a5d662ea72a8bf4a67f963b9d39abf4d0b1d8a72636e",
+      "case_number": 1,
+      "historical_comparison": {
+        "old_w4a8_c16_finish_reason": "stop",
+        "old_w4a8_c16_final_answer_present": false,
+        "old_w4a8_c16_completion_tokens": 14270,
+        "old_w4a8_c4_final_answer_present": true,
+        "observed_output_behavior": "Repeated U characters near the end."
+      }
+    },
+    {
+      "completion_tokens": 22565,
+      "finish_reason": "stop",
+      "truncated": false,
+      "continued": 0,
+      "journal_prompt_tokens": 280,
+      "reconstructed_prompt_tokens": 280,
+      "prompt_count_matches": true,
+      "reasoning_chars": 98185,
+      "final_chars": 0,
+      "reasoning_open_markers": 0,
+      "reasoning_close_markers": 0,
+      "reasoning_strict_answer_lines": 0,
+      "reasoning_bare_answer_lines": 0,
+      "reasoning_boxed_letters": 0,
+      "trailing_U_chars": 0,
+      "retokenized_reasoning_tokens": 22564,
+      "completion_minus_retokenized": 1,
+      "reparsed_content_chars": 0,
+      "reparsed_reasoning_equal": true,
+      "reasoning_sha256": "2dc25d289c295074e1217a84fcd65f8d90b5eb1021164ac4236d5ce10618220b",
+      "case_number": 2,
+      "historical_comparison": {
+        "old_w4a8_c16_finish_reason": "stop",
+        "old_w4a8_c16_final_answer_present": true,
+        "old_w4a8_c16_completion_tokens": 23934,
+        "observed_output_behavior": "Repeated reasoning with no final answer."
+      }
+    },
+    {
+      "completion_tokens": 158333,
+      "finish_reason": "stop",
+      "truncated": false,
+      "continued": 0,
+      "journal_prompt_tokens": 319,
+      "reconstructed_prompt_tokens": 319,
+      "prompt_count_matches": true,
+      "reasoning_chars": 570810,
+      "final_chars": 0,
+      "reasoning_open_markers": 0,
+      "reasoning_close_markers": 0,
+      "reasoning_strict_answer_lines": 0,
+      "reasoning_bare_answer_lines": 0,
+      "reasoning_boxed_letters": 0,
+      "trailing_U_chars": 0,
+      "retokenized_reasoning_tokens": 158332,
+      "completion_minus_retokenized": 1,
+      "reparsed_content_chars": 0,
+      "reparsed_reasoning_equal": true,
+      "reasoning_sha256": "cc2fa08a9117f6e30a7b113dfaeafeb94ab8e4585ee662597006d1fa72c0312a",
+      "case_number": 3,
+      "historical_comparison": {
+        "old_w4a8_c16_finish_reason": "length",
+        "old_w4a8_c16_final_answer_present": false,
+        "old_w4a8_c16_completion_tokens": 32365,
+        "observed_output_behavior": "Extended repeated reasoning with conflicting tentative choices."
+      }
+    }
+  ],
+  "limitations": [
+    "Journal synthesizes thinking delimiters and does not retain raw response, output token IDs, or matched_stop.",
+    "Prompt count equality does not prove equality of raw output IDs or exact original recurrent state.",
+    "CPU parser tests do not explain why the model chose its original stopping token.",
+    "The three original W4A8 failures did not retain their stopping tokens; successful retries do not recover that evidence.",
+    "The fourth formal W4A8 unparsed response also has no matched passive stop record.",
+    "Passive W4A4 evidence identifies EOS but does not retain raw output IDs or prove an emitted thinking close.",
+    "Three diagnostic requests use a different dynamic batch from the formal run; this does not prove a quantization or kernel cause.",
+    "Token IDs are valid integers; no claim about unrecorded logits or bitwise determinism is made.",
+    "Formal scores and original journals are preserved."
+  ],
+  "scoring_changed": false,
+  "diagnosis": "Formal responses ended without visible final answers. Passive captures identify EOS for all four W4A4 failures. All three separate W4A8 retries emitted a thinking close and a final answer, with two correct answers; original W4A8 stopping tokens remain unknown. No quantization, kernel, or batch cause is established.",
+  "actual_stopping_token_known": false,
+  "observed_at": "2026-10-03T01:34:00Z",
+  "context_length": 262144,
+  "client_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+  "complete_benchmark_result": true,
+  "cpu_audit_gpu_requests": 0,
+  "original_w4a8_stopping_tokens_known": false,
+  "actual_stopping_token_known_scope": "Original W4A8 responses at the 194-row snapshot; excludes newly captured W4A4 and retry responses.",
+  "updated_at": "2026-10-04",
+  "formal_benchmark_report": "dgx-spark-gpqa-256k-20261002.json",
+  "formal_passive_stop_evidence": {
+    "w4a8": {
+      "formal_journal_rows": 198,
+      "unparsed": 4,
+      "truncated": 0,
+      "rows": [
+        {
+          "completion_tokens": 21468,
+          "prompt_tokens": 450,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": false,
+          "matched_stop": null,
+          "reasoning_characters": 57515,
+          "response_sha256": null,
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 22565,
+          "prompt_tokens": 280,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": false,
+          "matched_stop": null,
+          "reasoning_characters": 98185,
+          "response_sha256": null,
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 158333,
+          "prompt_tokens": 319,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": false,
+          "matched_stop": null,
+          "reasoning_characters": 570810,
+          "response_sha256": null,
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 70466,
+          "prompt_tokens": 340,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": false,
+          "matched_stop": null,
+          "reasoning_characters": 305305,
+          "response_sha256": null,
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        }
+      ]
+    },
+    "w4a4": {
+      "formal_journal_rows": 198,
+      "unparsed": 4,
+      "truncated": 0,
+      "rows": [
+        {
+          "completion_tokens": 21996,
+          "prompt_tokens": 450,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": true,
+          "matched_stop": 248046,
+          "reasoning_characters": 63084,
+          "response_sha256": "84b89000765d598b395631250db3e09b5083d02c83848b1b80f3508371aa6adc",
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 30467,
+          "prompt_tokens": 221,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": true,
+          "matched_stop": 248046,
+          "reasoning_characters": 80665,
+          "response_sha256": "a0e04b7a165174f01a9cca121c05343ca4db4cce50fdc617687cdd50276113c3",
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 17406,
+          "prompt_tokens": 286,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": true,
+          "matched_stop": 248046,
+          "reasoning_characters": 24550,
+          "response_sha256": "08dba061875f31c9949d08982b64cd1578d631e77f3066204fcea81dfb35001a",
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        },
+        {
+          "completion_tokens": 49181,
+          "prompt_tokens": 2848,
+          "finish_reason": "stop",
+          "truncated": false,
+          "final_answer_characters": 0,
+          "passive_stop_evidence_matched": true,
+          "matched_stop": 248046,
+          "reasoning_characters": 113508,
+          "response_sha256": "482222ce6f32a550b34d0a9b96b07e642999551b6128bc0b2adf9de476825f1f",
+          "raw_token_ids_available": false,
+          "model_emitted_thinking_close_known": false
+        }
+      ]
+    }
+  },
+  "diagnostic_retry": {
+    "retry_completed": true,
+    "retry_correct_cases": 2,
+    "retry_final_answers": 3,
+    "retry_http_errors": 0,
+    "retry_actual_initial_client_concurrency": 3,
+    "retry_server": {
+      "context_length": 262144,
+      "max_running_requests": 16,
+      "mamba_ssm_dtype": "float32",
+      "max_mamba_cache_size": 64,
+      "speculative_algorithm": null,
+      "sampling_backend": "pytorch",
+      "mem_fraction_static": 0.7,
+      "disable_cuda_graph": true,
+      "tp_size": 1,
+      "kv_cache_dtype": "fp8_e4m3",
+      "enable_deterministic_inference": false,
+      "max_total_num_tokens": 1586927,
+      "max_req_input_len": 262138
+    },
+    "retry_recipe_parameters": {
+      "generation": {
+        "max_model_len": 262144,
+        "max_new_tokens": 0,
+        "continue_on_length": true,
+        "seed": 0,
+        "http_timeout_seconds": 86400.0
+      },
+      "sampling": {
+        "temperature": 0.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repetition_penalty": 1.0,
+        "do_sample": true
+      },
+      "thinking": {
+        "enable": true,
+        "preserve": true,
+        "reasoning_effort": "xhigh"
+      },
+      "shuffle_choices": true
+    },
+    "retry_completed_at": "2026-10-03T14:31:46Z",
+    "helper_source_sha256": "9a79eb3b6b0646e60bcca75795b956397055b7b12a169bf488dcf8da5e650ac8",
+    "selection_sha256": "04fca579d87b957a2af19b03382f5330245e252e125b6a6bf8fedf065bd957aa",
+    "dataset_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+    "recipe_file_sha256": "b7bc7838b43b09f78c24c9e731d5062b3548d8b3744c33e2a7f934a4bfa9434c",
+    "formal_w4a8_journal_sha256_unchanged": "0b6b1085707bbcbad6a76013c9b21bc9d45f77f7e5ec0497b7459157a20ce5dc",
+    "retry_cases": [
+      {
+        "case_label": "case-1",
+        "original_completion_tokens": 21468,
+        "original_stopping_token_known": false,
+        "retry_completion_tokens": 18095,
+        "retry_prompt_tokens": 450,
+        "request_max_tokens": 261481,
+        "response_token_ids_key": "choices[0].response_token_ids",
+        "response_token_ids_count": 18095,
+        "thinking_close_token_count": 1,
+        "thinking_close_first_position": 17840,
+        "matched_stop": 248046,
+        "last_response_token_id": 248046,
+        "finish_reason": "stop",
+        "reasoning_characters": 67493,
+        "answer_characters": 1040,
+        "truncated": false,
+        "continued": 0,
+        "correct": true,
+        "elapsed_seconds": 1768.394810096128,
+        "num_retractions": 0,
+        "checks": {
+          "request_matches_frozen_protocol_plus_return_flags": true,
+          "initial_budget_preserves_original_estimate": true,
+          "frozen_selection_matches_input": true,
+          "prompt_sha_matches": true,
+          "returned_prompt_token_ids_match_reconstructed": true,
+          "prompt_usage_matches_original": true,
+          "response_ids_count_matches_usage": true,
+          "response_ids_are_valid_vocab_ids": true,
+          "details_response_sha_matches_body": true,
+          "details_reasoning_hash_matches": true,
+          "details_answer_hash_matches": true,
+          "generation_usage_matches_response": true,
+          "case_complete": true,
+          "single_round_single_attempt": true,
+          "no_error_artifacts": true,
+          "model_emitted_thinking_close": true,
+          "stop_is_real_eos": true,
+          "last_token_is_matched_stop": true,
+          "final_answer_present": true,
+          "not_truncated": true,
+          "no_continuations": true
+        },
+        "raw_response_sha256": "2baa82d7d71994d92422064bca27c409d460523b544caf7f0a9fb4df684049d6"
+      },
+      {
+        "case_label": "case-2",
+        "original_completion_tokens": 22565,
+        "original_stopping_token_known": false,
+        "retry_completion_tokens": 20271,
+        "retry_prompt_tokens": 280,
+        "request_max_tokens": 261648,
+        "response_token_ids_key": "choices[0].response_token_ids",
+        "response_token_ids_count": 20271,
+        "thinking_close_token_count": 1,
+        "thinking_close_first_position": 20201,
+        "matched_stop": 248046,
+        "last_response_token_id": 248046,
+        "finish_reason": "stop",
+        "reasoning_characters": 82362,
+        "answer_characters": 254,
+        "truncated": false,
+        "continued": 0,
+        "correct": false,
+        "elapsed_seconds": 1977.4876926881261,
+        "num_retractions": 0,
+        "checks": {
+          "request_matches_frozen_protocol_plus_return_flags": true,
+          "initial_budget_preserves_original_estimate": true,
+          "frozen_selection_matches_input": true,
+          "prompt_sha_matches": true,
+          "returned_prompt_token_ids_match_reconstructed": true,
+          "prompt_usage_matches_original": true,
+          "response_ids_count_matches_usage": true,
+          "response_ids_are_valid_vocab_ids": true,
+          "details_response_sha_matches_body": true,
+          "details_reasoning_hash_matches": true,
+          "details_answer_hash_matches": true,
+          "generation_usage_matches_response": true,
+          "case_complete": true,
+          "single_round_single_attempt": true,
+          "no_error_artifacts": true,
+          "model_emitted_thinking_close": true,
+          "stop_is_real_eos": true,
+          "last_token_is_matched_stop": true,
+          "final_answer_present": true,
+          "not_truncated": true,
+          "no_continuations": true
+        },
+        "raw_response_sha256": "9533c34f30367005c999482d509fed33b7537aa3f48942f62f7a17fd6d6ca400"
+      },
+      {
+        "case_label": "case-3",
+        "original_completion_tokens": 158333,
+        "original_stopping_token_known": false,
+        "retry_completion_tokens": 48186,
+        "retry_prompt_tokens": 319,
+        "request_max_tokens": 261741,
+        "response_token_ids_key": "choices[0].response_token_ids",
+        "response_token_ids_count": 48186,
+        "thinking_close_token_count": 1,
+        "thinking_close_first_position": 47860,
+        "matched_stop": 248046,
+        "last_response_token_id": 248046,
+        "finish_reason": "stop",
+        "reasoning_characters": 156834,
+        "answer_characters": 875,
+        "truncated": false,
+        "continued": 0,
+        "correct": true,
+        "elapsed_seconds": 4602.554773461074,
+        "num_retractions": 0,
+        "checks": {
+          "request_matches_frozen_protocol_plus_return_flags": true,
+          "initial_budget_preserves_original_estimate": true,
+          "frozen_selection_matches_input": true,
+          "prompt_sha_matches": true,
+          "returned_prompt_token_ids_match_reconstructed": true,
+          "prompt_usage_matches_original": true,
+          "response_ids_count_matches_usage": true,
+          "response_ids_are_valid_vocab_ids": true,
+          "details_response_sha_matches_body": true,
+          "details_reasoning_hash_matches": true,
+          "details_answer_hash_matches": true,
+          "generation_usage_matches_response": true,
+          "case_complete": true,
+          "single_round_single_attempt": true,
+          "no_error_artifacts": true,
+          "model_emitted_thinking_close": true,
+          "stop_is_real_eos": true,
+          "last_token_is_matched_stop": true,
+          "final_answer_present": true,
+          "not_truncated": true,
+          "no_continuations": true
+        },
+        "raw_response_sha256": "c47ac7a86c31283d1f6952d8b4d26776544b8a92e2503b601181c290b3084bdc"
+      }
+    ],
+    "subset_only": true,
+    "formal_scores_updated": false
+  }
+}

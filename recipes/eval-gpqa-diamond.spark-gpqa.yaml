@@ -1,0 +1,74 @@
+# DGX Spark / GB10 (SM121), ARM64, CUDA 13, full GPQA baseline.
+# Sixteen requests on a 128 GB shared-memory Spark. Check free memory before
+# loading the checkpoint; 64 FP32 SSM slots serve 16 concurrent request chains.
+# Each request can use the model's native 262,144-token context. Requests share
+# a bounded KV pool; the scheduler can retract requests as the pool fills.
+# A single Spark has one GPU and 128 GB shared CPU/GPU memory. Leave room
+# for the vision encoder, image processing and the OS; do not create a
+# second host HiCache pool from the same physical memory.
+name: gpqa-diamond-qwen38-spark-gpqa
+benchmark: gpqa_diamond
+dataset: Idavidrein/gpqa
+dataset_config: gpqa_diamond
+model: outputs/Qwen3.8-27B-NVFP4-W4A8-spark
+backend: auto
+base_url: null
+shuffle_choices: true
+limit: null
+concurrency: 16
+
+thinking:
+  enable: true
+  preserve: true
+  reasoning_effort: xhigh
+
+sampling:
+  temperature: 0.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  do_sample: true
+
+generation:
+  max_model_len: 262144
+  max_new_tokens: 0
+  continue_on_length: true
+  http_timeout_seconds: 86400
+  seed: 0
+
+serve:
+  engine: sglang
+  host: 0.0.0.0
+  kv_cache_dtype: fp8_e4m3
+  gpu_memory_utilization: 0.70
+  mem_fraction_static: 0.70
+  max_num_seqs: 16
+  max_running_requests: 16
+  max_num_batched_tokens: 8192
+  chunked_prefill_size: 2048
+  reasoning_parser: qwen3
+  tool_call_parser: qwen3_coder
+  enable_multimodal: true
+  # SGLang resolves this alias from hf_quant_config.json, including MIXED_PRECISION.
+  quantization: modelopt
+  tensor_parallel_size: 1
+  # CUDA 13 FlashInfer is the official Spark attention path. Keep GDN and
+  # sampling on portable backends while testing the exported visual layers.
+  attention_backend: flashinfer
+  sampling_backend: pytorch
+  linear_attn_backend: triton
+  mamba_backend: triton
+  enable_jit_deepgemm: false
+  mamba_full_memory_ratio: 4.59
+  mamba_radix_cache_strategy: extra_buffer_lazy
+  # BF16 state stores can change greedy output between decode and MTP verify.
+  mamba_ssm_dtype: float32
+  max_mamba_cache_size: 64
+  enable_hierarchical_cache: false
+  kv_offloading_backend: none
+  kv_offloading_size_gb: 0
+  swap_space_gb: 0
+  disable_cuda_graph: true
+  # Full GPQA baseline leaves embedded MTP disabled.

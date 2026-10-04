@@ -15,7 +15,7 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 ## Hard rules
 
 - `megaquant plan` and eval/serve `--dry-run` must not download the 27B checkpoint.
-- A GPQA score is `correct/198` only when `summary.json` exists and the journal has 198 rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal.
+- A GPQA score is `correct/198` only when `summary.json` exists and the journal has exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal. For temperature-0 runs, require `scripts/check_gpqa_results.py` to pass against the actual CSV, seed and choice-shuffle policy before publishing a score.
 - Do not commit `.env`, `.oss.env`, `docker-compose.override.yml`, SSH material, bucket names, tenant DNS, or host paths.
 - Do not publish the `*-draft` directory as scheme `w4a8`, `w4a4`, or `mixed`.
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
@@ -57,20 +57,49 @@ tests, not a general quality or determinism guarantee.
 
 ## Eval
 
-Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on, `reasoning_effort=xhigh`). `max_new_tokens: 0` fills the remaining 262144 context. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, resume by `item_id`.
+Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on and preserved, `reasoning_effort=xhigh`). Default, 5090, 6000D and Spark full GPQA recipes use 262144 context. The separate Spark vision/MTP checks retain 32768. `max_new_tokens: 0` fills the selected recipe's remaining window. Continuations cannot enlarge that window; final length finishes count as wrong. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, or an explicit `--output` directory, resume by `item_id`.
+
+Spark full GPQA uses `recipes/eval-gpqa-diamond.spark-gpqa.yaml` for both mixed
+W4A8 and uniform W4A4, with 262144 context, the full remaining output budget,
+seed 0, shuffled choices, 16 requests, 64 FP32 SSM slots and MTP disabled. The
+vision/MTP validation recipes remain at 32768 context and four requests.
+Check available shared RAM and actual server cache allocations before running
+GPQA; do not merge 32k/256k or four-/16-request journals into one score.
+Run the two exports sequentially on the single GPU. Use separate dated output
+directories for both formats and every changed protocol; resume only the same
+run with the same inputs and settings. Keep the official CSV unchanged,
+including repeated answer options. Commands and limits are in
+`docs/DGX_SPARK.md#full-gpqa-diamond-at-temperature-0`.
+
+The original v0.1.2 baked eval client predates the raw HTTP parameter repair.
+Use a current client that sends SGLang extensions as top-level JSON fields,
+reserves chat-template tokens and applies strict truncation scoring. An older
+serving image may use a separate updated CPU client; record both source
+revisions and the serving image digest. The stdlib result checker accepts
+`--csv`, `--run-dir`, `--output-json`, `--seed` and `--no-shuffle-choices`; it
+requires complete evidence and emits hashes/aggregate checks without dataset
+questions, response text, item IDs or local paths. Do not publish raw journals.
 
 Finished journals:
 
+- Spark full **256k** mixed W4A8 with quantized vision/MTP: **177/198 (89.39%)**, truncated 0, unparsed 4. Spark full **256k** uniform W4A4 with quantized vision/MTP: **174/198 (87.88%)**, truncated 0, unparsed 4. Both use temperature **0**, seed 0, shuffled choices, preserved `xhigh` thinking, GB10 TP1, FlashInfer, 16 requests and MTP disabled. Each has 198 unique dataset-matching records and a verified summary; the sequential evaluation completed on 2026-10-03 at 13:12:33 UTC. Report/evidence: `docs/validation/dgx-spark-gpqa-256k-20261002.md` and `.json`.
 - Mixed / default W4A8, temperature **1.0**, 80 GB SM120, SGLang 64-way, 2026-09-22: **178/198** (truncated 0, unparsed 0). Not a rerun of the temperature-0 YAML.
 - Uniform W4A4, temperature **0**, Marlin, 2026-09-22: **172/198** (truncated 4, unparsed 6).
-- No finished 198-row mixed score at temperature 0.
+- Historical **32k trial**: Spark mixed W4A8 with quantized vision/MTP, temperature **0**, GB10 TP1, FlashInfer, 16 requests, 32768 context, MTP disabled during GPQA, 2026-10-02: **157/198 (79.29%)**, truncated 30, unparsed 32 (overlapping counts). All 198 dataset-matching records and the summary passed the strict checker. Evidence: `docs/validation/dgx-spark-gpqa-w4a8-20261002.json`. This is a length-limited 32k result, not the user's requested 262144-context result.
+- The 32k Spark uniform W4A4 trial was stopped without a complete score. The completed 256k runs use separate `w4a8-temp0-ctx262144-c16` and `w4a4-temp0-ctx262144-c16` directories; never resume those runs from 32k journals.
+
+A separate three-request diagnostic retry of three unparsed W4A8 responses
+produced three final answers, two correct and one wrong. It used concurrency 3
+rather than the formal 16, does not modify formal journals or scores and does
+not establish exact repeated-output determinism. The saved original responses
+lack actual stopping tokens; do not claim a proven quantization/kernel cause.
 
 | Box | Recipe |
 |---|---|
 | CUDA ≥ 12.9 | `recipes/eval-gpqa-diamond.yaml` (FlashInfer, HiCache 12 GiB, concurrency 1) |
 | 32 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.5090.yaml` (Triton + Marlin, HiCache 64 GiB, 24-way, CUDA graph off) |
 | 80 GB SM120 / CUDA 12.8 | `recipes/eval-gpqa-diamond.6000d.yaml` (Triton + Marlin + CUTLASS, KV on GPU, 64-way, CUDA graph on, SiLU+FP4 fusion off) |
-| DGX Spark ARM64 / SM121 / CUDA 13 | `recipes/eval-gpqa-diamond.spark.yaml` (32k context, vision, 4 requests, 0.70 memory, no HiCache/CUDA graphs; optional embedded EAGLE MTP) |
+| DGX Spark ARM64 / SM121 / CUDA 13 | Full GPQA: `recipes/eval-gpqa-diamond.spark-gpqa.yaml` (262144 context, 16 requests, 64 FP32 SSM slots, 0.70 memory, no MTP/HiCache/CUDA graphs). Vision/MTP checks retain `eval-gpqa-diamond.spark.yaml` and `eval-gpqa-diamond.spark-mtp.yaml` at 32768 context and four requests. |
 
 Compose default image is CUDA **12.8.1**. That build does not include a CUDA 13 FlashInfer toolchain. Optional rebuild: `SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04`. Leave the 12.8 default in place unless asked.
 
@@ -90,7 +119,8 @@ The 2026-10-01 v0.1.2 release rerun at `ac53833` is recorded in
 clean builds and isolated save/load checks. Fresh full W4A8/W4A4 quantization,
 strict export audits, vision/OCR and quantized embedded MTP passed; each format
 matched 205 baseline/MTP output IDs across five fixed cases. This remains a
-single-host TP1 result, without quality, performance or TP2 claims. The public
+single-host TP1 result; the separate full GPQA results above establish the
+recorded text benchmark scores, not vision quality, throughput or TP2. The public
 stdlib auditor is `scripts/audit_spark_export.py`; pass the full PTQ image
 revision with `--expected-revision` when checking export provenance.
 

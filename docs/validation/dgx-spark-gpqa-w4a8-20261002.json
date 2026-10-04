@@ -1,0 +1,196 @@
+{
+  "passed": true,
+  "complete": true,
+  "benchmark": "gpqa_diamond",
+  "expected_items": 198,
+  "protocol": {
+    "temperature": 0.0,
+    "seed": 0,
+    "shuffle_choices": true,
+    "concurrency": 16,
+    "sampling": {
+      "temperature": 0.0,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0,
+      "presence_penalty": 0.0,
+      "repetition_penalty": 1.0,
+      "do_sample": true
+    },
+    "thinking": {
+      "enable": true,
+      "preserve": true,
+      "reasoning_effort": "xhigh"
+    },
+    "generation": {
+      "max_model_len": 32768,
+      "max_new_tokens": 0,
+      "continue_on_length": true,
+      "seed": 0
+    }
+  },
+  "files": {
+    "csv": {
+      "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+      "bytes": 1373492
+    },
+    "journal": {
+      "sha256": "45908344d5791eb4b9e6611d1ab49089c38e8f8508f96b55154a34f0c9671b16",
+      "bytes": 7291597
+    },
+    "summary": {
+      "sha256": "07d94543b229cdecb39215b88d88df73a9566f8a7984012158090bec6c69c775",
+      "bytes": 4302
+    }
+  },
+  "errors": [],
+  "coverage": {
+    "dataset_rows": 198,
+    "journal_rows": 198,
+    "valid_record_objects": 198,
+    "unique_item_ids": 198,
+    "missing_items": 0,
+    "unexpected_items": 0,
+    "duplicate_rows": 0
+  },
+  "scores": {
+    "n": 198,
+    "correct": 157,
+    "accuracy": 0.7929292929292929,
+    "denominator": 198,
+    "truncated": 30,
+    "unparsed": 32,
+    "headline": "157/198"
+  },
+  "verified": [
+    "198 unique item IDs exactly match the supplied Diamond CSV",
+    "every gold letter and shuffled choice matches the CSV and supplied seed",
+    "saved predictions match the repository response extractor",
+    "truncated and unparsed responses count as wrong",
+    "summary scores match independently recomputed scores",
+    "summary records temperature zero and the supplied generation seed"
+  ],
+  "scope": "completed mixed W4A8 GPQA run only; uniform W4A4 remains in progress",
+  "format": "mixed W4A8 with quantized vision and MTP",
+  "finished_at": "2026-10-02T10:10:48Z",
+  "source": {
+    "deployment_revision": "a1fe94638928019ea554b90fac1b91b77b82da90",
+    "serving_runtime_base_revision": "ac53833dc5af3f03a10087449ca80e9484deba48",
+    "result_checker_revision": "470bf3c2e341ac01f9a3a01e21462954ae824d9e"
+  },
+  "hardware": {
+    "gpu": "NVIDIA GB10",
+    "architecture": "aarch64",
+    "tensor_parallel_size": 1
+  },
+  "actual_server": {
+    "context_length": 32768,
+    "tp_size": 1,
+    "max_running_requests": 16,
+    "max_mamba_cache_size": 64,
+    "mamba_ssm_dtype": "float32",
+    "kv_cache_dtype": "fp8_e4m3",
+    "attention_backend": "flashinfer",
+    "sampling_backend": "pytorch",
+    "linear_attn_backend": "triton",
+    "mamba_backend": "triton",
+    "mem_fraction_static": 0.7,
+    "enable_hierarchical_cache": false,
+    "disable_cuda_graph": true,
+    "speculative_algorithm": null,
+    "quantization": "modelopt",
+    "page_size": 1,
+    "enable_deterministic_inference": false
+  },
+  "dataset_source": {
+    "dataset": "GPQA Diamond",
+    "rows": 198,
+    "csv_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+    "official_zip_sha256": "461ae7329f15a3e35f8184d2dac24b990f34fdf12f366ca4062d8e6638cd08dc",
+    "source_url": "https://raw.githubusercontent.com/idavidrein/gpqa/main/dataset.zip",
+    "upstream_revision": "56686c06f5e19865c153de0fdb11be3890014df7",
+    "upstream_zip_git_blob_sha1": "80788cb325c4d63bbccad56c2e393b33389348fe",
+    "immutable_source_url": "https://raw.githubusercontent.com/idavidrein/gpqa/56686c06f5e19865c153de0fdb11be3890014df7/dataset.zip"
+  },
+  "checkpoint_files": {
+    "backend_meta.json": {
+      "bytes": 326,
+      "sha256": "0635aa810df0d6b12e47468ebfe3813a011afbc96d53207a41b991231196639d"
+    },
+    "calibration_coverage.json": {
+      "bytes": 10486,
+      "sha256": "d2d30eeb6dfe6ed59281184768d76e25e885c24d039562bb2ee483a6143b1933"
+    },
+    "chat_template.jinja": {
+      "bytes": 8952,
+      "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+    },
+    "config.json": {
+      "bytes": 91440,
+      "sha256": "adb54c4b409ae83f17681a1804c3845a9d419f5207a9f91b06b1f74484a3d6a2"
+    },
+    "generation_config.json": {
+      "bytes": 214,
+      "sha256": "a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4"
+    },
+    "hf_quant_config.json": {
+      "bytes": 56978,
+      "sha256": "056d78a66803c6b155b88b1b935fb7f5e4aef843f4f7189c05458f3dbbadeb35"
+    },
+    "model-00001-of-00003.safetensors": {
+      "bytes": 9944305992,
+      "sha256": "436d06084875c03404195e7554c7fd0069113242cbe55ce4b66a9a9767b6c5d1"
+    },
+    "model-00002-of-00003.safetensors": {
+      "bytes": 9757514560,
+      "sha256": "b6077b19a82043b0ebb8e07c5ce8ac5313737ecb65dd5d24e7d315192ad1e7a8"
+    },
+    "model-00003-of-00003.safetensors": {
+      "bytes": 999971632,
+      "sha256": "b4517400f567e7da03e0070c614f829447e44a207a9892ad0bb97ef091ca9917"
+    },
+    "model.safetensors.index.json": {
+      "bytes": 246561,
+      "sha256": "45cc03825a8a16542bed76be6f19ff9d21fc16ed6413c106dc2fc0892cf871e6"
+    },
+    "mtp_export.json": {
+      "bytes": 110,
+      "sha256": "c444ff73ed217f4e72b0a70d23ea741a30756465932c2a5407cf0f8b9e932eb1"
+    },
+    "preprocessor_config.json": {
+      "bytes": 390,
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+    },
+    "provenance.json": {
+      "bytes": 511,
+      "sha256": "b457a5606b94798162c32c80cb2fd26c2d220ab49fed61824887a82efffecc5e"
+    },
+    "tokenizer.json": {
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    "tokenizer_config.json": {
+      "bytes": 1123,
+      "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+    },
+    "video_preprocessor_config.json": {
+      "bytes": 385,
+      "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+    },
+    "vision_export.json": {
+      "bytes": 84,
+      "sha256": "566693584b28e8e1c17309511a31c259baa7af291c83c33225451698a6655647"
+    }
+  },
+  "truncated_and_unparsed_overlap": 30,
+  "limits": [
+    "32768 context; all final length finishes count as wrong",
+    "GPQA text prompts; embedded MTP disabled during evaluation",
+    "The run resumed from 21 saved rows after an interruption; settings stayed identical",
+    "One completed run; arbitrary hardware or batch determinism was not tested"
+  ],
+  "client_manifest_sha256": "96b320ee2f44d0da115e071c9dbc87509f3d644b8f00ad55a405787657cbf741",
+  "client_installed_eval_sha256": "5dd62cbeec079eae66e9ae8c5ac4eae239b7cd59027ea641038c154d9a4c4ff2",
+  "serving_manifest_sha256": "96b320ee2f44d0da115e071c9dbc87509f3d644b8f00ad55a405787657cbf741",
+  "serving_installed_eval_sha256": "5dd62cbeec079eae66e9ae8c5ac4eae239b7cd59027ea641038c154d9a4c4ff2"
+}

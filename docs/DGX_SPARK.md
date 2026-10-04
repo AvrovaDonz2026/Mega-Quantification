@@ -229,6 +229,167 @@ provide a GPQA score, a general vision quality result, controlled throughput,
 video support, long-context coverage or TP2 validation. High draft acceptance
 alone is not a measured speedup.
 
+## Full GPQA Diamond at temperature 0
+
+Both full **262144-context** Spark runs completed and passed strict result
+verification by **2026-10-03 13:12:33 UTC** (21:12:33 in Beijing).
+
+| Export | Strict score | Dataset-matching unique records | Truncated | Unparsed |
+|---|---|---|---|---|
+| Mixed W4A8, quantized vision/MTP | **177/198 (89.39%)** | 198 | 0 | 4 |
+| Uniform W4A4, quantized vision/MTP | **174/198 (87.88%)** | 198 | 0 | 4 |
+
+Each unparsed response counts as wrong. Both runs used temperature 0, seed 0,
+shuffled choices, preserved thinking with `xhigh`, 16 requests and MTP disabled.
+The formal journals and summaries remain unchanged. See the
+[full run report](validation/dgx-spark-gpqa-256k-20261002.md) and
+[verified evidence](validation/dgx-spark-gpqa-256k-20261002.json).
+
+W4A8 started from an empty journal at **2026-10-02 12:57:50 UTC**; W4A4 followed
+after W4A8 completed and passed verification. The baked client/profile revision
+was `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`. The W4A8 server reported
+262144 context, a 16-request limit and a KV pool of 1,565,460 tokens, which
+accommodated one full 256k request. The formats shared the same protocol and
+ran sequentially on the single GPU.
+
+A separate three-request diagnostic retry of three W4A8 responses produced
+final answers for all three, with two correct and one wrong. This retry used
+different concurrency from the formal 16-request run; it does not replace
+formal rows, raise the score or establish identical repeated outputs. The
+[unparsed-response investigation](validation/dgx-spark-gpqa-unparsed-20261003.md)
+records the earlier 194-row snapshot. Those saved records do not retain the
+actual stopping tokens, so they do not establish a cause involving quantization
+or a kernel.
+
+### Historical 32k trial
+
+The earlier **32768-context** W4A8 trial on 2026-10-02 scored
+**157/198 (79.29%)**, with 30 truncated and 32 unparsed responses (overlapping
+counts). Its 198 unique dataset-matching records and summary passed the checker;
+see the [historical evidence](validation/dgx-spark-gpqa-w4a8-20261002.json).
+This is a measurement under the earlier length limit. The 32k W4A4 trial was
+stopped without a complete score. These journals remain separate from the
+completed 256k results above.
+
+### Reproduce the full 256k protocol
+
+Evaluate both exports sequentially with
+`recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
+MTP is disabled during GPQA, although the exported vision and MTP tensors remain
+in each checkpoint. The earlier text/image/MTP checks do not establish a
+complete Spark GPQA result.
+
+| Setting | Spark GPQA protocol |
+|---|---|
+| Dataset | Official GPQA Diamond CSV, all 198 rows, no `--limit` |
+| Sampling | `temperature=0`, `top_p=0.95`, `top_k=20`, `min_p=0`, `presence_penalty=0`, `repetition_penalty=1` |
+| Thinking | Enabled and preserved, `reasoning_effort=xhigh` |
+| Seed and choices | Seed 0, shuffled choices |
+| Context and output | 262144 context (256k); `max_new_tokens=0` fills its remaining window; `continue_on_length=true` |
+| HTTP timeout | `generation.http_timeout_seconds=86400`: 24 hours per HTTP request, including each continuation; not a deadline for the full evaluation |
+| Serving | TP1, 16 requests, 64 FP32 SSM slots, FP8 KV, 0.70 memory fraction, FlashInfer attention |
+| Disabled | MTP, HiCache, host KV offload and CUDA graphs |
+
+The full GPQA recipe now uses **262144** context, matching the default, 5090 and
+6000D GPQA recipes. The separate four-request vision/MTP validation recipes
+remain at 32768. Continuation is bounded by the remaining context and at most
+eight follow-up requests; it does not create a larger context. A final length
+finish counts as incorrect even if the text contains the gold letter. The
+historical 32k journal stays separate from the new 256k runs.
+
+The GPQA recipe increases concurrency from the four requests used by the
+vision/MTP validation recipes to 16. It reserves 64 FP32 SSM slots and keeps the
+same 0.70 memory fraction. Check available shared RAM and the server's actual
+KV/Mamba allocations before starting; loading a recipe does not establish that
+a full 198-item run succeeds. Use a new output directory when changing
+concurrency or context instead of mixing rows from different protocols.
+
+Use a serving image built from the current checkout for the Compose client
+below. The original v0.1.2 image predates the GPQA client repair: SGLang extensions
+must be top-level JSON fields, rather than a nested SDK `extra_body` object.
+The repaired client also reserves chat-template tokens and counts truncated
+answers as wrong. When retaining an older serving image and using a separate
+updated CPU client, record both source revisions and the serving image digest.
+
+Fetch the official CSV on the host into `DATA_DIR`; the Spark input mount is
+read only inside the containers. `GPQA_CSV` below is the **container** path.
+Keep the CSV unchanged, including any repeated answer options.
+
+```bash
+set -e
+GPQA_DIR="$DATA_DIR" bash scripts/fetch_gpqa.sh
+export GPQA_CSV=/data/dataset/gpqa_diamond.csv
+export SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark-gpqa.yaml
+export SGLANG_SPARK_PORT="${SGLANG_SPARK_PORT:-30000}"
+export GPQA_RUN="outputs/spark-gpqa-256k-$(date -u +%Y%m%dT%H%M%SZ)"
+
+# The checker overrides the entrypoint, so verify its baked image explicitly.
+docker compose --profile spark run --rm --entrypoint python eval-gpqa-spark \
+  scripts/container_manifest.py verify
+
+for format in W4A8 W4A4; do
+  export SPARK_EVAL_MODEL="outputs/Qwen3.8-27B-NVFP4-${format}-spark"
+  run_name="${format,,}-temp0-ctx262144-c16"
+  docker compose --profile spark run --rm eval-gpqa-spark \
+    eval -c "$SPARK_EVAL_RECIPE" --model "$SPARK_EVAL_MODEL" \
+    --output "$GPQA_RUN/$run_name" --dry-run
+
+  docker compose --profile spark up -d serve-sglang-spark
+  timeout 600 bash -c 'until curl -fsS "http://127.0.0.1:${SGLANG_SPARK_PORT}/health" >/dev/null; do sleep 5; done'
+  docker compose --profile spark run --rm eval-gpqa-spark \
+    eval -c "$SPARK_EVAL_RECIPE" --model "$SPARK_EVAL_MODEL" \
+    --output "$GPQA_RUN/$run_name"
+  docker compose --profile spark run --rm --entrypoint python eval-gpqa-spark \
+    scripts/check_gpqa_results.py --csv "$GPQA_CSV" \
+    --run-dir "$GPQA_RUN/$run_name" \
+    --output-json "$GPQA_RUN/$run_name-verification.json" --seed 0
+  docker compose --profile spark stop serve-sglang-spark
+done
+```
+
+Run these commands in Bash so a failed evaluation or checker stops the
+sequence. Stop an existing MTP service before loading the baseline on the
+single GPU. The HTTP client and checker attach no GPU. The two journals and
+summaries appear under `OUTPUTS_DIR/spark-gpqa-256k-<timestamp>/` in
+`w4a8-temp0-ctx262144-c16` and `w4a4-temp0-ctx262144-c16`.
+Keep `GPQA_RUN` fixed when resuming an interrupted run: the client skips saved
+`item_id` values. Start a new directory when changing weights, temperature,
+context, seed, choice shuffle, server settings or client version.
+
+For a CPU client outside the serving image, install the current repository in
+a Python 3.10+ environment; a local CSV does not require Torch or Hub datasets.
+Inside the same loop above, replace the Compose evaluation and checker commands
+with the host commands below. This keeps the selected format, serving settings
+and dated run directory the same:
+
+```bash
+python3 -m venv .venv-gpqa
+.venv-gpqa/bin/python -m pip install .
+
+# With the corresponding baseline server already ready inside the loop:
+MEGAQUANT_SKIP_GPU_REPORT=1 GPQA_CSV="$DATA_DIR/dataset/gpqa_diamond.csv" \
+  .venv-gpqa/bin/megaquant eval -c recipes/eval-gpqa-diamond.spark-gpqa.yaml \
+  --model "$SPARK_EVAL_MODEL" \
+  --base-url "http://127.0.0.1:${SGLANG_SPARK_PORT}/v1" \
+  --output "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$run_name"
+.venv-gpqa/bin/python scripts/check_gpqa_results.py \
+  --csv "$DATA_DIR/dataset/gpqa_diamond.csv" \
+  --run-dir "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$run_name" \
+  --output-json "$OUTPUTS_DIR/${GPQA_RUN#outputs/}/$run_name-verification.json" --seed 0
+```
+
+Create the CPU environment before starting the loop. A score is publishable
+only after `summary.json` exists and the
+checker passes: it requires exactly 198 unique dataset-matching records,
+rebuilds shuffled choices and gold letters from the CSV, reparses responses,
+counts truncated/unparsed rows as wrong, and compares the recomputed scores
+with the summary. Its JSON contains aggregate checks and file hashes, without
+questions, answers, item IDs or local paths. Retain raw journals, the CSV,
+server logs and run metadata locally; publish the sanitized verification
+report and actual protocol with the final score. The historical W4A8 measurement
+above used 32k context. The two completed 256k measurements used new journals
+and passed these checks; reusing earlier 32k rows would invalidate a rerun.
+
 ## Transfer a built image
 
 The images contain the code and recipes, while weights and calibration remain
