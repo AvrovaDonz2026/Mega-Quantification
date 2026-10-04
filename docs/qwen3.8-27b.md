@@ -37,7 +37,20 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
-已完成的测量：
+Spark 完整 256k 评测已完成，两份权重各 198 个唯一题目和 summary 均通过严格
+校验，整套顺序评测于 **2026-10-03 13:12:33 UTC（北京时间 21:12:33）**完成：
+
+| Spark 权重（视觉/MTP 已量化） | 采样与服务 | 分数 | 截断 | 解析失败 |
+|---|---|---|---|---|
+| 混合 W4A8 | temperature 0，262144 上下文，GB10 TP1，FlashInfer，16 并发，MTP 关闭 | **177/198（89.39%）** | 0 | 4 |
+| 均匀 W4A4 | 同上 | **174/198（87.88%）** | 0 | 4 |
+
+两组都使用 seed 0、选项洗牌、thinking 开启并保留、`reasoning_effort=xhigh`。
+解析失败算错，正式 journal 和分数没有被重试覆盖。环境、协议和校验记录见
+[完整报告](validation/dgx-spark-gpqa-256k-20261002.md)与
+[结果证据](validation/dgx-spark-gpqa-256k-20261002.json)。
+
+历史测量保留如下，使用的权重、后端或上下文与上述正式结果不同：
 
 | 权重 | 采样 | 分数 | 机器 | 日期 |
 |---|---|---|---|---|
@@ -45,7 +58,12 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 | 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
 | 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化；历史 32k 试跑） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
 
-Spark 混合 W4A8 的历史 32k 试跑已结束，198 个唯一题目、选项和计分均通过独立校验，见[结果证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分，这个长度限制下的分数不能当作用户要求的 262144 上下文结果。32k 的 Spark 均匀 W4A4 试跑已停止，没有完整成绩。新的 W4A8 和 W4A4 256k 完整结果均待评测及验证完成；上表保留历史测量，不表示新协议已经跑完。
+Spark 混合 W4A8 的历史 32k 试跑已结束，198 个唯一题目、选项和计分均通过独立校验，见[历史证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分，这个长度限制下的分数不能当作 262144 上下文结果。32k 的 Spark 均匀 W4A4 试跑已停止，没有完整成绩；两组正式 256k 成绩见上面的新表。
+
+三条 W4A8 无最终答案响应另做了诊断重试，三条都给出答案，其中两条正确、
+一条错误。重试并发为 3，正式评测并发为 16，因此它不证明逐 token 相同，
+也不替换正式记录或提高正式分数。保存的旧响应没有实际停止 token，尚不能
+据此确定量化或 kernel 导致提前停止；见[诊断记录](validation/dgx-spark-gpqa-unparsed-20261003.md)。
 
 Spark 的混合 W4A8 和均匀 W4A4 都使用
 [`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
@@ -60,7 +78,7 @@ Spark 的混合 W4A8 和均匀 W4A4 都使用
 检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
 验证 JSON。原始 CSV 中的重复选项需要保留。两份 256k 的新结果使用独立目录
 `w4a8-temp0-ctx262144-c16` 和 `w4a4-temp0-ctx262144-c16`，不能复用历史
-32k journal。完整结束并通过校验后再补充两份新成绩。
+32k journal。两份完整 journal 均已结束并通过校验，成绩见上面的正式结果表。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|

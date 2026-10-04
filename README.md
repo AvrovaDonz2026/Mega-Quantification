@@ -2,6 +2,8 @@
 
 把 Hugging Face 上的 BF16 模型做训练后量化，导出 SGLang 能直接加载的 checkpoint。目前跑通的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。
 
+DGX Spark 的完整视觉/MTP 量化权重已完成 temperature 0、256k 上下文的 GPQA Diamond：混合 W4A8 **177/198（89.39%）**，均匀 W4A4 **174/198（87.88%）**，两组均为 0 截断、4 条解析失败，198 题结果通过独立校验。协议和证据见 [Spark 评测报告](docs/validation/dgx-spark-gpqa-256k-20261002.md)。
+
 默认方案叫 `nvfp4_w4a8`。MLP 和 `lm_head` 是 NVFP4（group 16），注意力投影是 FP8。导出文件里的 `quant_algo` 写成 `MIXED_PRECISION`。均匀的 W4A4 是另一份配方，整层都是 NVFP4 group 16。配方名叫 W4A8，是因为层的分法和 NVIDIA 公开的混合权重一致；MLP 的激活也是 NVFP4，不是 FP8。
 
 仓库里是代码和 YAML。27B 权重和量化结果不进 git。再跑一遍量化会重新估计 scale，文件不会和旧导出逐字节相同。机器差异、测过的分数、MTP 和上传方式写在 [Qwen3.8 手册](docs/qwen3.8-27b.md)。给代理用的约定在 [SKILL.md](SKILL.md)。
@@ -61,6 +63,8 @@ SKILL.md          给代理的入口
 ## English
 
 Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLang can load. The model this tree actually runs is Qwen/Qwen3.8-27B. The pipeline has been validated in production: PTQ finished on a 32 GB RTX 5090, and GPQA Diamond finished under SGLang on an 80 GB SM120.
+
+The Spark exports with quantized vision/MTP also completed GPQA Diamond at temperature 0 and 256k context: mixed W4A8 **177/198 (89.39%)**, uniform W4A4 **174/198 (87.88%)**. Both independently verified 198-item runs had zero truncations and four unparsed answers. See the [Spark evaluation report](docs/validation/dgx-spark-gpqa-256k-20261002.md) for the protocol and evidence.
 
 The default recipe, `nvfp4_w4a8`, puts NVFP4 group 16 on the MLP and `lm_head`, and FP8 on attention. The export tag is `MIXED_PRECISION`. Uniform W4A4 (`nvfp4_w4a4`) is NVFP4 group 16 on every targeted linear. The recipe is named W4A8 because the layer split matches NVIDIA's public mixed checkpoint; the MLP activations are NVFP4 as well.
 

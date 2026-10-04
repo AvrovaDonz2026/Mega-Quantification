@@ -82,10 +82,17 @@ questions, response text, item IDs or local paths. Do not publish raw journals.
 
 Finished journals:
 
+- Spark full **256k** mixed W4A8 with quantized vision/MTP: **177/198 (89.39%)**, truncated 0, unparsed 4. Spark full **256k** uniform W4A4 with quantized vision/MTP: **174/198 (87.88%)**, truncated 0, unparsed 4. Both use temperature **0**, seed 0, shuffled choices, preserved `xhigh` thinking, GB10 TP1, FlashInfer, 16 requests and MTP disabled. Each has 198 unique dataset-matching records and a verified summary; the sequential evaluation completed on 2026-10-03 at 13:12:33 UTC. Report/evidence: `docs/validation/dgx-spark-gpqa-256k-20261002.md` and `.json`.
 - Mixed / default W4A8, temperature **1.0**, 80 GB SM120, SGLang 64-way, 2026-09-22: **178/198** (truncated 0, unparsed 0). Not a rerun of the temperature-0 YAML.
 - Uniform W4A4, temperature **0**, Marlin, 2026-09-22: **172/198** (truncated 4, unparsed 6).
 - Historical **32k trial**: Spark mixed W4A8 with quantized vision/MTP, temperature **0**, GB10 TP1, FlashInfer, 16 requests, 32768 context, MTP disabled during GPQA, 2026-10-02: **157/198 (79.29%)**, truncated 30, unparsed 32 (overlapping counts). All 198 dataset-matching records and the summary passed the strict checker. Evidence: `docs/validation/dgx-spark-gpqa-w4a8-20261002.json`. This is a length-limited 32k result, not the user's requested 262144-context result.
-- The 32k Spark uniform W4A4 trial was stopped without a complete score. Both new 256k W4A8/W4A4 results remain pending; publish only after their separate complete runs pass verification. Use `w4a8-temp0-ctx262144-c16` and `w4a4-temp0-ctx262144-c16` under a new dated run directory; never resume those runs from 32k journals.
+- The 32k Spark uniform W4A4 trial was stopped without a complete score. The completed 256k runs use separate `w4a8-temp0-ctx262144-c16` and `w4a4-temp0-ctx262144-c16` directories; never resume those runs from 32k journals.
+
+A separate three-request diagnostic retry of three unparsed W4A8 responses
+produced three final answers, two correct and one wrong. It used concurrency 3
+rather than the formal 16, does not modify formal journals or scores and does
+not establish exact repeated-output determinism. The saved original responses
+lack actual stopping tokens; do not claim a proven quantization/kernel cause.
 
 | Box | Recipe |
 |---|---|
@@ -112,7 +119,8 @@ The 2026-10-01 v0.1.2 release rerun at `ac53833` is recorded in
 clean builds and isolated save/load checks. Fresh full W4A8/W4A4 quantization,
 strict export audits, vision/OCR and quantized embedded MTP passed; each format
 matched 205 baseline/MTP output IDs across five fixed cases. This remains a
-single-host TP1 result, without quality, performance or TP2 claims. The public
+single-host TP1 result; the separate full GPQA results above establish the
+recorded text benchmark scores, not vision quality, throughput or TP2. The public
 stdlib auditor is `scripts/audit_spark_export.py`; pass the full PTQ image
 revision with `--expected-revision` when checking export provenance.
 

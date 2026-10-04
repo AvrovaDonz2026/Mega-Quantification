@@ -1,0 +1,490 @@
+{
+  "complete": true,
+  "passed": true,
+  "scope": "full GPQA Diamond text evaluation of two freshly quantized Spark exports",
+  "finished_at": "2026-10-03T13:12:33Z",
+  "hardware": {
+    "platform": "DGX Spark",
+    "gpu": "NVIDIA GB10",
+    "sm": "12.1",
+    "architecture": "aarch64",
+    "gpu_count": 1,
+    "tensor_parallel_size": 1
+  },
+  "source": {
+    "serving_runtime_base_revision": "ac53833dc5af3f03a10087449ca80e9484deba48",
+    "client_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+    "recipe_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+    "serving_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+    "verifier_revision": "470bf3c2e341ac01f9a3a01e21462954ae824d9e",
+    "recipe": "recipes/eval-gpqa-diamond.spark-gpqa.yaml",
+    "local_checker_sha256": "1d3861c044dd1e1c2dc14ec93b2c3daa3e314c853c3ecbec17facbf070f63cb5"
+  },
+  "dataset": {
+    "dataset": "GPQA Diamond",
+    "rows": 198,
+    "csv_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+    "official_zip_sha256": "461ae7329f15a3e35f8184d2dac24b990f34fdf12f366ca4062d8e6638cd08dc",
+    "upstream_revision": "56686c06f5e19865c153de0fdb11be3890014df7",
+    "upstream_zip_git_blob_sha1": "80788cb325c4d63bbccad56c2e393b33389348fe",
+    "immutable_source_url": "https://raw.githubusercontent.com/idavidrein/gpqa/56686c06f5e19865c153de0fdb11be3890014df7/dataset.zip"
+  },
+  "containers": {
+    "client": {
+      "image_id": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
+      "manifest_sha256": "e80fa0ef0e7fe15b452698997ef6d892749a693ba31e4a44941f92b89a27f2aa",
+      "git_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+      "architecture": "aarch64",
+      "packages": {
+        "megaquant": "0.1.2",
+        "sglang": "0.5.20",
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "flashinfer-python": "0.6.18",
+        "sglang-kernel": "0.4.7",
+        "nvidia-modelopt": "0.46.1",
+        "cuda-toolkit": "13.0.3.0",
+        "triton": "3.7.1",
+        "pydantic": "2.13.5",
+        "pyyaml": "6.0.1"
+      },
+      "files_sha256": {
+        "recipes/eval-gpqa-diamond.spark-gpqa.yaml": "b7bc7838b43b09f78c24c9e731d5062b3548d8b3744c33e2a7f934a4bfa9434c",
+        "scripts/check_gpqa_results.py": "1d3861c044dd1e1c2dc14ec93b2c3daa3e314c853c3ecbec17facbf070f63cb5",
+        "scripts/patch_sglang_spark.py": "f83b6c4905213b5725dceaab46e83b59ee60347dbc8afd3167b4ca5cf06eefe1",
+        "scripts/check_sglang_spark.py": "148ebaf42d64e9a7f76e1a20788c6ca73cd851aac4c510cd7b22cbc0052e4bf1",
+        "scripts/check_sglang_attention.py": "7c45d7aac8ec6587c5b195809588bdee3c28fbabeba34ea4d15db87de03e6469",
+        "scripts/check_sglang_gdn.py": "f21398c450c2ef01dfe78141f295bd821d1baaf32dc94e85b1d5f594f1130838",
+        "scripts/check_sglang_fp8.py": "56361fdd275387c848dbeb22ff10065391dc2402d2225fdd2edbdb6695e869ba",
+        "scripts/check_sglang_ba.py": "aaa27bc2e3648824464b1ef610760fa9c73c7fa06a04aa2006b41c792f0ec493"
+      },
+      "installed_eval_gpqa_sha256": "9de9ac1ef756a40547fe31f18b9436dcebd78f9283d89c158c4cd090391e0104"
+    },
+    "serving": {
+      "image_id": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
+      "manifest_sha256": "e80fa0ef0e7fe15b452698997ef6d892749a693ba31e4a44941f92b89a27f2aa",
+      "git_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+      "architecture": "aarch64",
+      "packages": {
+        "megaquant": "0.1.2",
+        "sglang": "0.5.20",
+        "torch": "2.13.0+cu130",
+        "transformers": "5.12.1",
+        "flashinfer-python": "0.6.18",
+        "sglang-kernel": "0.4.7",
+        "nvidia-modelopt": "0.46.1",
+        "cuda-toolkit": "13.0.3.0",
+        "triton": "3.7.1",
+        "pydantic": "2.13.5",
+        "pyyaml": "6.0.1"
+      },
+      "files_sha256": {
+        "recipes/eval-gpqa-diamond.spark-gpqa.yaml": "b7bc7838b43b09f78c24c9e731d5062b3548d8b3744c33e2a7f934a4bfa9434c",
+        "scripts/check_gpqa_results.py": "1d3861c044dd1e1c2dc14ec93b2c3daa3e314c853c3ecbec17facbf070f63cb5",
+        "scripts/patch_sglang_spark.py": "f83b6c4905213b5725dceaab46e83b59ee60347dbc8afd3167b4ca5cf06eefe1",
+        "scripts/check_sglang_spark.py": "148ebaf42d64e9a7f76e1a20788c6ca73cd851aac4c510cd7b22cbc0052e4bf1",
+        "scripts/check_sglang_attention.py": "7c45d7aac8ec6587c5b195809588bdee3c28fbabeba34ea4d15db87de03e6469",
+        "scripts/check_sglang_gdn.py": "f21398c450c2ef01dfe78141f295bd821d1baaf32dc94e85b1d5f594f1130838",
+        "scripts/check_sglang_fp8.py": "56361fdd275387c848dbeb22ff10065391dc2402d2225fdd2edbdb6695e869ba",
+        "scripts/check_sglang_ba.py": "aaa27bc2e3648824464b1ef610760fa9c73c7fa06a04aa2006b41c792f0ec493"
+      },
+      "installed_eval_gpqa_sha256": "9de9ac1ef756a40547fe31f18b9436dcebd78f9283d89c158c4cd090391e0104"
+    }
+  },
+  "profile": {
+    "context_length": 262144,
+    "concurrency_limit": 16,
+    "http_timeout_seconds": 86400,
+    "recipe_snapshot_sha256": "b7bc7838b43b09f78c24c9e731d5062b3548d8b3744c33e2a7f934a4bfa9434c"
+  },
+  "runs": {
+    "w4a8": {
+      "format": "mixed W4A8",
+      "started_at": "2026-10-02T12:57:50Z",
+      "finished_at": "2026-10-03T03:52:22Z",
+      "fresh_start": {
+        "run_id": "spark-gpqa-256k-20261002-w4a8",
+        "initial_journal_rows": 0,
+        "initial_summary_exists": false,
+        "context_length": 262144,
+        "concurrency": 16,
+        "evidence_sha256": "99b288aba36d77c358a927631750688d78aed2c1e4b175a41d280320be14b5ea"
+      },
+      "scores": {
+        "n": 198,
+        "correct": 177,
+        "accuracy": 0.8939393939393939,
+        "denominator": 198,
+        "truncated": 0,
+        "unparsed": 4,
+        "headline": "177/198"
+      },
+      "coverage": {
+        "dataset_rows": 198,
+        "journal_rows": 198,
+        "valid_record_objects": 198,
+        "unique_item_ids": 198,
+        "missing_items": 0,
+        "unexpected_items": 0,
+        "duplicate_rows": 0
+      },
+      "protocol": {
+        "sampling": {
+          "temperature": 0.0,
+          "top_p": 0.95,
+          "top_k": 20,
+          "min_p": 0.0,
+          "presence_penalty": 0.0,
+          "repetition_penalty": 1.0,
+          "do_sample": true
+        },
+        "thinking": {
+          "enable": true,
+          "preserve": true,
+          "reasoning_effort": "xhigh"
+        },
+        "generation": {
+          "max_model_len": 262144,
+          "max_new_tokens": 0,
+          "continue_on_length": true,
+          "seed": 0,
+          "http_timeout_seconds": 86400.0
+        },
+        "shuffle_choices": true,
+        "concurrency": 16,
+        "speculative_algorithm": null
+      },
+      "actual_server": {
+        "context_length": 262144,
+        "max_running_requests": 16,
+        "max_mamba_cache_size": 64,
+        "mem_fraction_static": 0.7,
+        "chunked_prefill_size": 2048,
+        "max_prefill_tokens": 16384,
+        "kv_cache_dtype": "fp8_e4m3",
+        "quantization": "modelopt",
+        "tp_size": 1,
+        "page_size": 1,
+        "attention_backend": "flashinfer",
+        "sampling_backend": "pytorch",
+        "linear_attn_backend": "triton",
+        "mamba_backend": "triton",
+        "mamba_full_memory_ratio": 4.59,
+        "mamba_radix_cache_strategy": "extra_buffer_lazy",
+        "mamba_ssm_dtype": "float32",
+        "enable_multimodal": true,
+        "disable_cuda_graph": true,
+        "enable_hierarchical_cache": false,
+        "allow_auto_truncate": false,
+        "speculative_algorithm": null,
+        "speculative_num_steps": null,
+        "speculative_eagle_topk": null,
+        "speculative_num_draft_tokens": null,
+        "version": "0.5.20"
+      },
+      "actual_pool": {
+        "token_capacity": 1565460
+      },
+      "runtime_generation_limit": {
+        "environment_variable": "SGLANG_MAX_NEW_TOKENS_LIMIT",
+        "configured": false,
+        "value": null,
+        "uncapped": true,
+        "allow_auto_truncate": false,
+        "source_evidence_sha256": "9ab9269a49dd54bfbcbad6ddb799c065246b35ed8ce90c3cff6cfbf66d1c6834"
+      },
+      "server_info_sha256": "0f3d379c27d81daf383e24f8773f04bfb8d37114aa44d78f54383940a91aa317",
+      "elapsed_seconds": 53672.249,
+      "token_totals": {
+        "prompt_tokens": 63360,
+        "completion_tokens": 3030800,
+        "continuations": 0,
+        "continued_items": 0,
+        "max_item_completion_tokens": 176155,
+        "items_over_32768_completion_tokens": 25
+      },
+      "result_files": {
+        "csv": {
+          "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+          "bytes": 1373492
+        },
+        "journal": {
+          "sha256": "0b6b1085707bbcbad6a76013c9b21bc9d45f77f7e5ec0497b7459157a20ce5dc",
+          "bytes": 9479026
+        },
+        "summary": {
+          "sha256": "3b3217b7987afc97fa16ad2e3f37538d5c020dc250153c22e3b0eaa6c014c2bb",
+          "bytes": 4360
+        }
+      },
+      "checkpoint_files": {
+        "backend_meta.json": {
+          "bytes": 326,
+          "sha256": "0635aa810df0d6b12e47468ebfe3813a011afbc96d53207a41b991231196639d"
+        },
+        "calibration_coverage.json": {
+          "bytes": 10486,
+          "sha256": "d2d30eeb6dfe6ed59281184768d76e25e885c24d039562bb2ee483a6143b1933"
+        },
+        "chat_template.jinja": {
+          "bytes": 8952,
+          "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+        },
+        "config.json": {
+          "bytes": 91440,
+          "sha256": "adb54c4b409ae83f17681a1804c3845a9d419f5207a9f91b06b1f74484a3d6a2"
+        },
+        "generation_config.json": {
+          "bytes": 214,
+          "sha256": "a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4"
+        },
+        "hf_quant_config.json": {
+          "bytes": 56978,
+          "sha256": "056d78a66803c6b155b88b1b935fb7f5e4aef843f4f7189c05458f3dbbadeb35"
+        },
+        "model-00001-of-00003.safetensors": {
+          "bytes": 9944305992,
+          "sha256": "436d06084875c03404195e7554c7fd0069113242cbe55ce4b66a9a9767b6c5d1"
+        },
+        "model-00002-of-00003.safetensors": {
+          "bytes": 9757514560,
+          "sha256": "b6077b19a82043b0ebb8e07c5ce8ac5313737ecb65dd5d24e7d315192ad1e7a8"
+        },
+        "model-00003-of-00003.safetensors": {
+          "bytes": 999971632,
+          "sha256": "b4517400f567e7da03e0070c614f829447e44a207a9892ad0bb97ef091ca9917"
+        },
+        "model.safetensors.index.json": {
+          "bytes": 246561,
+          "sha256": "45cc03825a8a16542bed76be6f19ff9d21fc16ed6413c106dc2fc0892cf871e6"
+        },
+        "mtp_export.json": {
+          "bytes": 110,
+          "sha256": "c444ff73ed217f4e72b0a70d23ea741a30756465932c2a5407cf0f8b9e932eb1"
+        },
+        "preprocessor_config.json": {
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+        },
+        "provenance.json": {
+          "bytes": 511,
+          "sha256": "b457a5606b94798162c32c80cb2fd26c2d220ab49fed61824887a82efffecc5e"
+        },
+        "tokenizer.json": {
+          "bytes": 19989325,
+          "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        },
+        "tokenizer_config.json": {
+          "bytes": 1123,
+          "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+        },
+        "video_preprocessor_config.json": {
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+        },
+        "vision_export.json": {
+          "bytes": 84,
+          "sha256": "566693584b28e8e1c17309511a31c259baa7af291c83c33225451698a6655647"
+        }
+      },
+      "verification": "remote verification matches independently recomputed local checks"
+    },
+    "w4a4": {
+      "format": "uniform W4A4",
+      "started_at": "2026-10-03T03:55:46Z",
+      "finished_at": "2026-10-03T13:12:26Z",
+      "fresh_start": {
+        "run_id": "spark-gpqa-256k-20261002-w4a4",
+        "initial_journal_rows": 0,
+        "initial_summary_exists": false,
+        "context_length": 262144,
+        "concurrency": 16,
+        "evidence_sha256": "0f943f8d0bb358314b0f8866fc5268bd53e045792b5603857d67d6c4a3b232ae"
+      },
+      "scores": {
+        "n": 198,
+        "correct": 174,
+        "accuracy": 0.8787878787878788,
+        "denominator": 198,
+        "truncated": 0,
+        "unparsed": 4,
+        "headline": "174/198"
+      },
+      "coverage": {
+        "dataset_rows": 198,
+        "journal_rows": 198,
+        "valid_record_objects": 198,
+        "unique_item_ids": 198,
+        "missing_items": 0,
+        "unexpected_items": 0,
+        "duplicate_rows": 0
+      },
+      "protocol": {
+        "sampling": {
+          "temperature": 0.0,
+          "top_p": 0.95,
+          "top_k": 20,
+          "min_p": 0.0,
+          "presence_penalty": 0.0,
+          "repetition_penalty": 1.0,
+          "do_sample": true
+        },
+        "thinking": {
+          "enable": true,
+          "preserve": true,
+          "reasoning_effort": "xhigh"
+        },
+        "generation": {
+          "max_model_len": 262144,
+          "max_new_tokens": 0,
+          "continue_on_length": true,
+          "seed": 0,
+          "http_timeout_seconds": 86400.0
+        },
+        "shuffle_choices": true,
+        "concurrency": 16,
+        "speculative_algorithm": null
+      },
+      "actual_server": {
+        "context_length": 262144,
+        "max_running_requests": 16,
+        "max_mamba_cache_size": 64,
+        "mem_fraction_static": 0.7,
+        "chunked_prefill_size": 2048,
+        "max_prefill_tokens": 16384,
+        "kv_cache_dtype": "fp8_e4m3",
+        "quantization": "modelopt",
+        "tp_size": 1,
+        "page_size": 1,
+        "attention_backend": "flashinfer",
+        "sampling_backend": "pytorch",
+        "linear_attn_backend": "triton",
+        "mamba_backend": "triton",
+        "mamba_full_memory_ratio": 4.59,
+        "mamba_radix_cache_strategy": "extra_buffer_lazy",
+        "mamba_ssm_dtype": "float32",
+        "enable_multimodal": true,
+        "disable_cuda_graph": true,
+        "enable_hierarchical_cache": false,
+        "allow_auto_truncate": false,
+        "speculative_algorithm": null,
+        "speculative_num_steps": null,
+        "speculative_eagle_topk": null,
+        "speculative_num_draft_tokens": null,
+        "version": "0.5.20"
+      },
+      "actual_pool": {
+        "token_capacity": 1700758
+      },
+      "runtime_generation_limit": {
+        "environment_variable": "SGLANG_MAX_NEW_TOKENS_LIMIT",
+        "configured": false,
+        "value": null,
+        "uncapped": true,
+        "allow_auto_truncate": false,
+        "source_evidence_sha256": "578bbeb8e94de67445c84ab4e24cbf6afbb60fe04ac9e9f3c2d9f6fa992e74e9"
+      },
+      "server_info_sha256": "333c66d0317789d79107f24b21fd62615e2443bd12691ecce400d901088ca526",
+      "elapsed_seconds": 33400.403,
+      "token_totals": {
+        "prompt_tokens": 63360,
+        "completion_tokens": 2745811,
+        "continuations": 0,
+        "continued_items": 0,
+        "max_item_completion_tokens": 149616,
+        "items_over_32768_completion_tokens": 25
+      },
+      "result_files": {
+        "csv": {
+          "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+          "bytes": 1373492
+        },
+        "journal": {
+          "sha256": "3b1605dcd0c9fc59927795724daf05269f05ece1186d1f0c24c8aae851836007",
+          "bytes": 8533214
+        },
+        "summary": {
+          "sha256": "4568deeb6e974340c387158cd5e1a165faaa5eeafdb41a816ef471205633c22d",
+          "bytes": 4476
+        }
+      },
+      "checkpoint_files": {
+        "backend_meta.json": {
+          "bytes": 224,
+          "sha256": "c7cacc46a8524cfff7e336d2b2bb24a32c5165714f4f1f8777611820befb967e"
+        },
+        "calibration_coverage.json": {
+          "bytes": 10486,
+          "sha256": "d2d30eeb6dfe6ed59281184768d76e25e885c24d039562bb2ee483a6143b1933"
+        },
+        "chat_template.jinja": {
+          "bytes": 8952,
+          "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+        },
+        "config.json": {
+          "bytes": 14972,
+          "sha256": "1863a03b63ef930ee75c341c684e00ca8862c6dfe2477e26ea2f4a72415a5941"
+        },
+        "generation_config.json": {
+          "bytes": 214,
+          "sha256": "a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4"
+        },
+        "hf_quant_config.json": {
+          "bytes": 9996,
+          "sha256": "9ec4f59889055843cb4a22c681f0a7fcaf3bb78e77b6f55a19b04b9a208bb1b7"
+        },
+        "model-00001-of-00002.safetensors": {
+          "bytes": 9959627880,
+          "sha256": "f1df2abec2f089c7ed81da84691827927c7a64923cb59da0c63de5a3489b9900"
+        },
+        "model-00002-of-00002.safetensors": {
+          "bytes": 7540105344,
+          "sha256": "d595aa643fa086a185b11e4d40a69eb4336764f8ce4ce3c4109f54b2f0174440"
+        },
+        "model.safetensors.index.json": {
+          "bytes": 269697,
+          "sha256": "dc4c2b5670797864dbf9f57b99a83734fbb10ad03cde130c3e018ef5f6a7e7f3"
+        },
+        "mtp_export.json": {
+          "bytes": 110,
+          "sha256": "c444ff73ed217f4e72b0a70d23ea741a30756465932c2a5407cf0f8b9e932eb1"
+        },
+        "preprocessor_config.json": {
+          "bytes": 390,
+          "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+        },
+        "provenance.json": {
+          "bytes": 511,
+          "sha256": "1b69a189219ee6ec2dd6aac226ff87d7bf16d681304415d6c44be8faf1278850"
+        },
+        "tokenizer.json": {
+          "bytes": 19989325,
+          "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        },
+        "tokenizer_config.json": {
+          "bytes": 1123,
+          "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+        },
+        "video_preprocessor_config.json": {
+          "bytes": 385,
+          "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+        },
+        "vision_export.json": {
+          "bytes": 84,
+          "sha256": "566693584b28e8e1c17309511a31c259baa7af291c83c33225451698a6655647"
+        }
+      },
+      "verification": "remote verification matches independently recomputed local checks"
+    }
+  },
+  "scoring": "correct/198; truncated or unparsed responses count as wrong",
+  "limits": [
+    "GPQA is text only and does not measure visual reasoning quality",
+    "embedded MTP is disabled during these GPQA runs",
+    "temperature zero does not establish arbitrary batch or hardware determinism",
+    "single completed run per format; no speedup or repeated-run accuracy claim",
+    "262144-token configured context does not establish unlimited KV capacity or residency",
+    "earlier 32768-token trials are retained separately and excluded from these runs",
+    "vision and MTP validation is separately recorded in the 20261001 release report"
+  ]
+}

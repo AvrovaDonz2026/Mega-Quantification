@@ -35,8 +35,14 @@ change when a hardware profile is added. Groups below are the public index.
 
 采样和比特布局在 `docs/qwen3.8-27b.md`。跑完的分数是 journal 里 198 行都在之后的 `correct/198`。代理从仓库根目录的 `SKILL.md` 读硬约定。
 
-Spark 的历史 32k W4A8 试跑为 157/198，含长度截断；它不代表新的 262144
-上下文结果。32k W4A4 试跑已停止。两份权重按新 256k 协议完整评测并通过
-严格校验后再公布新成绩，使用独立日期目录，保留旧 journal 和证据不变。
+Spark 的完整 262144 上下文、temperature 0、16 并发 GPQA 已完成并通过严格
+校验：混合 W4A8 **177/198（89.39%）**，均匀 W4A4 **174/198（87.88%）**。
+两组各 198 个唯一题目，截断均为 0，解析失败各 4；thinking 保留并使用
+`xhigh`，GPQA 时关闭 MTP。见[完整报告](../docs/validation/dgx-spark-gpqa-256k-20261002.md)与
+[验证证据](../docs/validation/dgx-spark-gpqa-256k-20261002.json)。
+
+历史 32k W4A8 试跑为 157/198，含长度截断；32k W4A4 试跑已停止且无完整
+成绩。新旧 journal 分开保留。三题诊断重试的并发为 3，不替换正式 16 并发
+记录、提高正式分数或证明逐 token 复现。
 
 Generated `recipes/*.pod.yaml` files are local and gitignored.

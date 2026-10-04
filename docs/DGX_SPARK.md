@@ -231,30 +231,47 @@ alone is not a measured speedup.
 
 ## Full GPQA Diamond at temperature 0
 
-The historical **32k context trial** of Spark mixed W4A8 on 2026-10-02 scored
-**157/198 (79.29%)**.
-All 198 unique dataset-matching records and the summary passed the strict
-checker. There were 30 truncated and 32 unparsed responses; those counts
-overlap, and each affected response counts as wrong. See the
-[verified evidence](validation/dgx-spark-gpqa-w4a8-20261002.json).
-This measures the earlier 32768-token limit, not the requested 262144-token
-rerun. The 32k uniform W4A4 trial was stopped and has no completed score.
-The new **262144-context W4A8 and W4A4 results are both pending**; no completed
-256k score or absence of truncation is established yet.
+Both full **262144-context** Spark runs completed and passed strict result
+verification by **2026-10-03 13:12:33 UTC** (21:12:33 in Beijing).
 
-The new W4A8 run started from an empty journal at **2026-10-02 12:57:50 UTC**.
-The baked client/profile revision is `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`.
-The live server reports 262144 context, a 16-request limit and a KV pool of
-1,565,460 tokens, which accommodates one full 256k request. The two formats
-share the same protocol and run sequentially; W4A4 starts after W4A8 completes
-and passes verification. These startup checks establish the deployed settings;
-the new accuracy results require the complete journals.
+| Export | Strict score | Dataset-matching unique records | Truncated | Unparsed |
+|---|---|---|---|---|
+| Mixed W4A8, quantized vision/MTP | **177/198 (89.39%)** | 198 | 0 | 4 |
+| Uniform W4A4, quantized vision/MTP | **174/198 (87.88%)** | 198 | 0 | 4 |
 
-At the 194-record snapshot on 2026-10-03, three W4A8 responses stopped without
-a final answer. CPU checks found no evidence of an emitted final answer being
-discarded by the parser; the records do not retain the actual stopping tokens.
-See the [investigation and evidence](validation/dgx-spark-gpqa-unparsed-20261003.md).
-The scoring rule remains unchanged, and the complete 256k results are pending.
+Each unparsed response counts as wrong. Both runs used temperature 0, seed 0,
+shuffled choices, preserved thinking with `xhigh`, 16 requests and MTP disabled.
+The formal journals and summaries remain unchanged. See the
+[full run report](validation/dgx-spark-gpqa-256k-20261002.md) and
+[verified evidence](validation/dgx-spark-gpqa-256k-20261002.json).
+
+W4A8 started from an empty journal at **2026-10-02 12:57:50 UTC**; W4A4 followed
+after W4A8 completed and passed verification. The baked client/profile revision
+was `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`. The W4A8 server reported
+262144 context, a 16-request limit and a KV pool of 1,565,460 tokens, which
+accommodated one full 256k request. The formats shared the same protocol and
+ran sequentially on the single GPU.
+
+A separate three-request diagnostic retry of three W4A8 responses produced
+final answers for all three, with two correct and one wrong. This retry used
+different concurrency from the formal 16-request run; it does not replace
+formal rows, raise the score or establish identical repeated outputs. The
+[unparsed-response investigation](validation/dgx-spark-gpqa-unparsed-20261003.md)
+records the earlier 194-row snapshot. Those saved records do not retain the
+actual stopping tokens, so they do not establish a cause involving quantization
+or a kernel.
+
+### Historical 32k trial
+
+The earlier **32768-context** W4A8 trial on 2026-10-02 scored
+**157/198 (79.29%)**, with 30 truncated and 32 unparsed responses (overlapping
+counts). Its 198 unique dataset-matching records and summary passed the checker;
+see the [historical evidence](validation/dgx-spark-gpqa-w4a8-20261002.json).
+This is a measurement under the earlier length limit. The 32k W4A4 trial was
+stopped without a complete score. These journals remain separate from the
+completed 256k results above.
+
+### Reproduce the full 256k protocol
 
 Evaluate both exports sequentially with
 `recipes/eval-gpqa-diamond.spark-gpqa.yaml`. This is the GPQA baseline recipe: embedded
@@ -370,8 +387,8 @@ with the summary. Its JSON contains aggregate checks and file hashes, without
 questions, answers, item IDs or local paths. Retain raw journals, the CSV,
 server logs and run metadata locally; publish the sanitized verification
 report and actual protocol with the final score. The historical W4A8 measurement
-above used 32k context. Publish new W4A8 and W4A4 256k scores only after each
-full run passes; reusing earlier 32k rows would invalidate the new result.
+above used 32k context. The two completed 256k measurements used new journals
+and passed these checks; reusing earlier 32k rows would invalidate a rerun.
 
 ## Transfer a built image
 
