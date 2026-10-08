@@ -182,6 +182,12 @@ changes weight-scale calibration, while retaining the packed NVFP4 group-16
 format; it leaves the existing `max` configuration unchanged. The GPU operator
 gate must demonstrate that each search runs instead of silently matching max.
 
+The standalone MTP branch starts on CPU. Its calibration hook follows the
+target output's actual device and carries ModelOpt's precollected max statistics
+with the branch, preserving their values. Moving only module buffers leaves
+these ordinary tensor statistics on CPU and breaks static-weight calibration
+on the first CUDA MTP forward.
+
 Changing the search objective does not establish a higher full-model score.
 The new recipes are experimental; full quantization and quality results remain
 to be measured. Preserve the original scored exports and journals.
