@@ -191,6 +191,34 @@ def test_w4a4_cfg_uses_nvfp4_activations_and_lm_head() -> None:
     assert _block_size(last) == 16
 
 
+def test_w4a4_mse_sweeps_fp8_scales_without_changing_vision_or_mtp_formats() -> None:
+    recipe = load_recipe(REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a4.spark.yaml")
+    assert recipe.model.quantize_vision is True
+    assert recipe.model.quantize_mtp is True
+    backend = ModelOptBackend()
+    max_cfg = backend.build_quant_cfg(QuantPipeline(recipe).resolve())
+    mse_recipe = recipe.model_copy(update={"algorithm": "mse"})
+    mse_cfg = backend.build_quant_cfg(QuantPipeline(mse_recipe).resolve())
+
+    assert max_cfg["algorithm"] == "max"
+    assert mse_cfg["algorithm"] == {"method": "mse", "fp8_scale_sweep": True}
+    assert mse_cfg["quant_cfg"] == max_cfg["quant_cfg"]
+    weight, activation = _weight_input_attrs(mse_cfg)
+    for attrs in (weight, activation):
+        assert _num_bits(attrs) == (2, 1)
+        assert _block_size(attrs) == 16
+    for branch in ("visual", "mtp"):
+        for quantizer in ("weight_quantizer", "input_quantizer"):
+            assert _last_named(mse_cfg, branch, quantizer).get("enable") is True
+    assert _block_size(_last_named(mse_cfg, "lm_head", "weight_quantizer")) == 16
+
+
+def test_non_nvfp4_mse_preserves_generic_multiplier_search() -> None:
+    recipe = load_recipe(W4A4).model_copy(update={"scheme": "fp8_w8a8", "algorithm": "mse"})
+    cfg = ModelOptBackend().build_quant_cfg(QuantPipeline(recipe).resolve())
+    assert cfg["algorithm"] == {"method": "mse"}
+
+
 def test_describe_mixed_matches_nvidia_gs16() -> None:
     summary = describe_cfg("nvfp4_mixed")
     assert summary["supported"] is True

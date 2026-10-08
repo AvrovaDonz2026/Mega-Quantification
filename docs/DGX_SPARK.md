@@ -154,6 +154,82 @@ python scripts/audit_spark_export.py \
   --expected-revision "$GIT_REVISION" --output-json w4a4-export-audit.json
 ```
 
+## Controlled W4A4 calibration experiments
+
+Two additional recipes compare scale-search algorithms with the existing
+W4A4 `max` baseline. They retain uniform NVFP4 group 16, quantized vision and
+MTP, the same source checkpoint, the same 256 image/text samples, maximum
+sequence length 1024, batch size 1 and seed 42. Export KV quantizers remain
+unset; serving continues to use FP8 KV and FP32 SSM state. Memory placement
+uses the same settings from [Prepare inputs](#prepare-inputs).
+
+| Recipe | Weight-scale calibration | Separate export |
+|---|---|---|
+| `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `max`, the scored baseline | `Qwen3.8-27B-NVFP4-W4A4-spark` |
+| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | MSE minimizes NVFP4 weight reconstruction error with FP8 block-scale search | `Qwen3.8-27B-NVFP4-W4A4-spark-mse` |
+| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | Local-Hessian weights reconstruction error using input activations; FP8 scale search, block 16 | `Qwen3.8-27B-NVFP4-W4A4-spark-hessian` |
+
+Activation calibration remains `max` in these experiments. The MSE recipe uses
+the repository's explicit `fp8_scale_sweep=true` for NVFP4 weights; generic FP8
+MSE behavior is unchanged. Local-Hessian also uses `fp8_scale_sweep=true` and
+`block_size=16`.
+Changing the search objective does not establish a higher full-model score.
+The new recipes are experimental; full quantization and quality results remain
+to be measured. Preserve the original scored exports and journals.
+
+Use the same calibration JSONL and image hashes for every algorithm. Verify
+the actual 256-row count, image/text counts and token lengths before PTQ;
+`num_samples` and `max_seq_length` are requested limits, not measured coverage.
+Keep GPQA questions, choices, answers and generated evaluation traces out of
+calibration and candidate selection. Do not lengthen or replace calibration
+data during this controlled comparison.
+
+Rebuild the PTQ image from the current revision before using the new baked
+recipes. Exercise the GPU scale-search operators with
+`scripts/check_nvfp4_calibration.py` inside that image before full PTQ; an
+operator check alone does not validate a full checkpoint or its quality.
+Then run each candidate sequentially:
+
+```bash
+set -e
+# These entrypoint overrides bypass the normal CLI manifest guard.
+docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
+  scripts/container_manifest.py verify
+docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
+  scripts/check_nvfp4_calibration.py --output outputs/nvfp4-calibration-check.json
+
+for algorithm in mse hessian; do
+  recipe="recipes/qwen3.8-27b-nvfp4-w4a4.spark-${algorithm}.yaml"
+  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
+    plan -c "$recipe"
+  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
+    quantize -c "$recipe"
+  python scripts/audit_spark_export.py \
+    "$OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A4-spark-${algorithm}" \
+    "$MODELS_DIR/Qwen3.8-27B" nvfp4_w4a4 \
+    --expected-revision "$GIT_REVISION" \
+    --output-json "w4a4-${algorithm}-export-audit.json"
+done
+```
+
+Each candidate must pass the strict source/provenance/tensor/index/scale and
+vision/MTP calibration-coverage audit, then the actual text/image/OCR and
+embedded MTP checks in the next section. Compare baseline and MTP token IDs
+within the new checkpoint; matching the older checkpoint's output is not the
+gate. Retain actual verification steps, accepted drafts and finite output
+checks. Those fixed requests establish functionality for the cases tested,
+without a general vision quality claim.
+
+Run full GPQA separately for each passing candidate with
+`eval-gpqa-diamond.spark-gpqa.yaml`: temperature 0, 262144 context, 16 requests,
+seed 0, shuffled choices, preserved `xhigh` thinking and MTP disabled. Set
+`SPARK_EVAL_MODEL` to the candidate export and use a new dated `--output`
+directory for its 198-item journal. Apply the
+[same strict verification](#full-gpqa-diamond-at-temperature-0) and report
+each measured score, truncation and unparsed counts alongside the unchanged
+174/198 max baseline. One comparison does not establish a causal explanation
+for a score difference or deterministic repeated output.
+
 ## Vision and MTP inference
 
 Verify the serving image's manifest, seven-file patch guard, ARM64/SM121 GPU,

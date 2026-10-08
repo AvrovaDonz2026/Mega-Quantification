@@ -595,6 +595,10 @@ def _apply_algorithm(cfg: dict[str, Any], algorithm: str, canonical: str = "") -
         return
     if key == "mse":
         cfg["algorithm"] = {"method": "mse"}
+        if canonical.startswith("nvfp4"):
+            # Use NVIDIA's NVFP4 MSE preset's FP8 block-scale sweep instead of
+            # generic amax multiplier search; leave other formats' MSE intact.
+            cfg["algorithm"]["fp8_scale_sweep"] = True
         return
     cfg["algorithm"] = algorithm
 

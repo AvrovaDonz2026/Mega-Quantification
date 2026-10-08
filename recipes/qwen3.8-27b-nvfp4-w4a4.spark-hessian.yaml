@@ -1,0 +1,34 @@
+# Controlled W4A4 Spark experiment: same calibration and layer map as the
+# max baseline; change only the scale-search algorithm and output identity.
+# Local-Hessian uses input activations to weight reconstruction error and
+# searches FP8 block scales with block size 16. Activation calibration remains
+# max. Quantized vision and MTP remain enabled. Full-model quality is unmeasured.
+
+name: qwen3.8-27b-nvfp4-w4a4-spark-hessian
+backend: modelopt
+scheme: nvfp4_w4a4
+algorithm: local_hessian
+kv_cache: null
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: /models/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: true
+  quantize_mtp: true
+
+calibration:
+  dataset: /data/calibration.jsonl
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 1
+  seed: 42
+  with_images: true
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4-spark-hessian
+  format: hf
+  pack: true
