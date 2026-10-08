@@ -189,8 +189,12 @@ these ordinary tensor statistics on CPU and breaks static-weight calibration
 on the first CUDA MTP forward.
 
 Changing the search objective does not establish a higher full-model score.
-The new recipes are experimental; full quantization and quality results remain
-to be measured. Preserve the original scored exports and journals.
+Both experimental recipes completed full 27B quantization, strict export
+audits, and fixed text/image/OCR and embedded-MTP checks on Spark. Each actually
+completed 519 weight searches. See the
+[2026-10-08 validation record](validation/dgx-spark-w4a4-quality-20261008.md).
+Independent GPQA scores remain pending. Preserve the original scored exports
+and journals.
 
 Use the same calibration JSONL and image hashes for every algorithm. Verify
 the actual 256-row count, image/text counts and token lengths before PTQ;

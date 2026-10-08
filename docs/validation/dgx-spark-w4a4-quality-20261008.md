@@ -1,0 +1,135 @@
+# DGX Spark W4A4 校准修复验证：2026-10-08
+
+**状态：验证进行中。** MSE 和 Local-Hessian 的完整 27B 多模态量化及严格导出审计均已通过。
+两种新权重的文本/图像/OCR 和嵌入 MTP 服务检查均已通过。
+正式 256k GPQA 的 MSE 客户端已于 `2026-10-08T03:11:17Z` 启动，
+截至 `2026-10-08T03:21:04Z` 已完成 11/198 条 journal 记录；Local-Hessian 仍排队。
+当前没有新的 GPQA 分数，整模型质量验证尚未完成。
+详见[机器可读记录](dgx-spark-w4a4-quality-20261008.json)。
+
+## 本次修复
+
+NVFP4 MSE 配置现在显式启用 FP8 block-scale 搜索。MSE 和 Local-Hessian 使用
+静态权重 block scale，使 ModelOpt 实际执行搜索；默认动态权重量化器会跳过该搜索。
+激活保持动态 NVFP4 block scale 和 max 校准，权重/激活仍为 group-16 W4A4。
+模型的量化范围包括视觉和 MTP 投影。
+
+真实多模态量化还复现了 MTP 的 CPU/CUDA 设备错误：ModelOpt 在第一次模型前向前收集的
+max 统计是普通张量，移动 MTP 模块不能同时移动这些统计。校准 hook 现在将它们与 MTP
+一起移动到目标输出设备，保留已有数值。
+
+GPU 证据冻结于 `14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d`。
+PTQ 镜像 ID 为 `sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1`；
+运行前 manifest guard 通过。镜像 manifest 的全部 79 个源文件和 27 个已安装包文件
+SHA-256 与冻结源码 archive 一致。硬件为单台 ARM64 DGX Spark，NVIDIA GB10 / SM121。
+使用 ModelOpt 0.47.0、Transformers 5.12.1 和 PyTorch
+`2.14.0a0+4fdf77b940.nv26.8.63802676`。
+
+## 完成与待完成的检查
+
+| 检查 | MSE | Local-Hessian |
+| --- | --- | --- |
+| 新镜像中的 GPU scale-search 算子检查 | 通过 | 通过 |
+| 完整多模态 27B PTQ | 通过，1044.728 秒 | 通过，1157.952 秒 |
+| 严格导出与源码/校准覆盖审计 | 通过，35.486 秒 | 通过，34.511 秒 |
+| 新权重文本、图像及 OCR 服务 | 5 个固定用例通过 | 5 个固定用例通过 |
+| 新权重嵌入 MTP 接受率及 baseline/MTP token 一致性 | 通过，205/205 tokens 一致 | 通过，205/205 tokens 一致 |
+| 独立 198 题 GPQA，temperature=0、256k 上下文 | 运行中，上述时间点完成 11/198 条 | 排队，未开始 |
+
+MTP 设备回归在旧容器 runtime `6dc72ca` 上使用冻结修复源码覆盖运行：
+修复前 MSE 用例复现 CPU/CUDA 错误；修复后 9 项测试通过，耗时 74.00 秒。
+覆盖 max、MSE、Local-Hessian 的 CPU MTP / CUDA target，以及已有统计数值保留。
+这是源码覆盖的回归测试。下述两次完整量化和算子检查使用已经烘焙修复的新镜像。
+
+## GPU 算子结果
+
+公开脚本 `scripts/check_nvfp4_calibration.py` 在新镜像内退出码为 0，耗时 75.997 秒。
+固定 seed=42，权重形状 128×256；校准输入 512×256，独立 held-out 输入 256×256。
+MSE 和 Local-Hessian 均实际改变权重量化结果，三种算法的激活 max scale 完全相同。
+
+| 算法 | 实际前向轮数 | 权重 block scale | Held-out W4A4 输出相对 MSE |
+| --- | ---: | --- | ---: |
+| max | 1 | dynamic | 0.01937930 |
+| MSE | 1 | static，2048 个 scale | 0.01700883 |
+| Local-Hessian | 2 | static，2048 个 scale | 0.01697077 |
+
+这些数字是合成算子误差，不能解释为整模型准确率或 GPQA 提升。
+
+## 两次完整导出
+
+MSE 完成一轮 256/256 批校准，耗时 465.9 秒；Local-Hessian 完成 max 校准及 Hessian
+收集两轮 256/256 批前向，分别耗时 465.3 和 137.5 秒。两份 native 日志均记录 519 项
+权重搜索完成，与各自严格审计中的 401 个语言、110 个视觉和 8 个 MTP NVFP4 投影
+总数一致。Local-Hessian 日志确认校准完成，未报告 Hessian 搜索跳过或不支持。
+评测编排的 native 搜索证明分别确认 519 项搜索、1/2 轮完整校准，并绑定相应量化
+run、原生日志、审计和镜像 manifest 的 SHA-256。
+
+两种导出各含 2756 个张量、2 个分片。各自审计无错误或警告，provenance 精确匹配
+冻结 revision；结构和校准覆盖一致：
+
+| 分支 | 源张量 | NVFP4 投影 | 观察到的激活校准 |
+| --- | ---: | ---: | --- |
+| 语言 | 851 | 401 | 完整配置的多模态 PTQ |
+| 视觉 | 333 | 110 | 165 个 quantizer，每个 128 次 |
+| MTP | 15 | 8 | 8 个 quantizer，每个 256 次 |
+
+审计检查全部源张量覆盖、逻辑元素数、分片/index、packed NVFP4 group-16 形状、
+权重及激活 scale、配置一致性和校准执行。每个导出中的 1557 个 scale 张量共
+1,654,937,400 bytes 的流式扫描均未发现 NaN 或 infinity。该审计本身不验证 SGLang 生成、
+视觉质量或 MTP 接受；实际服务检查结果见下一节。
+
+## 两种新权重的视觉和嵌入 MTP 服务
+
+每种新权重的 baseline 和 MTP 两种模式都通过 5 个相同固定请求：算术、192-token Python 响应、
+红/蓝图像反事实和 OCR。4 个有标准答案的请求全部正确；Python 请求只验证输出非空、
+logprob 有限及 token 一致性，没有执行生成代码，也不证明代码完整或正确。
+每种权重的全部 205 个输出 token ID 在其 baseline 与 MTP 之间一致；两种权重四次
+服务检查共 820 个输出 logprob 均有限且与输出 ID 对齐。每个 MTP 用例都有正数
+验证步骤和接受草稿。
+
+| 新权重 | 匹配的输出 token ID | MTP 接受/提出草稿 | 验证步骤 | 聚合接受率 |
+| --- | ---: | ---: | ---: | ---: |
+| MSE | 205/205 | 136/146 | 73 | 93.15% |
+| Local-Hessian | 205/205 | 138/142 | 71 | 97.18% |
+
+四个实际服务容器的 image ID 均为
+`sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25`。
+实际功能检查服务为 TP1、context=32768、max_running_requests=4、ModelOpt 多模态加载、
+FP32 SSM 和 FP8 E4M3 KV。MTP 使用同一量化 checkpoint 的嵌入草稿，
+EAGLE steps=2、top-k=1、draft tokens=3，没有外部 draft checkpoint。
+
+这些功能检查使用 32k 上下文，只验证上述固定请求及同一 checkpoint 的 token 一致性。
+独立 GPQA 使用 256k 上下文；当前不能把功能检查解释为 GPQA 已通过或准确率提升。
+
+## 输入和后续比较
+
+沿用原来的 256 条校准输入，包括 128 条图像和 128 条文本；batch=1、seed=42、
+max_seq_length=1024。实际处理后 token 长度为 154–501，中位数 223，均值
+247.69140625，总计 63,409。输入审计通过，calibration SHA-256 为
+`e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed`。
+源 index SHA-256 为 `77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df`。
+
+校准文本与官方 GPQA 198 题的完整题干按 Unicode NFKC、大小写和空白规范化比较，
+精确重叠为 0；这项检查不构成一般污染证明。GPQA CSV SHA-256 为
+`41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305`。
+
+新候选通过功能检查后，分别使用 `eval-gpqa-diamond.spark-gpqa.yaml` 从空 journal
+开始完整 198 题评测：temperature=0、context=262144、concurrency=16、seed=0，
+固定种子打乱选项，开启并保留 xhigh thinking，MTP 关闭；服务使用 FP32 SSM 和 FP8 KV。
+服务/客户端继续冻结于 `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`。
+正式 MSE 评测从不存在的新目录和空 journal 开始，启动时 summary 不存在。
+实际服务确认 context=262144、max_running_requests=16、allow_auto_truncate=false、
+MTP 关闭；实际 KV 容量为 1,720,012 tokens，可容纳单个完整上下文，且没有额外 runtime
+生成长度限制。这些检查验证上下文和限制配置，不构成最终“零截断”的结果。
+
+当前评测编排脚本 SHA-256 为
+`7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3`；
+它已检查两种量化/服务前置证据及 native 搜索证明，并在每轮启动前核对冻结协议。
+MSE 评测客户端已启动；Local-Hessian 将在 MSE 完整评测结束后运行。
+进度记录只计 journal 行数，当前不报告题目、答案、准确率、未解析或截断统计。
+
+原 max W4A4 的 [174/198 基线](dgx-spark-gpqa-256k-20261002.md) 属于之前的完整评测，
+不计作新候选的分数。复现配方、算子 gate、审计和后续服务命令见
+[受控 W4A4 实验说明](../DGX_SPARK.md#controlled-w4a4-calibration-experiments)。
+机器可读记录保留源码 archive、镜像 manifest、执行记录、输入审计和结果摘要的 SHA-256；
+只发布聚合统计和哈希，不包含校准内容、GPQA 题目或模型原始中间张量。
