@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import json
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ import pytest
 
 from megaquant.backends.modelopt import (
     ModelOptBackend,
+    _apply_algorithm,
     _call_export_hf,
     _clear_partial_export,
     _has_accelerate_offload,
@@ -71,6 +74,24 @@ def _block_size(obj: dict[str, Any] | None) -> int | None:
 
 def _num_bits(obj: dict[str, Any] | None) -> Any:
     return _cfg_body(obj).get("num_bits")
+
+
+def _effective_quantizer_cfg(cfg: dict, name: str) -> tuple[bool, dict]:
+    enabled = True
+    attrs: dict = {}
+    for entry in _entries(cfg):
+        if not fnmatchcase(name, entry.get("quantizer_name", "")):
+            continue
+        if "cfg" in entry:
+            attrs = copy.deepcopy(entry["cfg"])
+            enabled = entry.get("enable", True)
+        elif "num_bits" in entry:
+            attrs = {k: copy.deepcopy(v) for k, v in entry.items()
+                     if k not in {"quantizer_name", "enable"}}
+            enabled = entry.get("enable", True)
+        if "enable" in entry:
+            enabled = entry["enable"]
+    return enabled, attrs
 
 
 def test_describe_w4a8_is_sglang_mixed() -> None:
@@ -191,26 +212,82 @@ def test_w4a4_cfg_uses_nvfp4_activations_and_lm_head() -> None:
     assert _block_size(last) == 16
 
 
-def test_w4a4_mse_sweeps_fp8_scales_without_changing_vision_or_mtp_formats() -> None:
+@pytest.mark.parametrize("algorithm", ("mse", "local_hessian"))
+def test_w4a4_scale_search_uses_static_weights_and_dynamic_vision_mtp_inputs(
+    algorithm: str,
+) -> None:
     recipe = load_recipe(REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a4.spark.yaml")
     assert recipe.model.quantize_vision is True
     assert recipe.model.quantize_mtp is True
     backend = ModelOptBackend()
     max_cfg = backend.build_quant_cfg(QuantPipeline(recipe).resolve())
-    mse_recipe = recipe.model_copy(update={"algorithm": "mse"})
-    mse_cfg = backend.build_quant_cfg(QuantPipeline(mse_recipe).resolve())
+    search_recipe = recipe.model_copy(update={"algorithm": algorithm})
+    search_cfg = backend.build_quant_cfg(QuantPipeline(search_recipe).resolve())
 
     assert max_cfg["algorithm"] == "max"
-    assert mse_cfg["algorithm"] == {"method": "mse", "fp8_scale_sweep": True}
-    assert mse_cfg["quant_cfg"] == max_cfg["quant_cfg"]
-    weight, activation = _weight_input_attrs(mse_cfg)
+    assert search_cfg["algorithm"]["method"] == algorithm
+    assert search_cfg["algorithm"]["fp8_scale_sweep"] is True
+    weight, activation = _weight_input_attrs(search_cfg)
     for attrs in (weight, activation):
         assert _num_bits(attrs) == (2, 1)
         assert _block_size(attrs) == 16
-    for branch in ("visual", "mtp"):
-        for quantizer in ("weight_quantizer", "input_quantizer"):
-            assert _last_named(mse_cfg, branch, quantizer).get("enable") is True
-    assert _block_size(_last_named(mse_cfg, "lm_head", "weight_quantizer")) == 16
+    for module in (
+        "model.language_model.layers.0.mlp.gate_proj",
+        "model.language_model.layers.0.self_attn.q_proj",
+        "model.visual.blocks.0.attn.qkv",
+        "mtp.fc",
+        "mtp.layers.0.self_attn.q_proj",
+        "lm_head",
+    ):
+        for suffix in ("weight_quantizer", "input_quantizer"):
+            name = f"{module}.{suffix}"
+            old_enabled, old_attrs = _effective_quantizer_cfg(max_cfg, name)
+            enabled, attrs = _effective_quantizer_cfg(search_cfg, name)
+            assert enabled is old_enabled is True
+            assert attrs["num_bits"] == (2, 1)
+            assert attrs["block_sizes"][-1] == 16
+            assert old_attrs["block_sizes"]["type"] == "dynamic"
+            assert attrs["block_sizes"]["type"] == (
+                "static" if suffix == "weight_quantizer" else "dynamic"
+            )
+            old_attrs["block_sizes"].pop("type")
+            attrs["block_sizes"].pop("type")
+            assert attrs == old_attrs
+
+
+def test_mixed_local_hessian_uses_static_nvfp4_weights_and_preserves_fp8_attention() -> None:
+    recipe = load_recipe(MIXED)
+    cfg = ModelOptBackend().build_quant_cfg(QuantPipeline(recipe).resolve())
+    for module in ("model.layers.0.mlp.gate_proj", "lm_head"):
+        for suffix, block_type in (("weight_quantizer", "static"),
+                                   ("input_quantizer", "dynamic")):
+            enabled, attrs = _effective_quantizer_cfg(cfg, f"{module}.{suffix}")
+            assert enabled is True
+            assert attrs["num_bits"] == (2, 1)
+            assert attrs["block_sizes"]["type"] == block_type
+    for suffix in ("weight_quantizer", "input_quantizer"):
+        enabled, attrs = _effective_quantizer_cfg(cfg, f"model.layers.0.self_attn.q_proj.{suffix}")
+        assert enabled is True
+        assert attrs["num_bits"] == (4, 3)
+        assert "block_sizes" not in attrs
+
+
+@pytest.mark.parametrize("shape", ("list", "dict"))
+def test_nvfp4_scale_search_supports_preset_config_shapes(shape: str) -> None:
+    weight = {"num_bits": (2, 1),
+              "block_sizes": {-1: 16, "type": "dynamic", "scale_bits": (4, 3)}}
+    activation = copy.deepcopy(weight)
+    fp8 = {"num_bits": (4, 3), "axis": None}
+    entries = {"*weight_quantizer": weight, "*input_quantizer": activation,
+               "*self_attn*weight_quantizer": fp8}
+    quant_cfg = entries if shape == "dict" else [
+        {"quantizer_name": name, "cfg": attrs} for name, attrs in entries.items()
+    ]
+    cfg = {"quant_cfg": quant_cfg}
+    _apply_algorithm(cfg, "mse", "nvfp4_w4a4")
+    assert weight["block_sizes"]["type"] == "static"
+    assert activation["block_sizes"]["type"] == "dynamic"
+    assert fp8 == {"num_bits": (4, 3), "axis": None}
 
 
 def test_non_nvfp4_mse_preserves_generic_multiplier_search() -> None:

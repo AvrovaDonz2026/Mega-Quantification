@@ -24,7 +24,9 @@ def main() -> int:
     import torch
     from torch import nn
 
-    from megaquant.backends.modelopt import _apply_algorithm
+    from megaquant.backends.modelopt import ModelOptBackend
+    from megaquant.config import load_recipe
+    from megaquant.pipeline import QuantPipeline
 
     if not torch.cuda.is_available():
         raise RuntimeError("This check requires CUDA and the PTQ dependencies")
@@ -48,13 +50,14 @@ def main() -> int:
     weight = original.mlp.weight.detach().float()
     reference = heldout.float() @ weight.T
     reports = {}
-    scales = {}
+    quantized_weights = {}
     input_scales = {}
+    recipe = load_recipe(Path("recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml"))
 
     for algorithm in ("max", "mse", "local_hessian"):
         model = copy.deepcopy(original)
-        cfg = copy.deepcopy(mtq.NVFP4_DEFAULT_CFG)
-        _apply_algorithm(cfg, algorithm, "nvfp4_w4a4")
+        candidate = recipe.model_copy(update={"algorithm": algorithm})
+        cfg = ModelOptBackend().build_quant_cfg(QuantPipeline(candidate).resolve())
         calls = 0
 
         def forward_loop(calibration_model):
@@ -78,7 +81,10 @@ def main() -> int:
             amax = quantizer.amax.detach().float().cpu()
             if not torch.isfinite(amax).all() or not (amax > 0).all():
                 raise RuntimeError(f"Invalid weight scales: {algorithm}")
-            scales[algorithm] = amax
+            global_amax = quantizer.global_amax.detach().float()
+            if not torch.isfinite(global_amax).all() or not (global_amax > 0).all():
+                raise RuntimeError(f"Invalid global weight scale: {algorithm}")
+            quantized_weights[algorithm] = quantized_weight.detach().cpu()
             input_scales[algorithm] = input_quantizer.amax.detach().float().cpu()
             if not torch.isfinite(input_scales[algorithm]).all() or not (
                 input_scales[algorithm] > 0
@@ -90,6 +96,8 @@ def main() -> int:
                 "algorithm_config": cfg["algorithm"],
                 "forward_loop_calls": calls,
                 "weight_scale_count": amax.numel(),
+                "weight_block_type": quantizer.block_sizes.get("type", "static"),
+                "weight_calibrator": type(quantizer._calibrator).__name__,
                 "weight_scale_sha256": hashlib.sha256(amax.numpy().tobytes()).hexdigest(),
                 "weight_mse": weight_mse,
                 "heldout_weight_output_relative_mse": (
@@ -102,10 +110,12 @@ def main() -> int:
         del model
 
     for algorithm in ("mse", "local_hessian"):
-        reports[algorithm]["weight_scales_changed_from_max"] = int(
-            (scales[algorithm] != scales["max"]).sum().item()
+        reports[algorithm]["weight_values_changed_from_max"] = int(
+            (quantized_weights[algorithm] != quantized_weights["max"]).sum().item()
         )
-        if reports[algorithm]["weight_scales_changed_from_max"] == 0:
+        if reports[algorithm]["weight_calibrator"] != "NVFP4MSECalibrator":
+            raise RuntimeError(f"NVFP4 scale search was skipped: {algorithm}")
+        if reports[algorithm]["weight_values_changed_from_max"] == 0:
             raise RuntimeError(f"Weight scale refinement had no effect: {algorithm}")
         if not torch.equal(input_scales[algorithm], input_scales["max"]):
             raise RuntimeError(f"Input calibration changed unexpectedly: {algorithm}")
