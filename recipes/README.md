@@ -26,6 +26,9 @@ change when a hardware profile is added. Groups below are the public index.
 
 The two experimental W4A4 recipes retain quantized vision/MTP, activation max
 calibration and the original 256×1024, batch-1, seed-42 calibration settings.
+Their backend uses static NVFP4 weight block scales with FP8 scale search so
+MSE/Local-Hessian actually execute; input block scales remain dynamic and the
+packed NVFP4 group-16 format is retained. The existing max recipe is unchanged.
 They keep export KV quantizers unset and use FP8 KV with FP32 SSM state when
 served. They do not replace the scored max export or promise a higher GPQA
 score. See [the controlled experiment and validation gates](../docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments).

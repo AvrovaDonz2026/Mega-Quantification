@@ -81,9 +81,10 @@ def main() -> int:
             amax = quantizer.amax.detach().float().cpu()
             if not torch.isfinite(amax).all() or not (amax > 0).all():
                 raise RuntimeError(f"Invalid weight scales: {algorithm}")
-            global_amax = quantizer.global_amax.detach().float()
-            if not torch.isfinite(global_amax).all() or not (global_amax > 0).all():
-                raise RuntimeError(f"Invalid global weight scale: {algorithm}")
+            if algorithm != "max":
+                global_amax = quantizer.global_amax.detach().float()
+                if not torch.isfinite(global_amax).all() or not (global_amax > 0).all():
+                    raise RuntimeError(f"Invalid global weight scale: {algorithm}")
             quantized_weights[algorithm] = quantized_weight.detach().cpu()
             input_scales[algorithm] = input_quantizer.amax.detach().float().cpu()
             if not torch.isfinite(input_scales[algorithm]).all() or not (

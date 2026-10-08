@@ -173,6 +173,15 @@ Activation calibration remains `max` in these experiments. The MSE recipe uses
 the repository's explicit `fp8_scale_sweep=true` for NVFP4 weights; generic FP8
 MSE behavior is unchanged. Local-Hessian also uses `fp8_scale_sweep=true` and
 `block_size=16`.
+
+The backend sets eligible NVFP4 **weight** block scales to `static` for MSE
+and Local-Hessian. ModelOpt skips these searches on the default dynamic
+NVFP4 weight quantizers, so changing only the algorithm name is insufficient.
+Inputs retain **dynamic** block scales and activation max calibration. This
+changes weight-scale calibration, while retaining the packed NVFP4 group-16
+format; it leaves the existing `max` configuration unchanged. The GPU operator
+gate must demonstrate that each search runs instead of silently matching max.
+
 Changing the search objective does not establish a higher full-model score.
 The new recipes are experimental; full quantization and quality results remain
 to be measured. Preserve the original scored exports and journals.
