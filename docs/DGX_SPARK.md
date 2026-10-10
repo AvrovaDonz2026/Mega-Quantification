@@ -193,8 +193,13 @@ Both experimental recipes completed full 27B quantization, strict export
 audits, and fixed text/image/OCR and embedded-MTP checks on Spark. Each actually
 completed 519 weight searches. See the
 [2026-10-08 validation record](validation/dgx-spark-w4a4-quality-20261008.md).
-Independent GPQA scores remain pending. Preserve the original scored exports
-and journals.
+Complete candidate GPQA scores remain pending. The interrupted MSE run retained
+186 valid responses: 171 correct (91.94%), versus 166 (89.25%) for the same
+questions in the original max W4A4 run. This subset was selected by completion
+time and does not establish a full score or quality recovery. On 2026-10-10,
+the frozen client resumed those records and started regenerating the remaining
+12 responses under the same 256k protocol; Local-Hessian is queued afterward.
+Preserve the original scored exports and journals.
 
 Use the same calibration JSONL and image hashes for every algorithm. Verify
 the actual 256-row count, image/text counts and token lengths before PTQ;
