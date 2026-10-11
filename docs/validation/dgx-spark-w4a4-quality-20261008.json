@@ -3,7 +3,7 @@
   "date": "2026-10-08",
   "status": "running",
   "complete": false,
-  "scope": "Controlled Spark W4A4 MSE/Local-Hessian scale-search repair; both full PTQ, strict export audits and fixed vision/MTP functional checks passed; interrupted MSE GPQA resumed from 186 validated records and is generating the remaining 12 responses in an independent run; Local-Hessian queued but not started; full quality results pending",
+  "scope": "Controlled Spark W4A4 MSE/Local-Hessian scale-search repair; both full PTQ, strict export audits and fixed vision/MTP functional checks passed. Resumed MSE GPQA completed with formal checks passed: 178/198 correct, 3 truncated and 4 unparsed. Local-Hessian is running with 194 valid records and no complete formal result; general quality recovery and recovery of stopping behavior have not been established.",
   "source": {
     "proof_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
     "source_archive_sha256": "23f03022b63188ce2564e93e2186630b803c2b4d0e5540669c1526af122e809e",
@@ -187,17 +187,17 @@
         "aggregate_spec_accept_rate": 0.9315068493150684
       },
       "full_gpqa": {
-        "status": "running",
+        "status": "complete",
         "started": true,
-        "correct": null,
-        "denominator": null,
-        "truncated": null,
-        "unparsed": null,
+        "correct": 178,
+        "denominator": 198,
+        "truncated": 3,
+        "unparsed": 4,
         "eval_started": true,
         "started_at": "2026-10-08T03:11:17Z",
-        "journal_rows_observed": 186,
-        "progress_observed_at": "2026-10-10T05:31:31.232814+00:00",
-        "journal_progress_note": "186 unique records were validated and provisionally scored after the service exited. The incomplete subset is not the formal 198-item score.",
+        "journal_rows_observed": 198,
+        "progress_observed_at": "2026-10-11T04:15:25.660811Z",
+        "journal_progress_note": "All 198 records were checked against the formal result checker. The historical 186-record subset below is superseded by this complete score.",
         "fresh_start": {
           "initial_journal_rows": 0,
           "initial_summary_exists": false,
@@ -325,19 +325,19 @@
           },
           "validation_errors": {},
           "formal_checker_note": "This provisional tool does not verify summary or serving protocol; use the formal checker after all 198 results exist.",
-          "selection_bias_note": "Completed responses are selected by completion time, not random sampling. Pending long responses may differ; this subset accuracy cannot be extrapolated to the complete benchmark."
+          "selection_bias_note": "Completed responses are selected by completion time, not random sampling. Pending long responses may differ; this subset accuracy cannot be extrapolated to the complete benchmark.",
+          "historical_snapshot": true,
+          "superseded_by_full_results": true,
+          "snapshot_note": "This is the 2026-10-10 observation before the remaining 12 responses completed. Its missing-response count, bounds and zero truncations apply only to that historical snapshot, not the current full result."
         },
         "resume": {
-          "status": "running",
+          "status": "complete",
           "run_id": "w4a4-quality-20261010-resume",
           "started_at_utc": "2026-10-10T05:40:30Z",
           "evaluation_started_at_utc": "2026-10-10T05:43:19Z",
-          "observed_at_utc": "2026-10-10T05:43:53.914044Z",
+          "observed_at_utc": "2026-10-11T04:12:02Z",
           "original_results_preserved": true,
           "independent_run_directory": true,
-          "driver_process_alive": true,
-          "client_container_running": true,
-          "server_container_running": true,
           "preflight_passed": true,
           "resume_seed_validation_passed": true,
           "seed_records": 186,
@@ -347,9 +347,6 @@
           "initial_pending_items": 12,
           "evaluation_requests_started": true,
           "client_resume_log_confirmed_records": 186,
-          "decode_running_requests_observed": 12,
-          "decode_observed_at_utc": "2026-10-10T05:43:33Z",
-          "observed_client_errors": [],
           "wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba",
           "frozen_original_driver_sha256": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
           "capacity": {
@@ -369,7 +366,115 @@
             "context_length": 262144,
             "max_running_requests": 16
           },
-          "note": "The recovery client confirmed 186 retained records and started the remaining 12 requests under the frozen protocol. No new full score is available. Recovery-segment timing is not the total benchmark runtime."
+          "note": "The recovery run retained the validated 186-record prefix and completed the remaining 12 responses. The formal checker passed for all 198 items. The recovery-segment timer covers only the resumed requests and is not the total benchmark runtime.",
+          "startup_observation": {
+            "observed_at_utc": "2026-10-10T05:43:53.914044Z",
+            "driver_process_alive": true,
+            "client_container_running": true,
+            "server_container_running": true,
+            "decode_running_requests_observed": 12,
+            "decode_observed_at_utc": "2026-10-10T05:43:33Z",
+            "observed_client_errors": []
+          },
+          "completed_at_utc": "2026-10-10T15:58:53Z",
+          "recovery_segment_elapsed_seconds": 36935.981,
+          "total_benchmark_elapsed_seconds": null
+        },
+        "complete": true,
+        "formal_full_checker_passed": true,
+        "formal_checker_errors": [],
+        "accuracy": 0.898989898989899,
+        "accuracy_percent": 89.8989898989899,
+        "truncated_and_unparsed_may_overlap": true,
+        "finish_reasons": {
+          "stop": 195,
+          "length": 3
+        },
+        "completed_at": "2026-10-10T15:58:53Z",
+        "completion_tokens": {
+          "total": 3603462,
+          "median": 8159,
+          "max": 261645,
+          "over_32768": 32,
+          "over_65536": 6,
+          "over_131072": 3
+        },
+        "continuation_count_total": 0,
+        "total_benchmark_elapsed_seconds": null,
+        "elapsed_note": "The preserved 186-record prefix and interruption prevent treating the recovery segment timer as the elapsed time of the complete benchmark.",
+        "integrity_checks": {
+          "passed": true,
+          "preserved_186_record_prefix_unchanged": true,
+          "original_journal_unchanged": true,
+          "checkpoint_files_before_after_unchanged": true,
+          "checkpoint_files_match_original_run": true,
+          "dataset_unchanged": true
+        },
+        "comparison_to_original_max": {
+          "baseline_correct": 174,
+          "baseline_denominator": 198,
+          "correct_difference": 4,
+          "accuracy_percentage_point_difference": 2.0202020202020203,
+          "quality_recovery_established": false,
+          "note": "The complete MSE run scored four more correct answers on this benchmark. Three length finishes remain; this run does not establish general quality recovery or resolve stopping behavior."
+        },
+        "unparsed_breakdown": {
+          "length_and_unparsed": 3,
+          "stop_and_unparsed": 1,
+          "total_unparsed": 4
+        },
+        "journal_sha256": "7c7aa22be4f7a152380555b702e17fb3d4ef08255dc3181c680a5c6555a84336",
+        "formal_verification": {
+          "passed": true,
+          "complete": true,
+          "benchmark": "gpqa_diamond",
+          "expected_items": 198,
+          "protocol": {
+            "temperature": 0.0,
+            "seed": 0,
+            "shuffle_choices": true
+          },
+          "files": {
+            "csv": {
+              "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+              "bytes": 1373492
+            },
+            "journal": {
+              "sha256": "7c7aa22be4f7a152380555b702e17fb3d4ef08255dc3181c680a5c6555a84336",
+              "bytes": 11161340
+            },
+            "summary": {
+              "sha256": "f946a2b276311071f0aad42a09438c347b78d3451395e556b9b1983c04989c52",
+              "bytes": 4483
+            }
+          },
+          "errors": [],
+          "coverage": {
+            "dataset_rows": 198,
+            "journal_rows": 198,
+            "valid_record_objects": 198,
+            "unique_item_ids": 198,
+            "missing_items": 0,
+            "unexpected_items": 0,
+            "duplicate_rows": 0
+          },
+          "scores": {
+            "n": 198,
+            "correct": 178,
+            "accuracy": 0.898989898989899,
+            "denominator": 198,
+            "truncated": 3,
+            "unparsed": 4,
+            "headline": "178/198"
+          },
+          "verified": [
+            "198 unique item IDs exactly match the supplied Diamond CSV",
+            "every gold letter and shuffled choice matches the CSV and supplied seed",
+            "saved predictions match the repository response extractor",
+            "truncated and unparsed responses count as wrong",
+            "summary scores match independently recomputed scores",
+            "summary records temperature zero and the supplied generation seed"
+          ]
         }
       },
       "native_weight_search": {
@@ -421,14 +526,68 @@
         "aggregate_spec_accept_rate": 0.971830985915493
       },
       "full_gpqa": {
-        "status": "queued",
-        "started": false,
+        "status": "running",
+        "started": true,
         "correct": null,
         "denominator": null,
         "truncated": null,
         "unparsed": null,
-        "eval_started": false,
-        "note": "The original queue was interrupted before Local-Hessian began. The independent recovery run queues it after the remaining MSE responses and full-result checks finish; it has not started."
+        "eval_started": true,
+        "note": "Local-Hessian started fresh after the complete MSE result and integrity checks passed. It is still generating four remaining responses; no formal complete result is available.",
+        "complete": false,
+        "formal_full_checker_passed": false,
+        "started_at": "2026-10-10T16:02:18Z",
+        "journal_rows_observed": 194,
+        "progress_observed_at": "2026-10-11T04:15:25.660811Z",
+        "last_record_saved_at": "2026-10-11T03:53:26.676702Z",
+        "fresh_start": {
+          "initial_journal_rows": 0
+        },
+        "observed_running_requests": 4,
+        "observed_client_errors": [],
+        "partial_results": {
+          "status": "partial_records_valid",
+          "full_complete": false,
+          "formal_full_checker_passed": false,
+          "observed_at_utc": "2026-10-11T04:15:25.660811Z",
+          "valid_unique_records": 194,
+          "unknown_remaining": 4,
+          "current": {
+            "n": 194,
+            "correct": 170,
+            "accuracy": 0.8762886597938144,
+            "truncated": 0,
+            "unparsed": 2,
+            "finish_reasons": {
+              "stop": 194
+            }
+          },
+          "possible_full_score_bounds": {
+            "minimum_correct": 170,
+            "maximum_correct": 174,
+            "denominator": 198,
+            "minimum_accuracy": 0.8585858585858586,
+            "maximum_accuracy": 0.8787878787878788
+          },
+          "selection_bias_note": "This subset is selected by response completion time. It is not the formal 198-item score; zero truncations applies only to the completed subset.",
+          "journal_sha256": "96f52841437166e75ba872bfbcc517cdbd947e87514cefdef447d0a4f93867c7"
+        },
+        "latest_liveness_observation": {
+          "observed_at_utc": "2026-10-11T04:26:49Z",
+          "candidate": "local_hessian",
+          "journal_rows_observed": 194,
+          "journal_bytes": 9064997,
+          "journal_modified_at_utc": "2026-10-11T03:53:26.676702Z",
+          "client_container_running": true,
+          "server_container_running": true,
+          "current_stage": "hessian-eval",
+          "decode_observed_at_utc": "2026-10-11T04:26:46Z",
+          "decode_running_requests_observed": 4,
+          "decode_queued_requests_observed": 0,
+          "decode_full_tokens_observed": 603103,
+          "aggregate_generation_tokens_per_second": 22.56,
+          "note": "Read-only Teleport status and log observation; full tokens are the aggregate batch log field, not per-request output lengths. No response text or question identifiers retained."
+        }
       },
       "native_weight_search": {
         "passed": true,
@@ -476,7 +635,7 @@
       "serving_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
       "client_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
       "orchestration_driver_sha256": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
-      "orchestration_note": "Both candidate PTQ/functional prerequisites and native search proofs passed. The original MSE run was interrupted after 186 valid records, with exact stopping cause unconfirmed. An independent recovery run preserved the validated 186-record prefix and began generating the remaining 12 requests on 2026-10-10 at 05:43:19 UTC under the frozen protocol. Local-Hessian is queued but has not started. Recovery-segment timing is not the total benchmark runtime.",
+      "orchestration_note": "The original MSE run was interrupted after 186 valid records and resumed under the frozen protocol. Its complete 198-item result and preservation/checkpoint/dataset integrity checks passed on 2026-10-10. The recovery-segment timer is not the total benchmark runtime. Local-Hessian then started from an empty journal and is still running; its complete result remains pending.",
       "resume_wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba"
     },
     "original_max_baseline": {
@@ -534,17 +693,21 @@
     "resume-20261010.provenance.json": "170e865c5525f8823756461552a65f76700247766006ec62da8350341c3c96e6",
     "resume-20261010.resume-start.json": "b936e3550a776150ec94424a202cad55de455282a20e01d841b3190714329410",
     "resume-20261010.capacity.json": "25675e99722d9943b3bf8e92bc13c8e23662832a45f04c60924a0f0e0e635e68",
-    "resume-20261010.server-info.json": "73ab286a0bf99c6af92df08430b4fdf9a65ed1b80480193c6ea714b2e139070a"
+    "resume-20261010.server-info.json": "73ab286a0bf99c6af92df08430b4fdf9a65ed1b80480193c6ea714b2e139070a",
+    "quality-progress-20261011.json": "f86604e5806330b143e2305651472260d70b69ea1ff06215ee3f18d32f2cb8fd",
+    "hessian-liveness-20261011.json": "a0323e745e6818537a4a7cf49292291d81664f9ae0fb5650aeb7e59e9962887b"
   },
   "limits": [
     "Synthetic operator error reduction does not establish a full-model or GPQA accuracy improvement.",
     "The strict export audit verifies structure, source/revision coverage, calibration execution and finite scale payloads; it does not verify generation or numerical quality.",
     "The calibration overlap check covers exact normalized GPQA question matches only, not general contamination.",
     "The nine MTP regression tests used the patched source over the earlier runtime; both separate full-model PTQ runs used the new baked container.",
-    "Neither independent full GPQA run is complete. MSE has an interrupted 186-item subset score; Local-Hessian has not started. No formal candidate 198-item score is available.",
     "Fixed vision/MTP requests establish functionality only for tested requests; accepted drafts and within-checkpoint token parity must be recorded separately.",
     "This record contains hashes and aggregate statistics only; it excludes private host paths, calibration contents, GPQA questions and raw model traces.",
-    "The MSE completed subset is selected by response completion time. Its provisional accuracy and paired comparison cannot establish the full-benchmark accuracy or quality recovery; the 12 missing responses remain unknown."
+    "MSE completed with 178/198 correct, but 3 length finishes and 4 unparsed responses remain; all three length finishes are included in the four unparsed responses, with one further stop response unparsed. General quality recovery and stopping behavior are not established as resolved.",
+    "Local-Hessian has only a 194-item completed subset. Its provisional accuracy and zero truncations are not the final 198-item score or final truncation count.",
+    "The historical MSE 186-item subset remains for provenance only and is superseded by the complete 198-item result.",
+    "Only the recovery segment has a recorded elapsed timer; total MSE benchmark elapsed time is unavailable and is represented as null."
   ],
   "serving_functional_protocol": {
     "image_id": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
@@ -642,5 +805,6 @@
     }
   ],
   "functional_case_limit": "The 192-token Python case verifies nonempty output, finite logprobs and token parity only; generated code was not executed or validated.",
-  "last_updated_at": "2026-10-10T05:43:53.914044Z"
+  "last_updated_at": "2026-10-11T04:26:49Z",
+  "quality_recovery_established": false
 }
