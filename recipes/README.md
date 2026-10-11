@@ -16,11 +16,22 @@ change when a hardware profile is added. Groups below are the public index.
 | `qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | Uniform NVFP4 W4A4, group 16. SGLang `modelopt_fp4`. |
 | `qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | Uniform W4A4 packed for 32 GB. |
 | `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `nvfp4_w4a4` | GB10 profile: quantizes language, vision, and MTP with ModelOpt 0.47; uses local `/models` and `/data` mounts. |
+| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | `nvfp4_w4a4` | Controlled Spark weight-MSE experiment with NVFP4 FP8 block-scale sweep: same 256 image/text samples and layer map as the max baseline, separate export. Quality improvement unmeasured. |
+| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | `nvfp4_w4a4` | Controlled Spark Local-Hessian experiment: input-aware weight-scale search, block 16, same 256 samples, separate export. Quality improvement unmeasured. |
 | `qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | Uniform W4A4, anonymous ultrachat. |
 | `qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | Same layer map as `nvfp4_w4a8`. Local-Hessian + Nemotron v3. Needs a larger GPU than 32 GB. |
 | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB PTQ: algorithm `max`, ultrachat 256×1024, batch 1. Restores BF16 vision + MTP. Writes `outputs/Qwen3.8-27B-NVFP4-W4A8`. |
 | `qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | Same map, algorithm `max`, anonymous ultrachat 512. |
 | `qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml` | `nvfp4_w4a16_mixed` | Optional Marlin export (BF16 MLP activations). Not the DGX Spark fast path. |
+
+The two experimental W4A4 recipes retain quantized vision/MTP, activation max
+calibration and the original 256×1024, batch-1, seed-42 calibration settings.
+Their backend uses static NVFP4 weight block scales with FP8 scale search so
+MSE/Local-Hessian actually execute; input block scales remain dynamic and the
+packed NVFP4 group-16 format is retained. The existing max recipe is unchanged.
+They keep export KV quantizers unset and use FP8 KV with FP32 SSM state when
+served. They do not replace the scored max export or promise a higher GPQA
+score. See [the controlled experiment and validation gates](../docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments).
 
 ## GPQA (SGLang)
 

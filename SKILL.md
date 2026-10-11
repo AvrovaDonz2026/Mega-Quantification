@@ -33,6 +33,17 @@ Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
 | `nvfp4_w4a4` | Uniform NVFP4 block 16, weights and activations, including attention | `NVFP4` | `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | Optional Marlin export. MLP activations stay BF16 | MLP entry `W4A16_NVFP4` | not the Spark fast path |
 
+Optional controlled Spark W4A4 experiments are
+`recipes/qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` and
+`recipes/qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml`. MSE/Local-Hessian require
+static NVFP4 weight block scales and `fp8_scale_sweep=true` to run the search;
+an algorithm name alone can silently leave dynamic weights unsearched.
+Input scales stay dynamic, activation calibration stays max, and the packed
+NVFP4 group-16 format and existing max configuration remain intact. Require
+`scripts/check_nvfp4_calibration.py` to pass on the actual GPU, then full export,
+vision/MTP serving and independent GPQA gates. Preserve the scored exports;
+no full-model quality improvement has been established for these experiments.
+
 5090 PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 1. Batch 4 can OOM at `lm_head` on a 32 GB instance. The export restores BF16 vision tensors into `vision.safetensors` and BF16 MTP tensors into `mtp.safetensors`; the HF index includes both. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` with 401 `quantized_layers` entries (193 NVFP4 + 208 FP8), which eval / serve use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. DGX Spark serves this mixed map at about 12 tok/s decode (bandwidth ceiling about 14); speculative MTP is the faster path.
 
 Pinned in `pyproject.toml` and `docker/requirements-gpu.txt`: `nvidia-modelopt[hf]==0.46.1`. Serve image pins `sglang==0.5.20`.

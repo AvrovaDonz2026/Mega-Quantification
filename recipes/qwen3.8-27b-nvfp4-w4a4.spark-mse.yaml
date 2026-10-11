@@ -1,0 +1,37 @@
+# Controlled W4A4 Spark experiment: same calibration and layer map as the
+# max baseline; change the weight-scale search and output identity.
+# MSE searches NVFP4 weight reconstruction error with an FP8 block-scale sweep.
+# The backend sets eligible NVFP4 weight block scales to static so ModelOpt
+# executes the search. Packed NVFP4 group 16 remains the same; input block scales
+# stay dynamic and activation calibration remains max. The max recipe is intact.
+# Quantized vision and MTP remain enabled. No quality improvement is established
+# until a full export audit, serving checks and independent GPQA run pass.
+
+name: qwen3.8-27b-nvfp4-w4a4-spark-mse
+backend: modelopt
+scheme: nvfp4_w4a4
+algorithm: mse
+kv_cache: null
+family: qwen3_5
+extra_ignore: []
+
+model:
+  source: /models/Qwen3.8-27B
+  dtype: bfloat16
+  trust_remote_code: true
+  device_map: auto
+  quantize_vision: true
+  quantize_mtp: true
+
+calibration:
+  dataset: /data/calibration.jsonl
+  num_samples: 256
+  max_seq_length: 1024
+  batch_size: 1
+  seed: 42
+  with_images: true
+
+export:
+  output_dir: outputs/Qwen3.8-27B-NVFP4-W4A4-spark-mse
+  format: hf
+  pack: true

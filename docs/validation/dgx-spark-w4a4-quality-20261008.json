@@ -1,0 +1,810 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-08",
+  "status": "running",
+  "complete": false,
+  "scope": "Controlled Spark W4A4 MSE/Local-Hessian scale-search repair; both full PTQ, strict export audits and fixed vision/MTP functional checks passed. Resumed MSE GPQA completed with formal checks passed: 178/198 correct, 3 truncated and 4 unparsed. Local-Hessian is running with 194 valid records and no complete formal result; general quality recovery and recovery of stopping behavior have not been established.",
+  "source": {
+    "proof_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+    "source_archive_sha256": "23f03022b63188ce2564e93e2186630b803c2b4d0e5540669c1526af122e809e",
+    "manifest_source_hashes_matched": 79,
+    "manifest_installed_package_hashes_matched": 27
+  },
+  "hardware": {
+    "platform": "DGX Spark",
+    "gpu": "NVIDIA GB10",
+    "compute_capability": [
+      12,
+      1
+    ],
+    "architecture": "aarch64"
+  },
+  "ptq_container": {
+    "image_id": "sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1",
+    "git_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+    "base_image": "nvcr.io/nvidia/pytorch:26.08-py3@sha256:3becd068f49bd2ad38f90db5f9a4803019a76933a24e63d821376c44e7a9200a",
+    "packages": {
+      "megaquant": "0.1.2",
+      "torch": "2.14.0a0+4fdf77b940.nv26.8.63802676",
+      "nvidia-modelopt": "0.47.0",
+      "transformers": "5.12.1",
+      "safetensors": "0.8.0"
+    },
+    "runtime_manifest_guard": {
+      "passed": true,
+      "exit_code": 0
+    }
+  },
+  "input_audit": {
+    "passed": true,
+    "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+    "calibration_manifest_sha256": "b45dffbbe47d3e07e1ccc11147d553c88bf70ab9ef326a317ac3e0af514f8650",
+    "actual_rows": 256,
+    "actual_batches": 256,
+    "actual_image_samples": 128,
+    "actual_text_samples": 128,
+    "actual_token_lengths": {
+      "min": 154,
+      "max": 501,
+      "mean": 247.69140625,
+      "median": 223.0,
+      "total": 63409
+    },
+    "exact_gpqa_question_overlap": 0,
+    "gpqa_csv_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+    "source_index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df"
+  },
+  "operator_validation": {
+    "execution": {
+      "status": "passed",
+      "passed": true,
+      "execution_mode": "baked_container",
+      "git_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+      "exit_code": 0,
+      "elapsed_seconds": 75.997
+    },
+    "passed": true,
+    "scope": "synthetic NVFP4 operator calibration; not GPQA or full-model accuracy",
+    "seed": 42,
+    "calibration_shape": [
+      512,
+      256
+    ],
+    "heldout_shape": [
+      256,
+      256
+    ],
+    "weight_shape": [
+      128,
+      256
+    ],
+    "activation_max_scales_equal": true,
+    "algorithms": {
+      "max": {
+        "algorithm_config": "max",
+        "forward_loop_calls": 1,
+        "weight_scale_count": 1,
+        "weight_block_type": "dynamic",
+        "weight_calibrator": "MaxCalibrator",
+        "weight_mse": 1.3609777852252591e-05,
+        "heldout_weight_output_relative_mse": 0.010333134792745113,
+        "heldout_w4a4_output_relative_mse": 0.019379304721951485
+      },
+      "mse": {
+        "algorithm_config": {
+          "method": "mse",
+          "fp8_scale_sweep": true
+        },
+        "forward_loop_calls": 1,
+        "weight_scale_count": 2048,
+        "weight_block_type": "static",
+        "weight_calibrator": "NVFP4MSECalibrator",
+        "weight_mse": 1.0266852768836543e-05,
+        "heldout_weight_output_relative_mse": 0.00801023282110691,
+        "heldout_w4a4_output_relative_mse": 0.01700882986187935,
+        "weight_values_changed_from_max": 21814
+      },
+      "local_hessian": {
+        "algorithm_config": {
+          "method": "local_hessian",
+          "fp8_scale_sweep": true,
+          "block_size": 16
+        },
+        "forward_loop_calls": 2,
+        "weight_scale_count": 2048,
+        "weight_block_type": "static",
+        "weight_calibrator": "NVFP4MSECalibrator",
+        "weight_mse": 1.0385305358795449e-05,
+        "heldout_weight_output_relative_mse": 0.008017105050384998,
+        "heldout_w4a4_output_relative_mse": 0.01697077415883541,
+        "weight_values_changed_from_max": 21889
+      }
+    }
+  },
+  "mtp_device_regression": {
+    "status": "passed",
+    "passed": true,
+    "execution_mode": "source_overlay",
+    "runtime_base_revision": "6dc72caa2852698c09372e5846f05a262ebdfcc7",
+    "patched_source_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+    "unpatched_reproduction": {
+      "algorithm": "mse",
+      "failed": 1,
+      "deselected": 8,
+      "elapsed_seconds": 6.57,
+      "error": "CPU/CUDA mismatch in precollected MaxCalibrator statistics"
+    },
+    "patched_suite": {
+      "passed": 9,
+      "warnings": 1,
+      "elapsed_seconds": 74.0,
+      "coverage": [
+        "original five MTP tests",
+        "exact preservation and same-device reuse of precollected max statistics",
+        "CPU MTP with CUDA target under max, MSE and Local-Hessian"
+      ]
+    },
+    "limit": "These nine tests ran with patched source over the older runtime. Both separate full-checkpoint PTQ runs used the new baked container, and their fixed vision/MTP serving checks passed."
+  },
+  "full_model_candidates": {
+    "mse": {
+      "recipe": "recipes/qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml",
+      "full_ptq": {
+        "status": "passed",
+        "passed": true,
+        "exit_code": 0,
+        "elapsed_seconds": 1044.728,
+        "calibration_pass_elapsed_seconds": [
+          465.9
+        ]
+      },
+      "strict_export_audit": {
+        "status": "passed",
+        "passed": true,
+        "exit_code": 0,
+        "elapsed_seconds": 35.486,
+        "git_sha": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d"
+      },
+      "text_image_ocr": {
+        "status": "passed",
+        "passed": true,
+        "cases_passed": 5,
+        "cases_with_expected_answers": 4,
+        "expected_answers_correct": 4,
+        "color_counterfactual_passed": true,
+        "output_logprobs_checked_both_modes": 410
+      },
+      "embedded_mtp": {
+        "status": "passed",
+        "passed": true,
+        "within_checkpoint_output_ids_equal": true,
+        "matching_output_ids": 205,
+        "same_requests_and_image_hashes": true,
+        "all_cases_have_positive_verify_steps_and_accepted_drafts": true,
+        "verify_steps": 73,
+        "accepted_drafts": 136,
+        "proposed_drafts": 146,
+        "aggregate_spec_accept_rate": 0.9315068493150684
+      },
+      "full_gpqa": {
+        "status": "complete",
+        "started": true,
+        "correct": 178,
+        "denominator": 198,
+        "truncated": 3,
+        "unparsed": 4,
+        "eval_started": true,
+        "started_at": "2026-10-08T03:11:17Z",
+        "journal_rows_observed": 198,
+        "progress_observed_at": "2026-10-11T04:15:25.660811Z",
+        "journal_progress_note": "All 198 records were checked against the formal result checker. The historical 186-record subset below is superseded by this complete score.",
+        "fresh_start": {
+          "initial_journal_rows": 0,
+          "initial_summary_exists": false,
+          "initial_run_directory_exists": false,
+          "scope_note": "This empty-journal fresh start describes the original 2026-10-08 run, not the resumed run."
+        },
+        "capacity": {
+          "token_capacities": [
+            1720012
+          ],
+          "single_request_context_fits": true,
+          "context_length": 262144,
+          "allow_auto_truncate": false,
+          "runtime_generation_limit": {
+            "configured": false,
+            "values": [],
+            "uncapped": true
+          }
+        },
+        "actual_server": {
+          "context_length": 262144,
+          "max_running_requests": 16,
+          "tp_size": 1,
+          "allow_auto_truncate": false,
+          "mamba_ssm_dtype": "float32",
+          "kv_cache_dtype": "fp8_e4m3",
+          "speculative_algorithm": null,
+          "max_total_num_tokens": 1720012,
+          "max_req_input_len": 262138,
+          "quantization": "modelopt",
+          "disable_cuda_graph": true,
+          "enable_hierarchical_cache": false,
+          "max_mamba_cache_size": 64
+        },
+        "interruption": {
+          "observed_at_utc": "2026-10-10T05:36:00.672603+00:00",
+          "host_recent_restart_observed": true,
+          "service_exited_at_utc": "2026-10-10T02:54:25.203701304Z",
+          "service_exit_code": 255,
+          "service_oom_killed": false,
+          "original_orchestration_status_stale": true,
+          "cause_note": "A recent host restart, missing original processes and stopped service were observed. The saved final decode log predates the restart. The exact stopping cause is unconfirmed; Docker did not mark the service OOM-killed and the inspected logs contain no actual OOM, traceback or watchdog-timeout report.",
+          "resume_started": true,
+          "original_processes_missing": true,
+          "last_saved_decode_log": {
+            "timestamp_utc": "2026-10-09T02:22:42Z",
+            "running_requests": 12,
+            "kv_tokens": 1357100,
+            "throughput_tokens_per_second": 17.16
+          },
+          "host_uptime_seconds": 9765.49,
+          "saved_server_log_sha256": "7446c6b69cd980e9ce49f8366658c7668189f228d1e26be3a7220f495559d901",
+          "saved_server_log_bytes": 1514824
+        },
+        "partial_results": {
+          "status": "partial_records_valid",
+          "full_complete": false,
+          "formal_full_checker_passed": false,
+          "quality_recovery_established": false,
+          "observed_at_utc": "2026-10-10T05:31:31.232814+00:00",
+          "valid_unique_records": 186,
+          "unknown_remaining": 12,
+          "current": {
+            "n": 186,
+            "correct": 171,
+            "accuracy": 0.9193548387096774,
+            "truncated": 0,
+            "unparsed": 1,
+            "finish_reasons": {
+              "stop": 186
+            },
+            "completion_tokens": {
+              "total": 2531948,
+              "mean": 13612.623655913978,
+              "median": 7271.0,
+              "max": 82082,
+              "over_32768": 26,
+              "over_65536": 2,
+              "over_131072": 0
+            },
+            "prompt_tokens_total": 57029,
+            "continuation_count_total": 0
+          },
+          "baseline_same_completed_subset": {
+            "n": 186,
+            "correct": 166,
+            "accuracy": 0.8924731182795699,
+            "truncated": 0,
+            "unparsed": 2,
+            "finish_reasons": {
+              "stop": 186
+            },
+            "completion_tokens": {
+              "total": 2284086,
+              "mean": 12280.032258064517,
+              "median": 7583.5,
+              "max": 83297,
+              "over_32768": 20,
+              "over_65536": 1,
+              "over_131072": 0
+            },
+            "prompt_tokens_total": 57029,
+            "continuation_count_total": 0
+          },
+          "paired_same_completed_subset": {
+            "n": 186,
+            "both_correct": 163,
+            "new_only_correct": 8,
+            "baseline_only_correct": 3,
+            "both_wrong": 12
+          },
+          "possible_full_score_bounds": {
+            "minimum_correct": 171,
+            "maximum_correct": 183,
+            "denominator": 198,
+            "minimum_accuracy": 0.8636363636363636,
+            "maximum_accuracy": 0.9242424242424242
+          },
+          "current_snapshot_sha256": "4feebfa61ca3e6509b5c84ccfce44e57b31a91449321aa2c998472f874314c00",
+          "baseline_snapshot_sha256": "3b1605dcd0c9fc59927795724daf05269f05ece1186d1f0c24c8aae851836007",
+          "dataset_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+          "parser": {
+            "method": "AST extraction of original repository definitions",
+            "source_sha256": "9de9ac1ef756a40547fe31f18b9436dcebd78f9283d89c158c4cd090391e0104"
+          },
+          "validation_errors": {},
+          "formal_checker_note": "This provisional tool does not verify summary or serving protocol; use the formal checker after all 198 results exist.",
+          "selection_bias_note": "Completed responses are selected by completion time, not random sampling. Pending long responses may differ; this subset accuracy cannot be extrapolated to the complete benchmark.",
+          "historical_snapshot": true,
+          "superseded_by_full_results": true,
+          "snapshot_note": "This is the 2026-10-10 observation before the remaining 12 responses completed. Its missing-response count, bounds and zero truncations apply only to that historical snapshot, not the current full result."
+        },
+        "resume": {
+          "status": "complete",
+          "run_id": "w4a4-quality-20261010-resume",
+          "started_at_utc": "2026-10-10T05:40:30Z",
+          "evaluation_started_at_utc": "2026-10-10T05:43:19Z",
+          "observed_at_utc": "2026-10-11T04:12:02Z",
+          "original_results_preserved": true,
+          "independent_run_directory": true,
+          "preflight_passed": true,
+          "resume_seed_validation_passed": true,
+          "seed_records": 186,
+          "seed_correct": 171,
+          "seed_snapshot_sha256": "4feebfa61ca3e6509b5c84ccfce44e57b31a91449321aa2c998472f874314c00",
+          "initial_summary_exists": false,
+          "initial_pending_items": 12,
+          "evaluation_requests_started": true,
+          "client_resume_log_confirmed_records": 186,
+          "wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba",
+          "frozen_original_driver_sha256": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
+          "capacity": {
+            "token_capacities": [
+              1728385
+            ],
+            "single_request_context_fits": true,
+            "context_length": 262144,
+            "allow_auto_truncate": false,
+            "runtime_generation_limit": {
+              "configured": false,
+              "values": [],
+              "uncapped": true
+            }
+          },
+          "actual_server": {
+            "context_length": 262144,
+            "max_running_requests": 16
+          },
+          "note": "The recovery run retained the validated 186-record prefix and completed the remaining 12 responses. The formal checker passed for all 198 items. The recovery-segment timer covers only the resumed requests and is not the total benchmark runtime.",
+          "startup_observation": {
+            "observed_at_utc": "2026-10-10T05:43:53.914044Z",
+            "driver_process_alive": true,
+            "client_container_running": true,
+            "server_container_running": true,
+            "decode_running_requests_observed": 12,
+            "decode_observed_at_utc": "2026-10-10T05:43:33Z",
+            "observed_client_errors": []
+          },
+          "completed_at_utc": "2026-10-10T15:58:53Z",
+          "recovery_segment_elapsed_seconds": 36935.981,
+          "total_benchmark_elapsed_seconds": null
+        },
+        "complete": true,
+        "formal_full_checker_passed": true,
+        "formal_checker_errors": [],
+        "accuracy": 0.898989898989899,
+        "accuracy_percent": 89.8989898989899,
+        "truncated_and_unparsed_may_overlap": true,
+        "finish_reasons": {
+          "stop": 195,
+          "length": 3
+        },
+        "completed_at": "2026-10-10T15:58:53Z",
+        "completion_tokens": {
+          "total": 3603462,
+          "median": 8159,
+          "max": 261645,
+          "over_32768": 32,
+          "over_65536": 6,
+          "over_131072": 3
+        },
+        "continuation_count_total": 0,
+        "total_benchmark_elapsed_seconds": null,
+        "elapsed_note": "The preserved 186-record prefix and interruption prevent treating the recovery segment timer as the elapsed time of the complete benchmark.",
+        "integrity_checks": {
+          "passed": true,
+          "preserved_186_record_prefix_unchanged": true,
+          "original_journal_unchanged": true,
+          "checkpoint_files_before_after_unchanged": true,
+          "checkpoint_files_match_original_run": true,
+          "dataset_unchanged": true
+        },
+        "comparison_to_original_max": {
+          "baseline_correct": 174,
+          "baseline_denominator": 198,
+          "correct_difference": 4,
+          "accuracy_percentage_point_difference": 2.0202020202020203,
+          "quality_recovery_established": false,
+          "note": "The complete MSE run scored four more correct answers on this benchmark. Three length finishes remain; this run does not establish general quality recovery or resolve stopping behavior."
+        },
+        "unparsed_breakdown": {
+          "length_and_unparsed": 3,
+          "stop_and_unparsed": 1,
+          "total_unparsed": 4
+        },
+        "journal_sha256": "7c7aa22be4f7a152380555b702e17fb3d4ef08255dc3181c680a5c6555a84336",
+        "formal_verification": {
+          "passed": true,
+          "complete": true,
+          "benchmark": "gpqa_diamond",
+          "expected_items": 198,
+          "protocol": {
+            "temperature": 0.0,
+            "seed": 0,
+            "shuffle_choices": true
+          },
+          "files": {
+            "csv": {
+              "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+              "bytes": 1373492
+            },
+            "journal": {
+              "sha256": "7c7aa22be4f7a152380555b702e17fb3d4ef08255dc3181c680a5c6555a84336",
+              "bytes": 11161340
+            },
+            "summary": {
+              "sha256": "f946a2b276311071f0aad42a09438c347b78d3451395e556b9b1983c04989c52",
+              "bytes": 4483
+            }
+          },
+          "errors": [],
+          "coverage": {
+            "dataset_rows": 198,
+            "journal_rows": 198,
+            "valid_record_objects": 198,
+            "unique_item_ids": 198,
+            "missing_items": 0,
+            "unexpected_items": 0,
+            "duplicate_rows": 0
+          },
+          "scores": {
+            "n": 198,
+            "correct": 178,
+            "accuracy": 0.898989898989899,
+            "denominator": 198,
+            "truncated": 3,
+            "unparsed": 4,
+            "headline": "178/198"
+          },
+          "verified": [
+            "198 unique item IDs exactly match the supplied Diamond CSV",
+            "every gold letter and shuffled choice matches the CSV and supplied seed",
+            "saved predictions match the repository response extractor",
+            "truncated and unparsed responses count as wrong",
+            "summary scores match independently recomputed scores",
+            "summary records temperature zero and the supplied generation seed"
+          ]
+        }
+      },
+      "native_weight_search": {
+        "passed": true,
+        "completed_weight_searches": 519,
+        "completed_calibration_passes": 1,
+        "rows_per_pass": 256,
+        "run_log_audit_manifest_hash_binding_verified": true
+      }
+    },
+    "local_hessian": {
+      "recipe": "recipes/qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml",
+      "full_ptq": {
+        "status": "passed",
+        "passed": true,
+        "exit_code": 0,
+        "elapsed_seconds": 1157.952,
+        "calibration_pass_elapsed_seconds": [
+          465.3,
+          137.5
+        ]
+      },
+      "strict_export_audit": {
+        "status": "passed",
+        "passed": true,
+        "exit_code": 0,
+        "elapsed_seconds": 34.511,
+        "git_sha": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d"
+      },
+      "text_image_ocr": {
+        "status": "passed",
+        "passed": true,
+        "cases_passed": 5,
+        "cases_with_expected_answers": 4,
+        "expected_answers_correct": 4,
+        "color_counterfactual_passed": true,
+        "output_logprobs_checked_both_modes": 410
+      },
+      "embedded_mtp": {
+        "status": "passed",
+        "passed": true,
+        "within_checkpoint_output_ids_equal": true,
+        "matching_output_ids": 205,
+        "same_requests_and_image_hashes": true,
+        "all_cases_have_positive_verify_steps_and_accepted_drafts": true,
+        "verify_steps": 71,
+        "accepted_drafts": 138,
+        "proposed_drafts": 142,
+        "aggregate_spec_accept_rate": 0.971830985915493
+      },
+      "full_gpqa": {
+        "status": "running",
+        "started": true,
+        "correct": null,
+        "denominator": null,
+        "truncated": null,
+        "unparsed": null,
+        "eval_started": true,
+        "note": "Local-Hessian started fresh after the complete MSE result and integrity checks passed. It is still generating four remaining responses; no formal complete result is available.",
+        "complete": false,
+        "formal_full_checker_passed": false,
+        "started_at": "2026-10-10T16:02:18Z",
+        "journal_rows_observed": 194,
+        "progress_observed_at": "2026-10-11T04:15:25.660811Z",
+        "last_record_saved_at": "2026-10-11T03:53:26.676702Z",
+        "fresh_start": {
+          "initial_journal_rows": 0
+        },
+        "observed_running_requests": 4,
+        "observed_client_errors": [],
+        "partial_results": {
+          "status": "partial_records_valid",
+          "full_complete": false,
+          "formal_full_checker_passed": false,
+          "observed_at_utc": "2026-10-11T04:15:25.660811Z",
+          "valid_unique_records": 194,
+          "unknown_remaining": 4,
+          "current": {
+            "n": 194,
+            "correct": 170,
+            "accuracy": 0.8762886597938144,
+            "truncated": 0,
+            "unparsed": 2,
+            "finish_reasons": {
+              "stop": 194
+            }
+          },
+          "possible_full_score_bounds": {
+            "minimum_correct": 170,
+            "maximum_correct": 174,
+            "denominator": 198,
+            "minimum_accuracy": 0.8585858585858586,
+            "maximum_accuracy": 0.8787878787878788
+          },
+          "selection_bias_note": "This subset is selected by response completion time. It is not the formal 198-item score; zero truncations applies only to the completed subset.",
+          "journal_sha256": "96f52841437166e75ba872bfbcc517cdbd947e87514cefdef447d0a4f93867c7"
+        },
+        "latest_liveness_observation": {
+          "observed_at_utc": "2026-10-11T04:26:49Z",
+          "candidate": "local_hessian",
+          "journal_rows_observed": 194,
+          "journal_bytes": 9064997,
+          "journal_modified_at_utc": "2026-10-11T03:53:26.676702Z",
+          "client_container_running": true,
+          "server_container_running": true,
+          "current_stage": "hessian-eval",
+          "decode_observed_at_utc": "2026-10-11T04:26:46Z",
+          "decode_running_requests_observed": 4,
+          "decode_queued_requests_observed": 0,
+          "decode_full_tokens_observed": 603103,
+          "aggregate_generation_tokens_per_second": 22.56,
+          "note": "Read-only Teleport status and log observation; full tokens are the aggregate batch log field, not per-request output lengths. No response text or question identifiers retained."
+        }
+      },
+      "native_weight_search": {
+        "passed": true,
+        "completed_weight_searches": 519,
+        "completed_calibration_passes": 2,
+        "rows_per_pass": 256,
+        "run_log_audit_manifest_hash_binding_verified": true,
+        "hessian_skip_or_unsupported_warnings_found": false
+      }
+    }
+  },
+  "comparison_protocol": {
+    "calibration": {
+      "num_samples": 256,
+      "max_seq_length": 1024,
+      "batch_size": 1,
+      "seed": 42,
+      "with_images": true
+    },
+    "quantization": {
+      "scheme": "nvfp4_w4a4",
+      "block_size": 16,
+      "weight_block_type": "static",
+      "fp8_scale_sweep": true,
+      "activation_calibration": "max",
+      "input_block_type": "dynamic",
+      "vision_quantized": true,
+      "mtp_quantized": true,
+      "export_kv_quantization": null
+    },
+    "gpqa": {
+      "recipe": "recipes/eval-gpqa-diamond.spark-gpqa.yaml",
+      "items": 198,
+      "temperature": 0,
+      "context_length": 262144,
+      "concurrency": 16,
+      "seed": 0,
+      "shuffle_choices": true,
+      "thinking": true,
+      "preserve_thinking": true,
+      "reasoning_effort": "xhigh",
+      "speculative_algorithm": null,
+      "http_timeout_seconds": 86400,
+      "serving_ssm_dtype": "float32",
+      "serving_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+      "client_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+      "orchestration_driver_sha256": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
+      "orchestration_note": "The original MSE run was interrupted after 186 valid records and resumed under the frozen protocol. Its complete 198-item result and preservation/checkpoint/dataset integrity checks passed on 2026-10-10. The recovery-segment timer is not the total benchmark runtime. Local-Hessian then started from an empty journal and is still running; its complete result remains pending.",
+      "resume_wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba"
+    },
+    "original_max_baseline": {
+      "algorithm": "max",
+      "correct": 174,
+      "denominator": 198,
+      "accuracy_percent": 87.87878787878788,
+      "report": "docs/validation/dgx-spark-gpqa-256k-20261002.json",
+      "note": "The baseline is the earlier completed run, not a new candidate score."
+    }
+  },
+  "evidence_sha256": {
+    "source-14d5ad6.tar": "23f03022b63188ce2564e93e2186630b803c2b4d0e5540669c1526af122e809e",
+    "ptq.manifest.json": "78325b44119df88e0d02f6891308f3841f2681334fe57b8b50ea7e1f950d2fd6",
+    "ptq.image.json": "768f843ae2357b0d69525fc0df5fc624b37b459f9f323e0eaf868d0c9e841d56",
+    "manifest-verify-mtp-fixed.run.json": "01fab9ef875248f29c6dac51a62416cf04676dd615f0b4a74f5659fcb1ffc1a5",
+    "operator-final.json": "f21e302ad5307d4e7b3a3bbb0dbde76e212dcb4c417a0194318563a90b7a0699",
+    "operator-mtp-fixed.run.json": "c0361c222f92f422f2253ec7ff3da724ebadd6224eaf3f91c533443920e56a32",
+    "input-audit.json": "568d7a63b64f4a9111721f29bd59ea844174f2de7ab1f239d6efc4365b961556",
+    "mtp-regression-before.log": "3b0a7a3f07d5dab053e64a6977e23bf880822590c58a52f58bbdd7fd338459e6",
+    "mtp-regression-fixed.log": "23d459c8256e6e8a4b591b4b1f9877b2c267eda0e85c430a9f869f9143c4a93b",
+    "quantize-mse.log": "0bd537eaf7d6ef6b49948d43f434b5c570929c63452c01d4bc47afe1f73969a5",
+    "quantize-mse.run.json": "cfe30e3fbc53baa8bd344ba2ae40e3535e1a5a4802de48798ecd7c957858f367",
+    "audit-mse.run.json": "d888a399d427306b2dc40be78dae2408781e1061540afd571aafb9aac3b4b6fb",
+    "mse.audit.json": "9a62cfb62322284bcea2bbd76661a298068a0875bbe1367b9987cbe57c166ae7",
+    "quantize-hessian.log": "f3765899ad5cec4e307acd3067f77e673b7fa63245b3d730caadaa6d42613d3f",
+    "quantize-hessian.run.json": "9de86a4b7e9c20cef8c72d82a04c28fa71db46ac1d5e41652014da1df574399b",
+    "audit-hessian.run.json": "319b2598df612db3041a6495cfd0285b313c9ff0cbc567c73d4485a20e701989",
+    "hessian.audit.json": "9a62cfb62322284bcea2bbd76661a298068a0875bbe1367b9987cbe57c166ae7",
+    "run_gpqa_candidates.py": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
+    "mse-baseline.container.json": "407219adba74761cf4cc84a57470613794b536356a38311d0199506ec2c5e5b1",
+    "mse-baseline.server-info.json": "41937b050f2913d20e2486f3a1236c66cbbc12842a9a5cdecb5bdd7be103cf10",
+    "mse-baseline.json": "473e379262ebb75b26ac7e1c5843408b02a5f5ad6fe104634ed9c087e470ea64",
+    "mse-mtp.container.json": "5fcf394287455a25731008bcf373646771de530fce41b47b460f822f40fee723",
+    "mse-mtp.server-info.json": "1918f0fbb1bdc45e71819ca45853f2fe60de9ffa99090e2ba4849fb9b593e9de",
+    "mse-mtp.json": "72453345915e56ae5a7f148077215ccada8ec8a83fdda9046e3e4abd4dd99370",
+    "mse.native-weight-search.json": "b27f46b3f4a753f667731b435d9797522a0d3fd6274b57f1d766e4578f880fdd",
+    "hessian-baseline.json": "dc88a1fc474c5d60516ab0f7af44700ea274a8eca1c436720e1b387b9ac35b7c",
+    "hessian-baseline.container.json": "a42f32168fed61d8b2d8227894c535e24651705177a2b534aee5fc3cf221010d",
+    "hessian-baseline.server-info.json": "5bfe8e6dc9dbfbef48a08ae4f885373dac49621c6bc0ed572d47cd47b89bec22",
+    "hessian-mtp.json": "50d2ea595972040a68fe3db052a34092bfe52b87ddeeaec5b06d164c6d140898",
+    "hessian-mtp.container.json": "d8807e3674e97ca8457888d24b36f8f63fc1629a78a9f53a9eb4fd6c59a6d2b4",
+    "hessian-mtp.server-info.json": "fa7eacd08b1d5c1c63256a887b9f7b098c141f4f37bd6b73f46cb8b575fb74b1",
+    "hessian.native-weight-search.json": "79dee2cd2ea248aa805c376b4711a9583010a53c9ce1194b9a6737f1708809ae",
+    "candidate-status.json": "5edf66095726e0ecffb1f46be14540e563b0970ceb3a5621c5eaa5457f6868c1",
+    "mse.capacity.json": "627f17f6f8553e45a7f128bd07937ba231a1adfd30a9765ac3781c2ae8460c19",
+    "mse.server-info.json": "262d358c2f7413df4ec104c4e322c879121affb39058241357e6f1e367ca7ecc",
+    "mse.fresh-start.json": "35de05acafaea05345459a83fa63c4be4ed488138cd6d533185407a2f57171ff",
+    "driver-inputs.json": "541736df8168a7df4f0311410ae9c7754cbb3dac69f78ebb01df56b3e386670a",
+    "partial_score_gpqa.py": "dbb07a1c19aa057b91f741b1029915e95009d08710192808d6fac2b9f8230088",
+    "partial-score-20261010.json": "54339bea12ce01618cafa5bbf97610597dfc601fac92c429ee7964355bd23443",
+    "interruption-evidence-20261010.json": "73f4dcf66c071d01882aabb3f9103187841ba6a7c7ce4447cb4a5f3e8accefa1",
+    "resume-20261010.status.json": "e8c12032fac7e48ea4ba624ede41c7d1ac6b227d7aefd0ee33dcae5e3da29d7c",
+    "resume-20261010.seed-validation.json": "ead4e83326283536645656ba5222b67219aac102572a583be706ce17400d2398",
+    "resume-20261010.provenance.json": "170e865c5525f8823756461552a65f76700247766006ec62da8350341c3c96e6",
+    "resume-20261010.resume-start.json": "b936e3550a776150ec94424a202cad55de455282a20e01d841b3190714329410",
+    "resume-20261010.capacity.json": "25675e99722d9943b3bf8e92bc13c8e23662832a45f04c60924a0f0e0e635e68",
+    "resume-20261010.server-info.json": "73ab286a0bf99c6af92df08430b4fdf9a65ed1b80480193c6ea714b2e139070a",
+    "quality-progress-20261011.json": "f86604e5806330b143e2305651472260d70b69ea1ff06215ee3f18d32f2cb8fd",
+    "hessian-liveness-20261011.json": "a0323e745e6818537a4a7cf49292291d81664f9ae0fb5650aeb7e59e9962887b"
+  },
+  "limits": [
+    "Synthetic operator error reduction does not establish a full-model or GPQA accuracy improvement.",
+    "The strict export audit verifies structure, source/revision coverage, calibration execution and finite scale payloads; it does not verify generation or numerical quality.",
+    "The calibration overlap check covers exact normalized GPQA question matches only, not general contamination.",
+    "The nine MTP regression tests used the patched source over the earlier runtime; both separate full-model PTQ runs used the new baked container.",
+    "Fixed vision/MTP requests establish functionality only for tested requests; accepted drafts and within-checkpoint token parity must be recorded separately.",
+    "This record contains hashes and aggregate statistics only; it excludes private host paths, calibration contents, GPQA questions and raw model traces.",
+    "MSE completed with 178/198 correct, but 3 length finishes and 4 unparsed responses remain; all three length finishes are included in the four unparsed responses, with one further stop response unparsed. General quality recovery and stopping behavior are not established as resolved.",
+    "Local-Hessian has only a 194-item completed subset. Its provisional accuracy and zero truncations are not the final 198-item score or final truncation count.",
+    "The historical MSE 186-item subset remains for provenance only and is superseded by the complete 198-item result.",
+    "Only the recovery segment has a recorded elapsed timer; total MSE benchmark elapsed time is unavailable and is represented as null."
+  ],
+  "serving_functional_protocol": {
+    "image_id": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
+    "serving_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
+    "context_length": 32768,
+    "max_running_requests": 4,
+    "tp_size": 1,
+    "enable_multimodal": true,
+    "quantization": "modelopt",
+    "mamba_ssm_dtype": "float32",
+    "kv_cache_dtype": "fp8_e4m3",
+    "temperature": 0,
+    "baseline_speculative_algorithm": null,
+    "mtp_speculative_algorithm": "EAGLE",
+    "mtp_num_steps": 2,
+    "mtp_eagle_topk": 1,
+    "mtp_num_draft_tokens": 3,
+    "mtp_external_draft_model": null,
+    "scope_note": "Fixed functional cases use 32768 context and are separate from the independent 262144-context GPQA runs."
+  },
+  "export_audit_invariants": {
+    "scheme": "nvfp4_w4a4",
+    "errors": [],
+    "warnings": [],
+    "export_tensor_count": 2756,
+    "export_shard_count": 2,
+    "source_tensor_counts": {
+      "language": 851,
+      "vision": 333,
+      "mtp": 15
+    },
+    "quantized_projection_counts": {
+      "language": {
+        "NVFP4": 401
+      },
+      "vision": {
+        "NVFP4": 110
+      },
+      "mtp": {
+        "NVFP4": 8
+      }
+    },
+    "calibration_coverage": {
+      "vision": {
+        "quantizers": 165,
+        "min_calls": 128,
+        "max_calls": 128
+      },
+      "mtp": {
+        "quantizers": 8,
+        "min_calls": 256,
+        "max_calls": 256
+      }
+    },
+    "scale_payload_scan": {
+      "tensors_checked": 1557,
+      "bytes_streamed": 1654937400
+    },
+    "verified_independently_for": [
+      "mse",
+      "local_hessian"
+    ]
+  },
+  "quantization_and_functionality": {
+    "complete": true,
+    "passed": true,
+    "finished_at": "2026-10-08T03:08:02Z",
+    "git_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d"
+  },
+  "functional_cases": [
+    {
+      "name": "arithmetic",
+      "output_tokens_per_mode": 4,
+      "expected_answer_checked": true
+    },
+    {
+      "name": "python_code",
+      "output_tokens_per_mode": 192,
+      "expected_answer_checked": false
+    },
+    {
+      "name": "red_square",
+      "output_tokens_per_mode": 2,
+      "expected_answer_checked": true
+    },
+    {
+      "name": "blue_square",
+      "output_tokens_per_mode": 2,
+      "expected_answer_checked": true
+    },
+    {
+      "name": "ocr_3729",
+      "output_tokens_per_mode": 5,
+      "expected_answer_checked": true
+    }
+  ],
+  "functional_case_limit": "The 192-token Python case verifies nonempty output, finite logprobs and token parity only; generated code was not executed or validated.",
+  "last_updated_at": "2026-10-11T04:26:49Z",
+  "quality_recovery_established": false
+}
