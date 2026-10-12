@@ -198,11 +198,15 @@ The resumed MSE run completed the formal 198-item check: 178/198 correct
 Three responses reached the length limit, and four were unparsed; all three
 truncated responses are included in those four. This single run does not
 establish general quality recovery or show that stopping behavior has recovered.
-As of 2026-10-11 10:19 UTC, Local-Hessian has 197 valid responses, 170 correct
-(86.29% of the completed subset), and one request still decoding. Two responses
-reached the length limit and are included in the four unparsed responses.
-Its formal full score remains pending and can be 170 or 171/198
-(85.86% or 86.36%), below the original max W4A4 and MSE on this run.
+Local-Hessian completed at 2026-10-11 11:10:13 UTC and passed the formal
+198-item check: 170/198 correct (85.86%), four fewer than the original max
+W4A4 and eight fewer than MSE on this run. Three responses reached the length
+limit and are included in the five unparsed responses; two further stop
+responses were unparsed. The client recorded 68,875.212 seconds, about 19.13
+hours, for this complete Local-Hessian run. Both candidates' checkpoint and
+CSV integrity checks passed. The final evidence was observed at
+2026-10-12 02:20:20 UTC. Execution and evidence verification are complete;
+general quality recovery and recovery of stopping behavior remain unestablished.
 Preserve the original scored exports and journals.
 
 Use the same calibration JSONL and image hashes for every algorithm. Verify

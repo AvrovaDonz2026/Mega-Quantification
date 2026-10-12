@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "date": "2026-10-08",
-  "status": "running",
-  "complete": false,
-  "scope": "Controlled Spark W4A4 MSE/Local-Hessian scale-search repair; both full PTQ, strict export audits and fixed vision/MTP functional checks passed. Resumed MSE GPQA completed with formal checks passed: 178/198 correct, 3 truncated and 4 unparsed. Local-Hessian is running with 197 valid records and no complete formal result; general quality recovery and recovery of stopping behavior have not been established.",
+  "status": "complete",
+  "complete": true,
+  "scope": "Controlled Spark W4A4 MSE/Local-Hessian validation completed: both full PTQ, strict export audits and fixed vision/MTP functional checks passed; both complete 198-item GPQA results passed formal verification. MSE scored 178/198 with 3 length finishes and 4 unparsed responses; Local-Hessian scored 170/198 with 3 length finishes and 5 unparsed responses. General quality recovery and recovery of stopping behavior have not been established.",
   "source": {
     "proof_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
     "source_archive_sha256": "23f03022b63188ce2564e93e2186630b803c2b4d0e5540669c1526af122e809e",
@@ -196,7 +196,7 @@
         "eval_started": true,
         "started_at": "2026-10-08T03:11:17Z",
         "journal_rows_observed": 198,
-        "progress_observed_at": "2026-10-11T04:15:25.660811Z",
+        "progress_observed_at": "2026-10-12T02:20:20.078540Z",
         "journal_progress_note": "All 198 records were checked against the formal result checker. The historical 186-record subset below is superseded by this complete score.",
         "fresh_start": {
           "initial_journal_rows": 0,
@@ -387,13 +387,14 @@
         "accuracy_percent": 89.8989898989899,
         "truncated_and_unparsed_may_overlap": true,
         "finish_reasons": {
-          "stop": 195,
-          "length": 3
+          "length": 3,
+          "stop": 195
         },
         "completed_at": "2026-10-10T15:58:53Z",
         "completion_tokens": {
           "total": 3603462,
-          "median": 8159,
+          "mean": 18199.303030303032,
+          "median": 8159.0,
           "max": 261645,
           "over_32768": 32,
           "over_65536": 6,
@@ -475,6 +476,23 @@
             "summary scores match independently recomputed scores",
             "summary records temperature zero and the supplied generation seed"
           ]
+        },
+        "last_record_saved_at": "2026-10-10T15:58:53.954413Z",
+        "formal_checker_execution": {
+          "exit_code": 0,
+          "elapsed_seconds": 0.471,
+          "started_at": "2026-10-10T15:58:55Z",
+          "finished_at": "2026-10-10T15:58:55Z"
+        },
+        "formal_input_integrity": {
+          "checkpoint_files_unchanged": true,
+          "csv_unchanged": true,
+          "checkpoint_hashes_before_and_after_equal": true,
+          "checkpoint_hashes_equal_original_attempt": true,
+          "original_journal_unchanged": true,
+          "original_journal_prefix_preserved": true,
+          "original_journal_sha256": "4feebfa61ca3e6509b5c84ccfce44e57b31a91449321aa2c998472f874314c00",
+          "original_journal_bytes": 8090414
         }
       },
       "native_weight_search": {
@@ -526,24 +544,24 @@
         "aggregate_spec_accept_rate": 0.971830985915493
       },
       "full_gpqa": {
-        "status": "running",
+        "status": "complete",
         "started": true,
-        "correct": null,
-        "denominator": null,
-        "truncated": null,
-        "unparsed": null,
+        "correct": 170,
+        "denominator": 198,
+        "truncated": 3,
+        "unparsed": 5,
         "eval_started": true,
-        "note": "Local-Hessian started fresh after the complete MSE result and integrity checks passed. It is still generating one remaining response; no formal complete result is available.",
-        "complete": false,
-        "formal_full_checker_passed": false,
+        "note": "Local-Hessian started from an empty journal after the complete MSE result and integrity checks passed. All 198 items, the summary, and final checkpoint/dataset integrity checks passed. The resulting 170/198 score is below the original max baseline and MSE.",
+        "complete": true,
+        "formal_full_checker_passed": true,
         "started_at": "2026-10-10T16:02:18Z",
-        "journal_rows_observed": 197,
-        "progress_observed_at": "2026-10-11T10:19:33.454805Z",
-        "last_record_saved_at": "2026-10-11T08:37:48.876326Z",
+        "journal_rows_observed": 198,
+        "progress_observed_at": "2026-10-12T02:20:20.078540Z",
+        "last_record_saved_at": "2026-10-11T11:10:13.378634Z",
         "fresh_start": {
           "initial_journal_rows": 0
         },
-        "observed_running_requests": 1,
+        "observed_running_requests": 0,
         "observed_client_errors": [],
         "partial_results": {
           "status": "partial_records_valid",
@@ -583,9 +601,116 @@
           },
           "selection_bias_note": "This subset is selected by response completion time. It is not the formal 198-item score; its two length finishes and four unparsed responses are provisional. Both length finishes are included among the unparsed responses.",
           "journal_sha256": "a81229021d6a1003ab226b1467783e0c26c9c4a4ed189ae6f5b27d863ee76137",
-          "truncated_and_unparsed": 2
+          "truncated_and_unparsed": 2,
+          "historical_snapshot": true,
+          "superseded_by_full_results": true,
+          "snapshot_note": "This is the 2026-10-11 10:19 UTC observation before the last response completed. Its missing-response count, bounds and truncation count describe that historical snapshot only; the final result is 170/198 with 3 length finishes and 5 unparsed responses."
         },
-        "latest_liveness_observation": {
+        "formal_checker_errors": [],
+        "accuracy": 0.8585858585858586,
+        "accuracy_percent": 85.85858585858585,
+        "completed_at": "2026-10-11T11:10:13Z",
+        "journal_sha256": "a7b09345ccd65ba2db370bb3941ff5e59883c5b2c9c8de4ac34f83f10c30aa7b",
+        "finish_reasons": {
+          "length": 3,
+          "stop": 195
+        },
+        "formal_verification": {
+          "passed": true,
+          "complete": true,
+          "benchmark": "gpqa_diamond",
+          "expected_items": 198,
+          "protocol": {
+            "temperature": 0.0,
+            "seed": 0,
+            "shuffle_choices": true
+          },
+          "files": {
+            "csv": {
+              "sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+              "bytes": 1373492
+            },
+            "journal": {
+              "sha256": "a7b09345ccd65ba2db370bb3941ff5e59883c5b2c9c8de4ac34f83f10c30aa7b",
+              "bytes": 12308459
+            },
+            "summary": {
+              "sha256": "22e39d94ff4ea310af054a8f0a2fab7882338a1f20c21780135a0c9726264f1c",
+              "bytes": 4500
+            }
+          },
+          "errors": [],
+          "coverage": {
+            "dataset_rows": 198,
+            "journal_rows": 198,
+            "valid_record_objects": 198,
+            "unique_item_ids": 198,
+            "missing_items": 0,
+            "unexpected_items": 0,
+            "duplicate_rows": 0
+          },
+          "scores": {
+            "n": 198,
+            "correct": 170,
+            "accuracy": 0.8585858585858586,
+            "denominator": 198,
+            "truncated": 3,
+            "unparsed": 5,
+            "headline": "170/198"
+          },
+          "verified": [
+            "198 unique item IDs exactly match the supplied Diamond CSV",
+            "every gold letter and shuffled choice matches the CSV and supplied seed",
+            "saved predictions match the repository response extractor",
+            "truncated and unparsed responses count as wrong",
+            "summary scores match independently recomputed scores",
+            "summary records temperature zero and the supplied generation seed"
+          ]
+        },
+        "formal_checker_execution": {
+          "exit_code": 0,
+          "elapsed_seconds": 0.434,
+          "started_at": "2026-10-11T11:10:13Z",
+          "finished_at": "2026-10-11T11:10:14Z"
+        },
+        "completion_tokens": {
+          "total": 3821301,
+          "mean": 19299.5,
+          "median": 7143.5,
+          "max": 261548,
+          "over_32768": 36,
+          "over_65536": 9,
+          "over_131072": 4
+        },
+        "continuation_count_total": 1,
+        "unparsed_breakdown": {
+          "length_and_unparsed": 3,
+          "stop_and_unparsed": 2,
+          "total_unparsed": 5
+        },
+        "formal_input_integrity": {
+          "checkpoint_files_unchanged": true,
+          "csv_unchanged": true,
+          "checkpoint_hashes_before_and_after_equal": true
+        },
+        "journal_progress_note": "The complete 198-item result supersedes the historical 197-item snapshot retained below.",
+        "total_benchmark_elapsed_seconds": 68875.212,
+        "elapsed_note": "Measured client elapsed time for this fresh complete Local-Hessian run; excludes quantization, serving startup, verification and MSE.",
+        "integrity_checks": {
+          "passed": true,
+          "checkpoint_files_unchanged": true,
+          "csv_unchanged": true,
+          "checkpoint_hashes_before_and_after_equal": true
+        },
+        "comparison_to_original_max": {
+          "baseline_correct": 174,
+          "baseline_denominator": 198,
+          "correct_difference": -4,
+          "accuracy_percentage_point_difference": -2.0202020202020203,
+          "quality_recovery_established": false,
+          "note": "Local-Hessian scored four fewer correct answers than the earlier max run and eight fewer than MSE. Three length finishes remain; the scale-search objective did not improve GPQA on this run."
+        },
+        "historical_liveness_observation": {
           "observed_at_utc": "2026-10-11T10:19:33.454805Z",
           "candidate": "local_hessian",
           "journal_rows_observed": 197,
@@ -597,7 +722,16 @@
           "decode_queued_requests_observed": 0,
           "decode_full_tokens_observed": 238492,
           "aggregate_generation_tokens_per_second": 8.84,
-          "note": "Read-only Teleport status and log observation; full tokens are the aggregate batch log field, not per-request output lengths. No response text or question identifiers retained."
+          "note": "Read-only Teleport status and log observation; full tokens are the aggregate batch log field, not per-request output lengths. No response text or question identifiers retained.",
+          "historical_snapshot": true
+        },
+        "final_runtime_observation": {
+          "observed_at_utc": "2026-10-12T02:18:46Z",
+          "current_stage": "complete",
+          "driver_status": "passed",
+          "driver_complete": true,
+          "client_and_server_containers_present": false,
+          "note": "Evaluation and serving containers were removed by the completed orchestration; results and checkpoint exports remain preserved."
         }
       },
       "native_weight_search": {
@@ -646,8 +780,10 @@
       "serving_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
       "client_revision": "79b5dfef54618d0e385c5974d0ea508cd2fbdd40",
       "orchestration_driver_sha256": "7c91c985db18ebc9573d71b7946c3acec2b537d88c261e9450866649137869c3",
-      "orchestration_note": "The original MSE run was interrupted after 186 valid records and resumed under the frozen protocol. Its complete 198-item result and preservation/checkpoint/dataset integrity checks passed on 2026-10-10. The recovery-segment timer is not the total benchmark runtime. Local-Hessian then started from an empty journal and is still running; its complete result remains pending.",
-      "resume_wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba"
+      "orchestration_note": "The original MSE run was interrupted after 186 valid records and resumed under the frozen protocol. Its complete 198-item result and prefix/checkpoint/dataset integrity checks passed on 2026-10-10; the recovery-segment timer is not total benchmark runtime. Local-Hessian then started from an empty journal, completed all 198 items on 2026-10-11, and passed formal result and final input-integrity checks. Final orchestration cleanup completed at 2026-10-11T11:10:48Z.",
+      "resume_wrapper_sha256": "f08f7f034dddfefa57df5192012fd10a191f34b77c21c655a774ce8849c5a6ba",
+      "continue_on_length": true,
+      "continuation_note": "The frozen recipe allows continuation within the remaining total token budget; this does not increase the 262144 context setting. Observed continuation counts were 0 for MSE and 1 for Local-Hessian."
     },
     "original_max_baseline": {
       "algorithm": "max",
@@ -708,7 +844,15 @@
     "quality-progress-20261011.json": "f86604e5806330b143e2305651472260d70b69ea1ff06215ee3f18d32f2cb8fd",
     "hessian-liveness-20261011.json": "a0323e745e6818537a4a7cf49292291d81664f9ae0fb5650aeb7e59e9962887b",
     "hessian-progress-20261011T070750Z.json": "796863c772044873f03e17c8fb9d79d7b670cffece8e16e6b323380ab4b5a2a8",
-    "hessian-progress-20261011T101933Z.json": "2956db804441ef19ddab46facd7eef62a43c632917b773c2609fe889aec3d739"
+    "hessian-progress-20261011T101933Z.json": "2956db804441ef19ddab46facd7eef62a43c632917b773c2609fe889aec3d739",
+    "resume-final.status.json": "240148e6fdefa8ca2730f06031e7462b1e1c22978c7b8541ae5a68db28d60a73",
+    "mse.verified.json": "690ac67d36e31f942d5f879faa91ed0dfadb8e99d20ac4055c25e936e637fc35",
+    "mse.input-integrity.json": "82630be03c5116118a3beb28cb40b885596fc3bb6b24f90f7ac4a8f0d12a34e4",
+    "mse-verify.run.json": "3bb125c5e5ec7f0b78a65c369b1e2007f0e50f4ceb167540325afb126ca465b1",
+    "hessian.verified.json": "a69a69eb55996460f6e1309bca487cf594804b8d13a8186a8175569e1aca9fb6",
+    "hessian.input-integrity.json": "62422b83b8935c8b24e16f75610bd4753f13176bd99fe995a4ad494a233c42a0",
+    "hessian-verify.run.json": "2d55ba370ffd15bfcb7d9d821c2b7f8b2feaad5b94ae3ce63de985ea04043758",
+    "quality-final-20261012.json": "5a2a79bec110affadf71f1816d02c565ee45d116b739d44f4079a671d9a2de98"
   },
   "limits": [
     "Synthetic operator error reduction does not establish a full-model or GPQA accuracy improvement.",
@@ -718,9 +862,10 @@
     "Fixed vision/MTP requests establish functionality only for tested requests; accepted drafts and within-checkpoint token parity must be recorded separately.",
     "This record contains hashes and aggregate statistics only; it excludes private host paths, calibration contents, GPQA questions and raw model traces.",
     "MSE completed with 178/198 correct, but 3 length finishes and 4 unparsed responses remain; all three length finishes are included in the four unparsed responses, with one further stop response unparsed. General quality recovery and stopping behavior are not established as resolved.",
-    "Local-Hessian has only a 197-item completed subset. Its provisional accuracy, two length finishes and four unparsed responses are not the final 198-item results. Even if the remaining response is correct, its maximum score is 171/198, below the original max baseline of 174/198 and MSE result of 178/198.",
+    "Local-Hessian completed with 170/198 correct, 3 length finishes and 5 unparsed responses. All three length finishes are included among the five unparsed responses. Its complete score is below the original max baseline (174/198) and MSE (178/198); aggregate statistics alone do not establish repetitive thinking as a cause.",
     "The historical MSE 186-item subset remains for provenance only and is superseded by the complete 198-item result.",
-    "Only the recovery segment has a recorded elapsed timer; total MSE benchmark elapsed time is unavailable and is represented as null."
+    "Only the recovery segment has a recorded elapsed timer; total MSE benchmark elapsed time is unavailable and is represented as null.",
+    "Completed validation and formal result checks do not establish general quality recovery or recovery of stopping behavior. GPQA here is text only with speculative MTP disabled; fixed vision/MTP functional checks have narrower scope."
   ],
   "serving_functional_protocol": {
     "image_id": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
@@ -818,6 +963,9 @@
     }
   ],
   "functional_case_limit": "The 192-token Python case verifies nonempty output, finite logprobs and token parity only; generated code was not executed or validated.",
-  "last_updated_at": "2026-10-11T10:19:33.454805Z",
-  "quality_recovery_established": false
+  "last_updated_at": "2026-10-12T02:20:20.078540Z",
+  "quality_recovery_established": false,
+  "completed_at": "2026-10-11T11:10:48Z",
+  "completion_note": "Complete refers to execution and evidence verification; it does not establish model-quality recovery.",
+  "stopping_behavior_recovery_established": false
 }
