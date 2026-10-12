@@ -16,8 +16,8 @@ change when a hardware profile is added. Groups below are the public index.
 | `qwen3.8-27b-nvfp4-w4a4.yaml` | `nvfp4_w4a4` | Uniform NVFP4 W4A4, group 16. SGLang `modelopt_fp4`. |
 | `qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | Uniform W4A4 packed for 32 GB. |
 | `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `nvfp4_w4a4` | GB10 profile: quantizes language, vision, and MTP with ModelOpt 0.47; uses local `/models` and `/data` mounts. |
-| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | `nvfp4_w4a4` | Controlled Spark weight-MSE experiment with NVFP4 FP8 block-scale sweep: same 256 image/text samples and layer map as the max baseline, separate export. Quality improvement unmeasured. |
-| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | `nvfp4_w4a4` | Controlled Spark Local-Hessian experiment: input-aware weight-scale search, block 16, same 256 samples, separate export. Quality improvement unmeasured. |
+| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | `nvfp4_w4a4` | Controlled Spark weight-MSE experiment with NVFP4 FP8 block-scale sweep: same 256 image/text samples and layer map as the max baseline, separate export. [Verified GPQA: 178/198 (89.90%)](../docs/validation/dgx-spark-w4a4-quality-20261008.md). |
+| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | `nvfp4_w4a4` | Controlled Spark Local-Hessian experiment: input-aware weight-scale search, block 16, same 256 samples, separate export. [Verified GPQA: 170/198 (85.86%)](../docs/validation/dgx-spark-w4a4-quality-20261008.md). |
 | `qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | Uniform W4A4, anonymous ultrachat. |
 | `qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | Same layer map as `nvfp4_w4a8`. Local-Hessian + Nemotron v3. Needs a larger GPU than 32 GB. |
 | `qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | 32 GB PTQ: algorithm `max`, ultrachat 256×1024, batch 1. Restores BF16 vision + MTP. Writes `outputs/Qwen3.8-27B-NVFP4-W4A8`. |
@@ -33,6 +33,14 @@ They keep export KV quantizers unset and use FP8 KV with FP32 SSM state when
 served. They do not replace the scored max export or promise a higher GPQA
 score. See [the controlled experiment and validation gates](../docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments).
 
+Both experiments completed full PTQ, strict export audits and fixed vision/MTP
+functional checks. Their temperature-0, 256k GPQA runs used MTP disabled.
+MSE has three length finishes and four unparsed answers; Local-Hessian has
+three length finishes and five unparsed answers. All length finishes are
+included in the unparsed counts. MSE's four additional correct answers over
+the max baseline in this run do not establish general quality or stopping
+recovery. The default recipe remains `nvfp4_w4a8`.
+
 ## GPQA (SGLang)
 
 | File | Machine |
@@ -47,7 +55,7 @@ score. See [the controlled experiment and validation gates](../docs/DGX_SPARK.md
 采样和比特布局在 `docs/qwen3.8-27b.md`。跑完的分数是 journal 里 198 行都在之后的 `correct/198`。代理从仓库根目录的 `SKILL.md` 读硬约定。
 
 Spark 的完整 262144 上下文、temperature 0、16 并发 GPQA 已完成并通过严格
-校验：混合 W4A8 **177/198（89.39%）**，均匀 W4A4 **174/198（87.88%）**。
+校验：混合 W4A8 **177/198（89.39%）**，max 均匀 W4A4 **174/198（87.88%）**。
 两组各 198 个唯一题目，截断均为 0，解析失败各 4；thinking 保留并使用
 `xhigh`，GPQA 时关闭 MTP。见[完整报告](../docs/validation/dgx-spark-gpqa-256k-20261002.md)与
 [验证证据](../docs/validation/dgx-spark-gpqa-256k-20261002.json)。

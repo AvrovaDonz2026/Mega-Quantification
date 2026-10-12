@@ -42,7 +42,11 @@ Input scales stay dynamic, activation calibration stays max, and the packed
 NVFP4 group-16 format and existing max configuration remain intact. Require
 `scripts/check_nvfp4_calibration.py` to pass on the actual GPU, then full export,
 vision/MTP serving and independent GPQA gates. Preserve the scored exports;
-no full-model quality improvement has been established for these experiments.
+the completed MSE run improved this GPQA score by four correct answers over
+the max baseline, while general quality and stopping recovery remain
+unestablished. Keep the experimental recipes optional and retain the default
+`nvfp4_w4a8` recipe. Completed PTQ, fixed vision/MTP functionality and GPQA
+evidence: `docs/validation/dgx-spark-w4a4-quality-20261008.md` and `.json`.
 
 5090 PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 1. Batch 4 can OOM at `lm_head` on a 32 GB instance. The export restores BF16 vision tensors into `vision.safetensors` and BF16 MTP tensors into `mtp.safetensors`; the HF index includes both. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` with 401 `quantized_layers` entries (193 NVFP4 + 208 FP8), which eval / serve use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. DGX Spark serves this mixed map at about 12 tok/s decode (bandwidth ceiling about 14); speculative MTP is the faster path.
 
@@ -93,6 +97,7 @@ questions, response text, item IDs or local paths. Do not publish raw journals.
 
 Finished journals:
 
+- Controlled Spark full **256k** W4A4 calibration experiments: **MSE 178/198 (89.90%)**, length finishes 3, unparsed 4; **Local-Hessian 170/198 (85.86%)**, length finishes 3, unparsed 5. All length finishes are included in the unparsed counts. Both complete 198-item results passed the formal checker at temperature **0**, seed 0, shuffled choices, preserved `xhigh` thinking and MTP disabled. Full multimodal PTQ, strict export audits and separate fixed vision/MTP functional checks passed. MSE's four additional correct answers over max in this run do not establish general quality or stopping recovery; Local-Hessian scored below max. Report/evidence: `docs/validation/dgx-spark-w4a4-quality-20261008.md` and `.json`.
 - Spark full **256k** mixed W4A8 with quantized vision/MTP: **177/198 (89.39%)**, truncated 0, unparsed 4. Spark full **256k** uniform W4A4 with quantized vision/MTP: **174/198 (87.88%)**, truncated 0, unparsed 4. Both use temperature **0**, seed 0, shuffled choices, preserved `xhigh` thinking, GB10 TP1, FlashInfer, 16 requests and MTP disabled. Each has 198 unique dataset-matching records and a verified summary; the sequential evaluation completed on 2026-10-03 at 13:12:33 UTC. Report/evidence: `docs/validation/dgx-spark-gpqa-256k-20261002.md` and `.json`.
 - Mixed / default W4A8, temperature **1.0**, 80 GB SM120, SGLang 64-way, 2026-09-22: **178/198** (truncated 0, unparsed 0). Not a rerun of the temperature-0 YAML.
 - Uniform W4A4, temperature **0**, Marlin, 2026-09-22: **172/198** (truncated 4, unparsed 6).
