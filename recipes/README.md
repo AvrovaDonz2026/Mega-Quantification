@@ -25,7 +25,7 @@ inputs, quantization and validation.
 | [qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml](qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml) | `nvfp4_w4a4` | Optional controlled Local-Hessian search; separate export. See experiments below. |
 | [qwen3.8-27b-nvfp4-w4a4.public-calib.yaml](qwen3.8-27b-nvfp4-w4a4.public-calib.yaml) | `nvfp4_w4a4` | Uniform W4A4, anonymous ultrachat. |
 | [qwen3.8-27b-nvfp4-mixed.yaml](qwen3.8-27b-nvfp4-mixed.yaml) | `nvfp4_mixed` | W4A8 layer map, Local-Hessian + Nemotron v3; needs more than 32 GB. |
-| [qwen3.8-27b-nvfp4-mixed.5090.yaml](qwen3.8-27b-nvfp4-mixed.5090.yaml) | `nvfp4_mixed` | 5090 production profile: max, ultrachat 256×1024, batch 1; BF16 vision/MTP. |
+| [qwen3.8-27b-nvfp4-mixed.5090.yaml](qwen3.8-27b-nvfp4-mixed.5090.yaml) | `nvfp4_mixed` | 5090 production profile: max, ultrachat 256×1024, batch 1; BF16 vision/MTP. Writes `outputs/Qwen3.8-27B-NVFP4-W4A8`. |
 | [qwen3.8-27b-nvfp4-mixed.public-calib.yaml](qwen3.8-27b-nvfp4-mixed.public-calib.yaml) | `nvfp4_mixed` | Same map, max, anonymous ultrachat 512. |
 | [qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml](qwen3.8-27b-nvfp4-w4a16-mixed.5090.yaml) | `nvfp4_w4a16_mixed` | Optional Marlin export with BF16 MLP activations. |
 
