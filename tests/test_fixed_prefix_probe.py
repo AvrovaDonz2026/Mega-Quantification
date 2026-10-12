@@ -120,6 +120,84 @@ def test_eos_probe_counts_generated_stopping_id_even_if_text_empty():
     assert row["rollout"]["finish_type"] == "stop"
 
 
+def terminal_response(output_ids: list[int], finish: dict) -> dict:
+    """Aligned native IDs/logprobs so failures isolate terminal semantics."""
+    data = response()
+    data["output_ids"] = output_ids
+    meta = data["meta_info"]
+    meta["completion_tokens"] = len(output_ids)
+    meta["finish_reason"] = finish
+    meta["output_token_logprobs"] = [[-0.2, token, None] for token in output_ids]
+    meta["output_top_logprobs"] = [
+        [[-0.2, token, None], [-0.3, 13, None]] for token in output_ids
+    ]
+    meta["output_token_ids_logprobs"] = [
+        [[-0.2 if candidate == token else -0.3 if candidate == 13 else -5.0,
+          candidate, None] for candidate in [12, 13, 14, 15]]
+        for token in output_ids
+    ]
+    return data
+
+
+@pytest.mark.parametrize("matched", ["NaN happened", "stop", "14", True, [14], None, 99])
+def test_stop_rejects_non_integer_or_undeclared_eos_even_when_final_id_is_eos(matched):
+    data = terminal_response([14], {"type": "stop", "matched": matched})
+    with pytest.raises(probe.DiagnosticError, match="integer declared EOS"):
+        probe.summarize_response(bundle()["cases"][0], data, 8)
+
+
+@pytest.mark.parametrize("output_ids,matched", [([12], 14), ([14], 15)])
+def test_stop_requires_matched_eos_preserved_as_final_native_id(output_ids, matched):
+    data = terminal_response(output_ids, {"type": "stop", "matched": matched})
+    with pytest.raises(probe.DiagnosticError, match="preserved as the last"):
+        probe.summarize_response(bundle()["cases"][0], data, 8)
+
+
+def test_stop_rejects_output_continuing_after_an_earlier_eos():
+    data = terminal_response([14, 12, 15], {"type": "stop", "matched": 15})
+    with pytest.raises(probe.DiagnosticError, match="continued after an EOS"):
+        probe.summarize_response(bundle()["cases"][0], data, 8)
+
+
+@pytest.mark.parametrize("eos", [14, 15])
+def test_genuine_eos_can_stop_before_budget_without_changing_report_schema(eos):
+    data = terminal_response([12, eos], {"type": "stop", "matched": eos})
+    row = probe.summarize_response(bundle()["cases"][0], data, 8)
+    assert row["rollout"]["completion_tokens"] == 2
+    assert row["rollout"]["finish_type"] == "stop"
+    assert row["rollout"]["eos_token_occurrences"] == 1
+    assert set(row["rollout"]) == {
+        "completion_tokens", "finish_type", "output_ids_sha256",
+        "thinking_end_token_occurrences", "eos_token_occurrences", "repetition",
+    }
+
+
+def test_length_finish_must_reach_requested_budget():
+    with pytest.raises(probe.DiagnosticError, match="before the diagnostic token budget"):
+        probe.summarize_response(bundle()["cases"][0], response(), 8)
+
+
+@pytest.mark.parametrize("finish", [{"type": "length"}, {"type": "length", "length": 2}])
+def test_length_finish_accepts_legacy_and_native_metadata_at_budget(finish):
+    data = terminal_response([12, 12], finish)
+    row = probe.summarize_response(bundle()["cases"][0], data, 2)
+    assert row["rollout"]["completion_tokens"] == 2
+    assert row["rollout"]["finish_type"] == "length"
+
+
+def test_length_finish_rejects_generated_eos():
+    data = terminal_response([12, 14], {"type": "length", "length": 2})
+    with pytest.raises(probe.DiagnosticError, match="cannot contain an EOS"):
+        probe.summarize_response(bundle()["cases"][0], data, 2)
+
+
+@pytest.mark.parametrize("length", [1, True, None])
+def test_length_metadata_must_match_budget_when_present(length):
+    data = terminal_response([12, 12], {"type": "length", "length": length})
+    with pytest.raises(probe.DiagnosticError, match="length finish differs"):
+        probe.summarize_response(bundle()["cases"][0], data, 2)
+
+
 def test_aborted_request_cannot_be_reported_complete(tmp_path, monkeypatch):
     source = tmp_path / "bundle.json"
     source.write_text(json.dumps(bundle()))

@@ -298,6 +298,27 @@ def summarize_response(case: dict, response: dict, max_new_tokens: int) -> dict:
         raise DiagnosticError("Aborted generation cannot provide a successful probe result")
     if finish_type not in {"length", "stop"}:
         raise DiagnosticError("Unknown native finish reason")
+    eos = set(case["candidate_token_ids"]["eos"])
+    if finish_type == "stop":
+        # SGLang also labels string/regex stops and its "NaN happened" path
+        # as type=stop. Only an actual, preserved EOS match validates stopping
+        # under this request's ignore_eos=False and no_stop_trim=True protocol.
+        matched = finish.get("matched")
+        if not valid_int(matched) or matched not in eos:
+            raise DiagnosticError("Stop finish must match an integer declared EOS token")
+        if output_ids[-1] != matched:
+            raise DiagnosticError("Matched EOS must be preserved as the last native output token")
+        if any(token in eos for token in output_ids[:-1]):
+            raise DiagnosticError("Native output continued after an EOS token")
+    else:
+        if completed != max_new_tokens:
+            raise DiagnosticError("Length finish occurred before the diagnostic token budget")
+        if any(token in eos for token in output_ids) or finish.get("matched") is not None:
+            raise DiagnosticError("Length finish cannot contain an EOS token or match")
+        if "length" in finish and (
+            not valid_int(finish["length"], 1) or finish["length"] != max_new_tokens
+        ):
+            raise DiagnosticError("Native length finish differs from the diagnostic token budget")
     result = {
         "case": case["case"], "prefix": case["prefix"], "stage": case["stage"],
         "input_ids_sha256": digest(case["input_ids"]), "prompt_tokens": meta["prompt_tokens"],
