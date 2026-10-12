@@ -220,6 +220,61 @@ class FlashInferMultiStepDraftBackend:
     pass
 '''
 
+LOGPROB_PATH = "srt/managers/scheduler_components/batch_result_processor.py"
+LOGPROB_SOURCE = '''class SchedulerBatchResultProcessor:
+    def move_logprobs_to_cpu(self, *, batch, logits_output):
+        if batch.return_logprob:
+            if logits_output.next_token_logprobs is not None:
+                logits_output.next_token_logprobs = (
+                    logits_output.next_token_logprobs.tolist()
+                )
+            if logits_output.input_token_logprobs is not None:
+                logits_output.input_token_logprobs = tuple(
+                    logits_output.input_token_logprobs.tolist()
+                )
+            if logits_output.next_token_top_logprobs_val:
+                logits_output.next_token_top_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_top_logprobs_val
+                ]
+                logits_output.next_token_top_logprobs_idx = [
+                    x.tolist() for x in logits_output.next_token_top_logprobs_idx
+                ]
+            if logits_output.next_token_token_ids_logprobs_val:
+                logits_output.next_token_token_ids_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_token_ids_logprobs_val
+                ]
+
+    def _normalize_decode_outputs(
+        self, *, batch, result, logits_output, next_token_ids,
+    ):
+        next_token_logprobs = None
+        if not batch.spec_algorithm.is_none():
+            next_token_ids = self._resolve_spec_v2_tokens(result, batch)
+        else:
+            ids = (
+                next_token_ids.tolist()
+                if torch.is_tensor(next_token_ids)
+                else next_token_ids
+            )
+            next_token_ids = [[t] for t in ids]
+
+        if batch.return_logprob:
+            next_token_logprobs = logits_output.next_token_logprobs.tolist()
+            if logits_output.next_token_top_logprobs_val:
+                logits_output.next_token_top_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_top_logprobs_val
+                ]
+                logits_output.next_token_top_logprobs_idx = [
+                    x.tolist() for x in logits_output.next_token_top_logprobs_idx
+                ]
+
+            if logits_output.next_token_token_ids_logprobs_val:
+                logits_output.next_token_token_ids_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_token_ids_logprobs_val
+                ]
+        return next_token_ids, next_token_logprobs
+'''
+
 FIXTURES = {
     "srt/models/qwen3_vl.py": VISION_SOURCE,
     "srt/models/qwen3_5_mtp.py": MTP_SOURCE,
@@ -232,6 +287,7 @@ FIXTURES = {
     ),
     "srt/layers/quantization/unquant.py": UNQUANT_SOURCE,
     FLASHINFER_PATH: FLASHINFER_SOURCE,
+    LOGPROB_PATH: LOGPROB_SOURCE,
 }
 
 
@@ -396,6 +452,158 @@ def test_old_v5_manifest_cannot_skip_fp8_attention_alignment(upstream_tree, chec
         patch.patch_tree(upstream_tree, "0.5.20", check=check)
     assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
     assert path.read_bytes() == before_manifest
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_old_v6_manifest_cannot_skip_logprob_row_fix(upstream_tree, check):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v6"
+    del manifest["files"][LOGPROB_PATH]
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    before_manifest = path.read_bytes()
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=check)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert path.read_bytes() == before_manifest
+
+
+def test_logprob_target_hash_drift_fails_before_any_write(upstream_tree):
+    target = upstream_tree / LOGPROB_PATH
+    target.write_text(target.read_text() + "# upstream scheduler changed\n")
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(
+        patch.PatchError, match="batch_result_processor.py: upstream SHA256 mismatch"
+    ):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+@pytest.mark.parametrize(
+    "field", ["next_token_top_logprobs_val", "next_token_token_ids_logprobs_val"]
+)
+def test_logprob_fragment_drift_fails_before_any_write(upstream_tree, monkeypatch, field):
+    target = upstream_tree / LOGPROB_PATH
+    original = target.read_text()
+    target.write_text(original.replace(f"v.tolist() for v in logits_output.{field}",
+                                      "v.cpu().tolist() for v in changed", 1))
+    monkeypatch.setitem(
+        patch.UPSTREAM_SHA256, LOGPROB_PATH, hashlib.sha256(target.read_bytes()).hexdigest()
+    )
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="logprob row normalization.*expected two upstream"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
+
+
+class MockLogprobTensor:
+    def __init__(self, values):
+        self.values = list(values)
+        self.tolist_calls = 0
+
+    def tolist(self):
+        self.tolist_calls += 1
+        return self.values.copy()
+
+
+def _logprob_output(row_kind):
+    values = {
+        "next_token_top_logprobs_val": [[-0.25, -2.25], [], [-0.125]],
+        "next_token_top_logprobs_idx": [[5, 6], [], [7]],
+        "next_token_token_ids_logprobs_val": [[-1.5, -4.5], [], [-3.25]],
+        "next_token_token_ids_logprobs_idx": [[20, 21], [], [22]],
+    }
+    output = SimpleNamespace(
+        next_token_logprobs=MockLogprobTensor([-0.25, -0.125, -0.5]),
+        input_token_logprobs=MockLogprobTensor([-0.75, -0.875]),
+    )
+    expected = {}
+    originals = {}
+    for field, rows in values.items():
+        if row_kind == "empty":
+            rows = []
+        expected[field] = copy.deepcopy(rows)
+        wrapped = [
+            MockLogprobTensor(row)
+            if row_kind == "tensors" or row_kind == "mixed" and i % 2 == 0
+            else row
+            for i, row in enumerate(rows)
+        ]
+        setattr(output, field, wrapped)
+        originals[field] = wrapped.copy()
+    return output, expected, originals
+
+
+@pytest.mark.parametrize("phase", ["prefill", "decode"])
+@pytest.mark.parametrize("row_kind", ["lists", "tensors", "mixed", "empty"])
+def test_logprob_rows_normalize_without_changing_values_or_ids(phase, row_kind):
+    torch = SimpleNamespace(is_tensor=lambda value: isinstance(value, MockLogprobTensor))
+    processor = _namespace(LOGPROB_PATH, torch=torch)["SchedulerBatchResultProcessor"]()
+    output, expected, originals = _logprob_output(row_kind)
+    batch = SimpleNamespace(return_logprob=True,
+                            spec_algorithm=SimpleNamespace(is_none=lambda: True))
+    if phase == "prefill":
+        processor.move_logprobs_to_cpu(batch=batch, logits_output=output)
+        assert output.next_token_logprobs == [-0.25, -0.125, -0.5]
+        assert output.input_token_logprobs == (-0.75, -0.875)
+    else:
+        ids, logprobs = processor._normalize_decode_outputs(
+            batch=batch, result=None, logits_output=output,
+            next_token_ids=MockLogprobTensor([5, 7, 8]),
+        )
+        assert ids == [[5], [7], [8]]
+        assert logprobs == [-0.25, -0.125, -0.5]
+    for field, values in expected.items():
+        actual = getattr(output, field)
+        assert actual == values
+        for before, after in zip(originals[field], actual, strict=True):
+            if isinstance(before, MockLogprobTensor):
+                assert before.tolist_calls == 1
+            else:
+                assert after is before
+
+
+@pytest.mark.parametrize("phase", ["prefill", "decode"])
+def test_disabled_logprobs_do_not_normalize_rows(phase):
+    torch = SimpleNamespace(is_tensor=lambda value: isinstance(value, MockLogprobTensor))
+    processor = _namespace(LOGPROB_PATH, torch=torch)["SchedulerBatchResultProcessor"]()
+    output, _, original = _logprob_output("mixed")
+    batch = SimpleNamespace(return_logprob=False,
+                            spec_algorithm=SimpleNamespace(is_none=lambda: True))
+    if phase == "prefill":
+        processor.move_logprobs_to_cpu(batch=batch, logits_output=output)
+    else:
+        ids, logprobs = processor._normalize_decode_outputs(
+            batch=batch, result=None, logits_output=output, next_token_ids=[5, 7, 8],
+        )
+        assert ids == [[5], [7], [8]]
+        assert logprobs is None
+    for field, values in original.items():
+        assert getattr(output, field) == values
+        assert all(value.tolist_calls == 0 for value in values
+                   if isinstance(value, MockLogprobTensor))
+
+
+def test_speculative_logprob_normalization_preserves_accepted_tokens():
+    torch = SimpleNamespace(is_tensor=lambda value: isinstance(value, MockLogprobTensor))
+    processor = _namespace(LOGPROB_PATH, torch=torch)["SchedulerBatchResultProcessor"]()
+    accepted = [[5, 7], [8]]
+    processor._resolve_spec_v2_tokens = lambda result, batch: accepted
+    output, expected, _ = _logprob_output("mixed")
+    output.next_token_logprobs = MockLogprobTensor([[-0.25, -0.125], [-0.5]])
+    batch = SimpleNamespace(return_logprob=True,
+                            spec_algorithm=SimpleNamespace(is_none=lambda: False))
+    ids, logprobs = processor._normalize_decode_outputs(
+        batch=batch, result=object(), logits_output=output, next_token_ids=object(),
+    )
+    assert ids is accepted
+    assert logprobs == [[-0.25, -0.125], [-0.5]]
+    for field, values in expected.items():
+        assert getattr(output, field) == values
 
 
 def test_seventh_attention_target_hash_drift_fails_before_any_write(upstream_tree):

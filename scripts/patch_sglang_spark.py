@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch pinned SGLang 0.5.20 for quantized vision/MTP and GDN parity.
+"""Patch pinned SGLang 0.5.20 for quantized vision/MTP and Spark compatibility.
 
 The upstream Qwen3.5 loader assumes BF16 vision and a BF16 MTP fc.  This
 build-time patch enables them only when the exported quantized_layers map
@@ -19,9 +19,12 @@ from pathlib import Path
 from typing import Any
 
 VERSION = "0.5.20"
-PATCH_ID = "megaquant-spark-v6"
+PATCH_ID = "megaquant-spark-v7"
 MANIFEST = ".megaquant-spark-patch.json"
-MARKER = f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and GDN/FP8/BF16 compatibility.\n"
+MARKER = (
+    f"# {PATCH_ID}: SGLang {VERSION} quantized vision/MTP and "
+    "GDN/FP8/BF16/logprob compatibility.\n"
+)
 
 # Exact files from https://github.com/sgl-project/sglang/tree/v0.5.20/python/sglang
 UPSTREAM_SHA256 = {
@@ -42,7 +45,48 @@ UPSTREAM_SHA256 = {
     "srt/layers/attention/flashinfer_backend.py": (
         "dce9594f150664cd12c2fb3cfddb37a955759b32a312bc27b0538c1435e82294"
     ),
+    "srt/managers/scheduler_components/batch_result_processor.py": (
+        "e4fb82ba6bc501f2e8f29a0fc76ce240d1d128210122619c899917433c2b6ddb"
+    ),
 }
+
+LOGPROB_TOP_ROWS_OLD = '''            if logits_output.next_token_top_logprobs_val:
+                logits_output.next_token_top_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_top_logprobs_val
+                ]
+                logits_output.next_token_top_logprobs_idx = [
+                    x.tolist() for x in logits_output.next_token_top_logprobs_idx
+                ]
+'''
+
+LOGPROB_TARGET_ROWS_OLD = '''            if logits_output.next_token_token_ids_logprobs_val:
+                logits_output.next_token_token_ids_logprobs_val = [
+                    v.tolist() for v in logits_output.next_token_token_ids_logprobs_val
+                ]
+'''
+
+LOGPROB_TOP_ROWS_NEW = '''            if logits_output.next_token_top_logprobs_val:
+                logits_output.next_token_top_logprobs_val = [
+                    v.tolist() if torch.is_tensor(v) else v
+                    for v in logits_output.next_token_top_logprobs_val
+                ]
+                logits_output.next_token_top_logprobs_idx = [
+                    x.tolist() if torch.is_tensor(x) else x
+                    for x in logits_output.next_token_top_logprobs_idx
+                ]
+'''
+
+LOGPROB_TARGET_ROWS_NEW = '''            if logits_output.next_token_token_ids_logprobs_val:
+                # Targeted rows can already be host lists in the sampler output.
+                logits_output.next_token_token_ids_logprobs_val = [
+                    v.tolist() if torch.is_tensor(v) else v
+                    for v in logits_output.next_token_token_ids_logprobs_val
+                ]
+                logits_output.next_token_token_ids_logprobs_idx = [
+                    x.tolist() if torch.is_tensor(x) else x
+                    for x in logits_output.next_token_token_ids_logprobs_idx
+                ]
+'''
 
 VISION_HELPER = '''
 def _megaquant_vision_quant_config(quant_config):
@@ -397,6 +441,20 @@ def transform(relative_path: str, source: str) -> str:
 ''',
             "SM121 BF16 GDN BA decode/verify backend alignment",
         )
+    elif relative_path == "srt/managers/scheduler_components/batch_result_processor.py":
+        # Both prefill and decode consume the list-or-tensor row contract.
+        # Do not touch the logits, chosen tokens, or numerical logprob values.
+        for old, new, label in (
+            (LOGPROB_TOP_ROWS_OLD, LOGPROB_TOP_ROWS_NEW, "top"),
+            (LOGPROB_TARGET_ROWS_OLD, LOGPROB_TARGET_ROWS_NEW, "targeted"),
+        ):
+            count = source.count(old)
+            if count != 2:
+                raise PatchError(
+                    f"{label} logprob row normalization: "
+                    f"expected two upstream fragments, found {count}"
+                )
+            source = source.replace(old, new, 2)
     elif relative_path == "srt/layers/attention/flashinfer_backend.py":
         source = _replace_once(
             source,
