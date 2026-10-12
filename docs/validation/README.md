@@ -4,10 +4,12 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
-最新重复诊断确认：匿名题目 3 的 MSE W4A4 在最终 ready、idle flush 和零缓存
-命中审计通过后仍出现周期 2032 的原生 token 循环，连续覆盖 16021 tokens；
-本题 max / BF16 尚未完成。九组计划截至该快照有 7 条 validated、2 条 incomplete，
-见[case3 MSE 证据](dgx-spark-repetition-case3-mse-20261012.md)，根因仍未知。
+最新重复诊断确认：匿名题目 3 的 MSE W4A4 在零缓存启动审计通过后出现周期
+2032 的循环；max 本次在 22569 tokens 以 EOS 停止，thinking-end 与 EOS 各一次。
+后续 CPU 正式解析器判定 max 答案可解析但答错，未修改正式分数。
+同题 BF16 尚未完成，九组计划有 8 条 validated、1 条 incomplete，见
+[max 独立快照](dgx-spark-repetition-case3-max-20261012.md)及
+[MSE 快照](dgx-spark-repetition-case3-mse-20261012.md)。此次配对不建立算法排序或根因。
 
 此前匿名题目 5 的源 BF16 权重在 **FP8 KV / FP32 SSM** 下也出现
 持续的原生 token 精确循环，覆盖输出末尾 11441 tokens，周期为 4。MSE 权重量化
@@ -73,6 +75,7 @@ MSE 本轮较 max 多对 4 题，Local-Hessian 少对 4 题；单轮结果尚不
 
 ## 历史试跑与诊断
 
+- **匿名题目 3 的 max 原生停止**：截至 `2026-10-12T13:03:12.992792Z`，max 输出 22569 tokens，以 EOS 停止，thinking-end 与 EOS 各一次，未检出支持阈值内精确循环，零缓存启动与终止审计通过。后续 CPU 判定最终答案可解析但答错，正式分数未改。同题 MSE 已循环，BF16 未完成；九组计划有 8 条 validated、1 条 incomplete，配对行为不建立算法排序或因果。[报告](dgx-spark-repetition-case3-max-20261012.md) · [JSON](dgx-spark-repetition-case3-max-20261012.json)。
 - **匿名题目 3 的 MSE 长周期循环**：截至 `2026-10-12T12:29:22.878411Z`，MSE 输出 49152 tokens，原生周期 2032、稳定后缀起点 33131、连续覆盖 16021 tokens，零缓存启动 gate 与终止审计通过。本题 max / BF16 未完成，九组计划有 7 条 validated、2 条 incomplete，尚不能比较算法或归因。[报告](dgx-spark-repetition-case3-mse-20261012.md) · [JSON](dgx-spark-repetition-case3-mse-20261012.json)。
 - **匿名题目 5 的源 BF16 精确循环**：截至 `2026-10-12T11:59:00.794562Z`，本条输出 24576 tokens，原生周期 4、稳定后缀起点 13135、覆盖 11441 tokens，启动与终止审计通过。共同 FP8 KV / FP32 SSM 条件下，MSE 不是此类循环的必要条件，根因仍未知；九组计划有 6 条 validated、3 条 incomplete。[报告](dgx-spark-repetition-case5-bf16-20261012.md) · [JSON](dgx-spark-repetition-case5-bf16-20261012.json)。
 - **匿名题目 5 的 MSE / max 对照**：两条各用尽 24576 输出预算，停止结果仍未知，未检出支持阈值内精确循环。修正分块 prefill 审计后，九组计划有 5 条 validated、4 条 incomplete；BF16 尚无完成结果。配对语义审阅确认两条都有转录、分组、计数与对齐返工，量化根因仍未知。[报告](dgx-spark-repetition-case5-controls-20261012.md) · [JSON](dgx-spark-repetition-case5-controls-20261012.json)。
