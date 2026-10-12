@@ -1,23 +1,35 @@
-# DGX Spark containers
+# DGX Spark runbook
 
 This runbook builds the repository's ARM64 / CUDA 13 images and runs full-27B
 W4A8 and W4A4 quantization, image inference and embedded MTP checks on one GB10.
-The recipes use TP1. Cross-node TP2 requires a separate distributed validation.
+Start with the default mixed W4A8 recipe; uniform W4A4 and its scale-search
+experiments are alternatives. All recipes here use TP1 on a single host.
 
-The [v0.1.2 release rerun](validation/dgx-spark-release-20261001.md) records
-the exact inputs, image digests and results at frozen revision `ac53833`.
-The 2026-10-01 TP1 rerun passed two independent offline builds of each image,
-fresh full W4A8/W4A4 PTQ, strict source/provenance/export audits, GPU regressions,
-text/image/OCR and embedded quantized MTP checks, and isolated image save/load.
-Both quantization and serving used that same revision. Each format matched
-205 baseline/MTP token IDs across five fixed cases. This coverage does not
-establish arbitrary-prompt determinism or TP2. The
-[previous clean-container report](validation/dgx-spark-clean-container-20260930.md)
-retains the earlier failures and repairs. The earlier
-[quantization](validation/dgx-spark-pr46-20260929.md) and
-[serving](validation/dgx-spark-serving-20260930.md) reports describe their actual
-environments; they do not prove a clean build of these new images. No published
-registry image is claimed here.
+The current release is [v0.1.3](releases/v0.1.3.md). GPU evidence remains frozen
+at the revisions actually tested: `ac53833` for the v0.1.2 clean-container
+rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and `79b5dfe` for their
+serving/evaluation client. Those tested images report version 0.1.2; this
+runbook builds local images from your checkout. Record that build's own
+revision, manifests and checks. See the [validation index](validation/README.md)
+for completed results, exact revisions, image digests and earlier repair history.
+
+The release rerun and later W4A4 candidates passed full PTQ/export checks and
+five fixed text/image/OCR/MTP cases; each matched 205 baseline/MTP token IDs.
+These checks cover functionality on those cases. General vision quality,
+arbitrary-prompt determinism, stopping recovery and cross-node TP2 require
+separate validation.
+
+Follow the workflow in order; use the optional experiments after a baseline:
+
+1. [Build and verify provenance](#build-and-verify-provenance)
+2. [Prepare inputs](#prepare-inputs)
+3. [Quantize and audit both formats](#quantize-both-formats)
+4. [Check vision and embedded MTP](#vision-and-mtp-inference)
+5. [Run full GPQA Diamond at temperature 0](#full-gpqa-diamond-at-temperature-0)
+6. [Transfer a built image](#transfer-a-built-image)
+7. [Optional controlled W4A4 calibration experiments](#controlled-w4a4-calibration-experiments)
+
+[Image contents and mount layout](#what-the-images-contain) are described below.
 
 ## What the images contain
 
@@ -154,115 +166,9 @@ python scripts/audit_spark_export.py \
   --expected-revision "$GIT_REVISION" --output-json w4a4-export-audit.json
 ```
 
-## Controlled W4A4 calibration experiments
-
-Two additional recipes compare scale-search algorithms with the existing
-W4A4 `max` baseline. They retain uniform NVFP4 group 16, quantized vision and
-MTP, the same source checkpoint, the same 256 image/text samples, maximum
-sequence length 1024, batch size 1 and seed 42. Export KV quantizers remain
-unset; serving continues to use FP8 KV and FP32 SSM state. Memory placement
-uses the same settings from [Prepare inputs](#prepare-inputs).
-
-| Recipe | Weight-scale calibration | Separate export |
-|---|---|---|
-| `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `max`, the scored baseline | `Qwen3.8-27B-NVFP4-W4A4-spark` |
-| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | MSE minimizes NVFP4 weight reconstruction error with FP8 block-scale search | `Qwen3.8-27B-NVFP4-W4A4-spark-mse` |
-| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | Local-Hessian weights reconstruction error using input activations; FP8 scale search, block 16 | `Qwen3.8-27B-NVFP4-W4A4-spark-hessian` |
-
-Activation calibration remains `max` in these experiments. The MSE recipe uses
-the repository's explicit `fp8_scale_sweep=true` for NVFP4 weights; generic FP8
-MSE behavior is unchanged. Local-Hessian also uses `fp8_scale_sweep=true` and
-`block_size=16`.
-
-The backend sets eligible NVFP4 **weight** block scales to `static` for MSE
-and Local-Hessian. ModelOpt skips these searches on the default dynamic
-NVFP4 weight quantizers, so changing only the algorithm name is insufficient.
-Inputs retain **dynamic** block scales and activation max calibration. This
-changes weight-scale calibration, while retaining the packed NVFP4 group-16
-format; it leaves the existing `max` configuration unchanged. The GPU operator
-gate must demonstrate that each search runs instead of silently matching max.
-
-The standalone MTP branch starts on CPU. Its calibration hook follows the
-target output's actual device and carries ModelOpt's precollected max statistics
-with the branch, preserving their values. Moving only module buffers leaves
-these ordinary tensor statistics on CPU and breaks static-weight calibration
-on the first CUDA MTP forward.
-
-Changing the search objective does not establish a higher full-model score.
-Both experimental recipes completed full 27B quantization, strict export
-audits, and fixed text/image/OCR and embedded-MTP checks on Spark. Each actually
-completed 519 weight searches. See the
-[2026-10-08 validation record](validation/dgx-spark-w4a4-quality-20261008.md).
-The resumed MSE run completed the formal 198-item check: 178/198 correct
-(89.90%), compared with 174/198 (87.88%) for the original max W4A4 run.
-Three responses reached the length limit, and four were unparsed; all three
-truncated responses are included in those four. This single run does not
-establish general quality recovery or show that stopping behavior has recovered.
-Local-Hessian completed at 2026-10-11 11:10:13 UTC and passed the formal
-198-item check: 170/198 correct (85.86%), four fewer than the original max
-W4A4 and eight fewer than MSE on this run. Three responses reached the length
-limit and are included in the five unparsed responses; two further stop
-responses were unparsed. The client recorded 68,875.212 seconds, about 19.13
-hours, for this complete Local-Hessian run. Both candidates' checkpoint and
-CSV integrity checks passed. The final evidence was observed at
-2026-10-12 02:20:20 UTC. Execution and evidence verification are complete;
-general quality recovery and recovery of stopping behavior remain unestablished.
-Preserve the original scored exports and journals.
-
-Use the same calibration JSONL and image hashes for every algorithm. Verify
-the actual 256-row count, image/text counts and token lengths before PTQ;
-`num_samples` and `max_seq_length` are requested limits, not measured coverage.
-Keep GPQA questions, choices, answers and generated evaluation traces out of
-calibration and candidate selection. Do not lengthen or replace calibration
-data during this controlled comparison.
-
-Rebuild the PTQ image from the current revision before using the new baked
-recipes. Exercise the GPU scale-search operators with
-`scripts/check_nvfp4_calibration.py` inside that image before full PTQ; an
-operator check alone does not validate a full checkpoint or its quality.
-Then run each candidate sequentially:
-
-```bash
-set -e
-# These entrypoint overrides bypass the normal CLI manifest guard.
-docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
-  scripts/container_manifest.py verify
-docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
-  scripts/check_nvfp4_calibration.py --output outputs/nvfp4-calibration-check.json
-
-for algorithm in mse hessian; do
-  recipe="recipes/qwen3.8-27b-nvfp4-w4a4.spark-${algorithm}.yaml"
-  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
-    plan -c "$recipe"
-  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
-    quantize -c "$recipe"
-  python scripts/audit_spark_export.py \
-    "$OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A4-spark-${algorithm}" \
-    "$MODELS_DIR/Qwen3.8-27B" nvfp4_w4a4 \
-    --expected-revision "$GIT_REVISION" \
-    --output-json "w4a4-${algorithm}-export-audit.json"
-done
-```
-
-Each candidate must pass the strict source/provenance/tensor/index/scale and
-vision/MTP calibration-coverage audit, then the actual text/image/OCR and
-embedded MTP checks in the next section. Compare baseline and MTP token IDs
-within the new checkpoint; matching the older checkpoint's output is not the
-gate. Retain actual verification steps, accepted drafts and finite output
-checks. Those fixed requests establish functionality for the cases tested,
-without a general vision quality claim.
-
-Run full GPQA separately for each passing candidate with
-`eval-gpqa-diamond.spark-gpqa.yaml`: temperature 0, 262144 context, 16 requests,
-seed 0, shuffled choices, preserved `xhigh` thinking and MTP disabled. Set
-`SPARK_EVAL_MODEL` to the candidate export and use a new dated `--output`
-directory for its 198-item journal. Apply the
-[same strict verification](#full-gpqa-diamond-at-temperature-0) and report
-each measured score, truncation and unparsed counts alongside the unchanged
-174/198 max baseline. One comparison does not establish a causal explanation
-for a score difference or deterministic repeated output.
-
 ## Vision and MTP inference
+
+### GPU preflight
 
 Verify the serving image's manifest, seven-file patch guard, ARM64/SM121 GPU,
 CUDA matrix multiplication, GDN decode/verify state parity and FP8/BF16
@@ -303,10 +209,13 @@ requests, including masked future tokens. The extra attention work has not
 been benchmarked; this is a scoped compatibility repair, not a general
 determinism or performance guarantee.
 
+### Baseline and embedded MTP checks
+
 The following runs W4A8. For W4A4, change `SPARK_EVAL_MODEL` to the W4A4 export
 and use distinct output JSON filenames. The HTTP clients do not attach a GPU.
 
 ```bash
+export SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark.yaml
 export SPARK_EVAL_MODEL=outputs/Qwen3.8-27B-NVFP4-W4A8-spark
 export SPARK_CHECK_OUTPUT=outputs/w4a8-baseline.json
 export SPARK_MTP_CHECK_OUTPUT=outputs/w4a8-mtp.json
@@ -326,6 +235,8 @@ The default host ports are 30000 for baseline and 30001 for MTP. If changed via
 `SGLANG_SPARK_PORT` or `SGLANG_SPARK_MTP_PORT`, change the health probes as well.
 Inspect logs with `docker compose logs <service>` if readiness fails.
 
+### Acceptance criteria
+
 The public client sends arithmetic, Python generation, red/blue counterfactual
 images and four-digit OCR requests. Passing MTP validation requires correct
 functional answers, exact baseline output token IDs, actual MTP verification
@@ -339,45 +250,12 @@ alone is not a measured speedup.
 
 ## Full GPQA Diamond at temperature 0
 
-Both full **262144-context** Spark runs completed and passed strict result
-verification by **2026-10-03 13:12:33 UTC** (21:12:33 in Beijing).
-
-| Export | Strict score | Dataset-matching unique records | Truncated | Unparsed |
-|---|---|---|---|---|
-| Mixed W4A8, quantized vision/MTP | **177/198 (89.39%)** | 198 | 0 | 4 |
-| Uniform W4A4, quantized vision/MTP | **174/198 (87.88%)** | 198 | 0 | 4 |
-
-Each unparsed response counts as wrong. Both runs used temperature 0, seed 0,
-shuffled choices, preserved thinking with `xhigh`, 16 requests and MTP disabled.
-The formal journals and summaries remain unchanged. See the
-[full run report](validation/dgx-spark-gpqa-256k-20261002.md) and
-[verified evidence](validation/dgx-spark-gpqa-256k-20261002.json).
-
-W4A8 started from an empty journal at **2026-10-02 12:57:50 UTC**; W4A4 followed
-after W4A8 completed and passed verification. The baked client/profile revision
-was `79b5dfef54618d0e385c5974d0ea508cd2fbdd40`. The W4A8 server reported
-262144 context, a 16-request limit and a KV pool of 1,565,460 tokens, which
-accommodated one full 256k request. The formats shared the same protocol and
-ran sequentially on the single GPU.
-
-A separate three-request diagnostic retry of three W4A8 responses produced
-final answers for all three, with two correct and one wrong. This retry used
-different concurrency from the formal 16-request run; it does not replace
-formal rows, raise the score or establish identical repeated outputs. The
-[unparsed-response investigation](validation/dgx-spark-gpqa-unparsed-20261003.md)
-records the earlier 194-row snapshot. Those saved records do not retain the
-actual stopping tokens, so they do not establish a cause involving quantization
-or a kernel.
-
-### Historical 32k trial
-
-The earlier **32768-context** W4A8 trial on 2026-10-02 scored
-**157/198 (79.29%)**, with 30 truncated and 32 unparsed responses (overlapping
-counts). Its 198 unique dataset-matching records and summary passed the checker;
-see the [historical evidence](validation/dgx-spark-gpqa-w4a8-20261002.json).
-This is a measurement under the earlier length limit. The 32k W4A4 trial was
-stopped without a complete score. These journals remain separate from the
-completed 256k results above.
+The default mixed W4A8 and uniform max W4A4 baselines completed full
+**262144-context**, 198-item runs and passed strict result verification.
+Their scores and the completed MSE/Local-Hessian comparisons are in the
+[validation index](validation/README.md). Exact baseline execution metadata
+and verified evidence are in the [full run report](validation/dgx-spark-gpqa-256k-20261002.md)
+and [aggregate JSON](validation/dgx-spark-gpqa-256k-20261002.json).
 
 ### Reproduce the full 256k protocol
 
@@ -495,8 +373,16 @@ with the summary. Its JSON contains aggregate checks and file hashes, without
 questions, answers, item IDs or local paths. Retain raw journals, the CSV,
 server logs and run metadata locally; publish the sanitized verification
 report and actual protocol with the final score. The historical W4A8 measurement
-above used 32k context. The two completed 256k measurements used new journals
+used 32k context. The two completed 256k measurements used new journals
 and passed these checks; reusing earlier 32k rows would invalidate a rerun.
+
+### Historical 32k trial
+
+The earlier 32768-context W4A8 measurement is retained as
+[historical evidence](validation/dgx-spark-gpqa-w4a8-20261002.json); the 32k
+W4A4 trial stopped without a complete score. Keep those journals separate from
+256k evaluations. A later [three-response diagnostic retry](validation/dgx-spark-gpqa-unparsed-20261003.md)
+used different concurrency and does not replace formal rows or scores.
 
 ## Transfer a built image
 
@@ -513,3 +399,104 @@ On the destination, verify the archive checksum, use `docker image load`, set
 the same image tags and external input paths, then repeat manifest and GPU
 checks. Sharing an archive does not by itself establish that a second machine
 completed quantization or inference.
+
+## Controlled W4A4 calibration experiments
+
+This optional comparison follows the build, input, export and serving checks
+above. Keep the default W4A8 recipe and the max W4A4 baseline available.
+
+Two additional recipes compare scale-search algorithms with the existing
+W4A4 `max` baseline. They retain uniform NVFP4 group 16, quantized vision and
+MTP, the same source checkpoint, the same 256 image/text samples, maximum
+sequence length 1024, batch size 1 and seed 42. Export KV quantizers remain
+unset; serving continues to use FP8 KV and FP32 SSM state. Memory placement
+uses the same settings from [Prepare inputs](#prepare-inputs).
+
+| Recipe | Weight-scale calibration | Separate export |
+|---|---|---|
+| `qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `max`, the scored baseline | `Qwen3.8-27B-NVFP4-W4A4-spark` |
+| `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | MSE minimizes NVFP4 weight reconstruction error with FP8 block-scale search | `Qwen3.8-27B-NVFP4-W4A4-spark-mse` |
+| `qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | Local-Hessian weights reconstruction error using input activations; FP8 scale search, block 16 | `Qwen3.8-27B-NVFP4-W4A4-spark-hessian` |
+
+Activation calibration remains `max` in these experiments. The MSE recipe uses
+the repository's explicit `fp8_scale_sweep=true` for NVFP4 weights; generic FP8
+MSE behavior is unchanged. Local-Hessian also uses `fp8_scale_sweep=true` and
+`block_size=16`.
+
+The backend sets eligible NVFP4 **weight** block scales to `static` for MSE
+and Local-Hessian. ModelOpt skips these searches on the default dynamic
+NVFP4 weight quantizers, so changing only the algorithm name is insufficient.
+Inputs retain **dynamic** block scales and activation max calibration. This
+changes weight-scale calibration, while retaining the packed NVFP4 group-16
+format; it leaves the existing `max` configuration unchanged. The GPU operator
+gate must demonstrate that each search runs instead of silently matching max.
+
+The standalone MTP branch starts on CPU. Its calibration hook follows the
+target output's actual device and carries ModelOpt's precollected max statistics
+with the branch, preserving their values. Moving only module buffers leaves
+these ordinary tensor statistics on CPU and breaks static-weight calibration
+on the first CUDA MTP forward.
+
+Both experimental recipes completed full 27B PTQ, strict export audits and
+fixed text/image/OCR and embedded-MTP checks; each completed 519 weight
+searches. The complete GPQA checks recorded MSE **178/198 (89.90%)** and
+Local-Hessian **170/198 (85.86%)**. Both had three length finishes, included
+in their four and five unparsed responses respectively. General quality and
+stopping recovery remain unestablished. See the [validation index](validation/README.md)
+for the score comparison and the [complete experiment record](validation/dgx-spark-w4a4-quality-20261008.md)
+for timings, hashes and integrity checks. Preserve the scored exports and journals.
+
+Use the same calibration JSONL and image hashes for every algorithm. Verify
+the actual 256-row count, image/text counts and token lengths before PTQ;
+`num_samples` and `max_seq_length` are requested limits, not measured coverage.
+Keep GPQA questions, choices, answers and generated evaluation traces out of
+calibration and candidate selection. Do not lengthen or replace calibration
+data during this controlled comparison.
+
+### Reproduce the comparison
+
+Build the PTQ image from the current revision with the experimental recipes.
+Exercise the GPU scale-search operators with
+`scripts/check_nvfp4_calibration.py` inside that image before full PTQ; an
+operator check alone does not validate a full checkpoint or its quality.
+Then run each candidate sequentially:
+
+```bash
+set -e
+# These entrypoint overrides bypass the normal CLI manifest guard.
+docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
+  scripts/container_manifest.py verify
+docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a4 \
+  scripts/check_nvfp4_calibration.py --output outputs/nvfp4-calibration-check.json
+
+for algorithm in mse hessian; do
+  recipe="recipes/qwen3.8-27b-nvfp4-w4a4.spark-${algorithm}.yaml"
+  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
+    plan -c "$recipe"
+  docker compose --profile spark-ptq run --rm quantize-spark-w4a4 \
+    quantize -c "$recipe"
+  python scripts/audit_spark_export.py \
+    "$OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A4-spark-${algorithm}" \
+    "$MODELS_DIR/Qwen3.8-27B" nvfp4_w4a4 \
+    --expected-revision "$GIT_REVISION" \
+    --output-json "w4a4-${algorithm}-export-audit.json"
+done
+```
+
+Each candidate must pass the strict source/provenance/tensor/index/scale and
+vision/MTP calibration-coverage audit, then the actual text/image/OCR and
+embedded MTP checks in [Vision and MTP inference](#vision-and-mtp-inference).
+Compare baseline and MTP token IDs within the new checkpoint; matching the
+older checkpoint's output is not the gate. Retain actual verification steps, accepted drafts and finite output
+checks. Those fixed requests establish functionality for the cases tested,
+without a general vision quality claim.
+
+Run full GPQA separately for each passing candidate with
+`eval-gpqa-diamond.spark-gpqa.yaml`: temperature 0, 262144 context, 16 requests,
+seed 0, shuffled choices, preserved `xhigh` thinking and MTP disabled. Set
+`SPARK_EVAL_MODEL` to the candidate export and use a new dated `--output`
+directory for its 198-item journal. Apply the
+[same strict verification](#full-gpqa-diamond-at-temperature-0) and report
+each measured score, truncation and unparsed counts alongside the unchanged
+174/198 max baseline. One comparison does not establish a causal explanation
+for a score difference or deterministic repeated output.

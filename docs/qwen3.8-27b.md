@@ -1,14 +1,37 @@
 # Qwen3.8-27B
 
-[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) 是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration`，`model_type=qwen3_5`）。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。默认配方量化打在语言模型的线性层上；DGX Spark 配方还会量化视觉塔和 MTP。默认情况下视觉塔、embedding、MTP，以及 GDN 的 `conv1d` / `in_proj_a` / `in_proj_b` 留在 BF16。MTP 写进 `mtp.safetensors`。投机解码时，把 `--speculative-draft-model-path` 指到旁边那个 1 层的 `*-draft` 目录。`megaquant serve` 不会替你加上这个参数。
+[Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) 是 27B 稠密 VLM（`Qwen3_5ForConditionalGeneration`，`model_type=qwen3_5`）。本页介绍模型、量化格式和通用操作；DGX Spark 的容器构建、图文/MTP 校准与评测命令集中在 [Spark 操作说明](DGX_SPARK.md)。当前版本的变更和验证范围见 [v0.1.3 发布说明](releases/v0.1.3.md)，历次实机证据见 [验证记录索引](validation/README.md)。
 
-默认方案 `nvfp4_w4a8` 和 `nvfp4_mixed` 是同一张层图，跟 NVIDIA 公开的 [`nvidia/Qwen3.8-27B-NVFP4`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4) 对齐：MLP 和 `lm_head` 是 NVFP4 group 16（权重和激活都是），self-attn 和 linear-attn 是 FP8。导出写成 `quant_algo=MIXED_PRECISION`，并带上 `quantized_layers`。均匀 W4A4 是另一张图，选中的线性层全部是 NVFP4 block 16。NVFP4 推理要 Blackwell；校准可以在 Hopper 上多卡或 offload 完成。
+默认 `nvfp4_w4a8` 与 `nvfp4_mixed` 使用相同的混合层图：MLP 和 `lm_head` 是 NVFP4 group 16（权重和激活都是），self-attn 和 linear-attn 是 FP8。均匀 `nvfp4_w4a4` 把选中的语言模型线性层全部量化为 NVFP4 block 16，含注意力。默认配方保留 BF16 视觉塔和 MTP；Spark 配方同时量化语言、视觉和 MTP。BF16 外置 MTP helper 与 Spark 量化内嵌 MTP 的用法见 [MTP export](#mtp-export)。
 
-32 GB 5090 上使用 [`recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)：ModelOpt 0.46.1、算法 `max`、`HuggingFaceH4/ultrachat_200k` 256×1024、batch 1。batch 4 在部分 5090 实例会在 `lm_head` 前向申请约 1.62 GiB 时 OOM，因此配方默认 batch 1。导出会把跳过量化的 BF16 视觉塔恢复到 `vision.safetensors`，并把 BF16 MTP 恢复到 `mtp.safetensors`，两者都写入 HF index。`outputs/Qwen3.8-27B-NVFP4-W4A8` 是历史 batch 4 产物，不代表当前默认配置。当前导出仍应有 401 个 `quantized_layers`（193 个 NVFP4、208 个 FP8）。想贴近公开卡，用 [`recipes/qwen3.8-27b-nvfp4-mixed.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.yaml)：Local-Hessian（`fp8_scale_sweep`，Hessian `block_size` 16）、`nvidia/Nemotron-Post-Training-Dataset-v3`、2048×2048、batch 1。32 GB 放不下这次校准。公开卡在 GB300 的 vLLM 上报 GPQA Diamond 88.92（BF16）/ 88.01（NVFP4），`max_new_tokens=65536`。Qwen 自己的 thinking 分是 89.2。
+| 任务 / 机器 | 从这里开始 |
+|---|---|
+| 选择量化方案与配方 | [Quantization format](#quantization-format)、[Recipes](#recipes)、[配方索引](../recipes/README.md) |
+| 32 GB RTX 5090 PTQ | [Single 5090 + 64 GB RAM](#single-5090--64-gb-ram) |
+| 5090 / 80 GB SM120 服务与 GPQA | [SGLang inference and GPQA](#sglang-inference-and-gpqa) |
+| DGX Spark ARM64 / GB10 | [Spark 操作说明](DGX_SPARK.md)：[量化](DGX_SPARK.md#quantize-both-formats)、[视觉/MTP](DGX_SPARK.md#vision-and-mtp-inference)、[256k GPQA](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0) |
+| 查看完整成绩与验证边界 | [当前 Spark 结果](#sglang-inference-and-gpqa)、[验证记录索引](validation/README.md) |
+| 上传已完成的导出 | [OSS publish](#oss-publish) |
 
-DGX Spark（GB10，大约 273 GB/s）用的也是这份混合权重：MLP 带 NVFP4 激活，注意力和 KV 是 FP8。普通 decode 大约 12 tok/s，带宽上限大约 14 tok/s，再快靠这上面的 MTP 投机解码。`nvfp4_w4a16_mixed` 是 32 GB 机器上的可选 Marlin 导出，MLP 激活留 BF16。
+## Contents
 
-代理从仓库根目录的 [SKILL.md](../SKILL.md) 读硬约定。
+- [Quantization format](#quantization-format)
+- [SGLang inference and GPQA](#sglang-inference-and-gpqa)
+- [Model facts](#model-facts)
+- [Recipes](#recipes)
+- [Ignore list](#ignore-list-why-these-stay-bf16)
+- [Mixed / W4A8 / W4A4 comparison](#mixed-vs-sglang-w4a8-vs-uniform-w4a4)
+- [Calibration](#calibration)
+- [Commands](#commands)
+- [Single 5090 + 64 GB RAM](#single-5090--64-gb-ram)
+- [MTP export](#mtp-export)
+- [OSS publish](#oss-publish)
+- [Serve](#serve-sglang--vllm--tensorrt-llm)
+- [GPQA Diamond protocol](#gpqa-diamond-official-card-protocol)
+- [Troubleshooting](#troubleshooting)
+
+NVFP4 推理需要 Blackwell；校准可以在 Hopper 上多卡或 offload 完成。
+代理从仓库根目录的 [SKILL.md](../SKILL.md) 读取硬约定。
 
 Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 5.14.1。Transformers 4.x 缺少所需的模型接口。若启动时报告 GDN API 不兼容，
@@ -23,62 +46,68 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 | `self_attn.{q,k,v,o}_proj` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.{in_proj_qkv,in_proj_z,out_proj}` | FP8 E4M3 | FP8 E4M3 | `quant_algo: FP8` |
 | `linear_attn.conv1d` / `in_proj_a` / `in_proj_b` | BF16 | BF16 | 不写入 |
-| 视觉塔、MTP、embedding、norm | 默认 BF16；Spark 配方对视觉塔/MTP 做 NVFP4 | 默认 BF16；Spark 配方做 NVFP4 | 默认不写入 `quantized_layers`；Spark 配方保留 ModelOpt 导出的量化张量 |
+| 视觉塔的目标线性层 | 默认 BF16；Spark 配方启用 NVFP4 | 默认 BF16；Spark 配方启用 NVFP4 | 默认不写入；Spark 保留 ModelOpt 导出的量化张量 |
+| MTP 的目标线性层 | 默认 BF16；Spark 混合 W4A8 为 FP8 注意力 + NVFP4 其他目标层 | 同权重布局 | 默认不写入；Spark 保留 ModelOpt 导出的量化张量 |
+| embedding、norm | BF16 | BF16 | 不写入 |
 | 推理时的 KV | | fp8_e4m3 | 配方 `kv_cache: fp8` |
 
-`hf_quant_config.json` 顶层是 `MIXED_PRECISION`，`quantized_layers` 非空。SGLang 0.5.20 按 `modelopt_mixed` 加载。导出如果还是裸的 `NVFP4`，先跑 `megaquant rewrite-sglang <export_dir>`。本仓库的方案停在 group 16 的混合图和均匀 W4A4；ModelOpt 那个 block 32 的 `W4A8_NVFP4_FP8` 标签 SGLang 不收，这里也不量化成它。
+上表是默认混合图，`hf_quant_config.json` 顶层为 `MIXED_PRECISION`，`quantized_layers` 非空，SGLang 0.5.20 按 `modelopt_mixed` 加载。若旧版混合导出仍是裸的 `NVFP4`，先跑 `megaquant rewrite-sglang <export_dir>`。均匀 W4A4 的顶层 `NVFP4` 是预期格式，见下表。ModelOpt 的 block 32 `W4A8_NVFP4_FP8` 标签不属于本仓库支持的方案。
 
 | 方案 | 和上表的差别 | 导出 | 运行时 |
 |---|---|---|---|
-| `nvfp4_w4a4` | 选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
+| `nvfp4_w4a4` | 选中的 LM 线性层全部是 NVFP4 W4A4 group 16，含注意力；Spark 的视觉/MTP 目标层也使用 NVFP4 | `quant_algo: NVFP4` | SGLang `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head` 为 NVFP4 group 16 权重、BF16 激活；注意力仍是 FP8 | MLP 条目 `quant_algo: W4A16_NVFP4` | 可选 Marlin 导出 |
 
 ## SGLang inference and GPQA
 
 推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
 
-Spark 完整 256k 评测已完成，两份权重各 198 个唯一题目和 summary 均通过严格
-校验，整套顺序评测于 **2026-10-03 13:12:33 UTC（北京时间 21:12:33）**完成：
+### 当前 Spark 完整结果
 
-| Spark 权重（视觉/MTP 已量化） | 采样与服务 | 分数 | 截断 | 解析失败 |
-|---|---|---|---|---|
-| 混合 W4A8 | temperature 0，262144 上下文，GB10 TP1，FlashInfer，16 并发，MTP 关闭 | **177/198（89.39%）** | 0 | 4 |
-| 均匀 W4A4 | 同上 | **174/198（87.88%）** | 0 | 4 |
+四份 Spark 导出均完成 198 题并通过正式结果校验。它们使用量化视觉/MTP，
+temperature 0、262144 上下文、GB10 TP1、FlashInfer、16 并发、seed 0、
+选项洗牌、保留 `xhigh` thinking；GPQA 期间关闭 MTP。
 
-两组都使用 seed 0、选项洗牌、thinking 开启并保留、`reasoning_effort=xhigh`。
-解析失败算错，正式 journal 和分数没有被重试覆盖。环境、协议和校验记录见
-[完整报告](validation/dgx-spark-gpqa-256k-20261002.md)与
-[结果证据](validation/dgx-spark-gpqa-256k-20261002.json)。
+| Spark 导出 | 正确 / 198 | 准确率 | 最终 length | 解析失败 | 完整报告 |
+|---|---:|---:|---:|---:|---|
+| 混合 W4A8（max） | 177 | 89.39% | 0 | 4 | [基线](validation/dgx-spark-gpqa-256k-20261002.md) |
+| 均匀 W4A4（max） | 174 | 87.88% | 0 | 4 | [基线](validation/dgx-spark-gpqa-256k-20261002.md) |
+| 均匀 W4A4（MSE） | 178 | 89.90% | 3 | 4 | [校准实验](validation/dgx-spark-w4a4-quality-20261008.md) |
+| 均匀 W4A4（Local-Hessian） | 170 | 85.86% | 3 | 5 | [校准实验](validation/dgx-spark-w4a4-quality-20261008.md) |
 
-历史测量保留如下，使用的权重、后端或上下文与上述正式结果不同：
+MSE 和 Local-Hessian 的三条最终 length 均包含在解析失败数中，两列不能相加。
+MSE 在这次 GPQA 比 max 多答对四题，Local-Hessian 少答对四题；泛化质量改善
+和停止行为恢复尚未证实。两个实验方案保留为可选配方，默认仍是混合 W4A8，
+已评测的 max 导出继续保留。
 
-| 权重 | 采样 | 分数 | 机器 | 日期 |
-|---|---|---|---|---|
-| 混合 / 默认 W4A8（5090 的 `max` + ultrachat） | temperature 1.0（历史记录） | **178/198**（截断 0，解析失败 0） | 80 GB SM120，SGLang，64 路，KV 在 GPU | 2026-09-22 |
-| 均匀 W4A4 | temperature 0，Marlin | **172/198**（截断 4，解析失败 6） | 同一天 | 2026-09-22 |
-| 混合 W4A8（Spark 多模态校准，视觉/MTP 已量化；历史 32k 试跑） | temperature 0，FlashInfer，32768 上下文，GPQA 关闭 MTP | **157/198（79.29%）**（截断 30，解析失败 32；两项有重叠） | GB10，TP1，16 并发 | 2026-10-02 |
+实验导出还通过完整 27B PTQ、严格导出审计以及独立 32k 文本/图像/OCR/MTP
+功能检查；每份导出在普通 decode 与嵌入式 MTP 间匹配 205/205 输出 token。
+这些固定用例不代表广泛视觉质量、256k MTP 质量、吞吐提升或 TP2 验证。
+GPU 运行的实际源码版本、镜像摘要和耗时范围保留在日期报告中；
+[v0.1.3 发布说明](releases/v0.1.3.md)说明发布包与 GPU 证据的版本关系。
 
-Spark 混合 W4A8 的历史 32k 试跑已结束，198 个唯一题目、选项和计分均通过独立校验，见[历史证据](validation/dgx-spark-gpqa-w4a8-20261002.json)。30 题最终达到 length 上限并按错计分，这个长度限制下的分数不能当作 262144 上下文结果。32k 的 Spark 均匀 W4A4 试跑已停止，没有完整成绩；两组正式 256k 成绩见上面的新表。
+### 历史测量与诊断
 
-三条 W4A8 无最终答案响应另做了诊断重试，三条都给出答案，其中两条正确、
-一条错误。重试并发为 3，正式评测并发为 16，因此它不证明逐 token 相同，
-也不替换正式记录或提高正式分数。保存的旧响应没有实际停止 token，尚不能
-据此确定量化或 kernel 导致提前停止；见[诊断记录](validation/dgx-spark-gpqa-unparsed-20261003.md)。
+| 权重 | 分数 | 协议与日期 |
+|---|---|---|
+| 混合 / 默认 W4A8（5090 的 max + ultrachat） | 178/198；截断 0，解析失败 0 | temperature 1.0，80 GB SM120，SGLang 64 路，KV 在 GPU；2026-09-22 |
+| 均匀 W4A4 | 172/198；截断 4，解析失败 6 | temperature 0，80 GB SM120，Marlin；2026-09-22 |
+| Spark 混合 W4A8 的 32k 试跑 | 157/198（79.29%）；截断 30，解析失败 32，含重叠 | temperature 0，GB10 TP1，FlashInfer，16 并发，MTP 关闭；2026-10-02，[证据](validation/dgx-spark-gpqa-w4a8-20261002.json) |
 
-Spark 的混合 W4A8 和均匀 W4A4 都使用
-[`recipes/eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)
-做 temperature 0 的完整 198 题基线评测：seed 0、选项洗牌、thinking 开启并
-保留、`xhigh`、262144（256k）上下文、16 并发、64 个 FP32 SSM slot，
-`max_new_tokens=0` 使用完整剩余上下文预算，GPQA 时关闭 MTP。
-视觉/MTP 功能验证仍使用原来的 32k、4 并发配方。这两份 Spark 权重的
-视觉及 MTP 已量化，不能与上表的历史权重混为一谈。完整启动、顺序切换两份
-权重及验分命令见 [Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
-每次协议或权重发生变化都使用新的日期目录；仅中断后的同一次评测复用
-`--output`。`scripts/check_gpqa_results.py` 从原始官方 CSV 重建选项和正确答案，
-检查 198 条唯一记录、温度 0、seed 0 和严格计分，并输出不含题目或轨迹的
-验证 JSON。原始 CSV 中的重复选项需要保留。两份 256k 的新结果使用独立目录
-`w4a8-temp0-ctx262144-c16` 和 `w4a4-temp0-ctx262144-c16`，不能复用历史
-32k journal。两份完整 journal 均已结束并通过校验，成绩见上面的正式结果表。
+这些结果的权重、后端或上下文不同，不能并入当前 Spark 成绩。32k Spark
+W4A4 试跑已停止，没有完整成绩。三条 W4A8 无最终答案响应的独立诊断重试
+得到两条正确、一条错误；并发为 3，不能替换正式 16 并发结果或证明逐 token
+相同。停止 token 缺失，量化/kernel 原因尚未确定，见
+[解析失败诊断](validation/dgx-spark-gpqa-unparsed-20261003.md)。
+
+### 按硬件选择服务配方
+
+Spark 完整评测使用
+[`eval-gpqa-diamond.spark-gpqa.yaml`](../recipes/eval-gpqa-diamond.spark-gpqa.yaml)：
+256k、16 并发、64 个 FP32 SSM slot、MTP 关闭；独立视觉/MTP 检查使用
+32k、4 并发配方。完整启动、顺序切换导出及验分命令见
+[Spark GPQA 操作说明](DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
+下表保留 x86 机器的配置差异。
 
 | | 默认 | 32 GB SM120（5090） | 80 GB SM120（6000D） |
 |---|---|---|---|
@@ -140,6 +169,8 @@ vanilla Qwen3 (`qwen3` / `qwen3_moe`).
 | `recipes/qwen3.8-27b-nvfp4-w4a4.5090.yaml` | `nvfp4_w4a4` | `max` | ultrachat 256×1024, **batch 1** | same, packed for 32 GB + 64 GB RAM |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.public-calib.yaml` | `nvfp4_w4a4` | `max` | ultrachat 512 (anonymous Hub) | same |
 | `recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml` | `nvfp4_w4a4` | `max` | local `/data/calibration.jsonl`, 256 × 1024, batch 1 | `outputs/Qwen3.8-27B-NVFP4-W4A4-spark`; quantizes vision + MTP |
+| `recipes/qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` | `nvfp4_w4a4` | `mse`（可选实验） | same Spark 256 × 1024, batch 1 | `outputs/Qwen3.8-27B-NVFP4-W4A4-spark-mse` |
+| `recipes/qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml` | `nvfp4_w4a4` | `local_hessian`（可选实验） | same Spark 256 × 1024, batch 1 | `outputs/Qwen3.8-27B-NVFP4-W4A4-spark-hessian` |
 | `recipes/qwen3.8-27b-nvfp4-mixed.yaml` | `nvfp4_mixed` | `local_hessian` | **2048**, `nvidia/Nemotron-Post-Training-Dataset-v3` | `outputs/Qwen3.8-27B-NVFP4-mixed` |
 | `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml` | `nvfp4_mixed` | `max` | ultrachat 256×1024, **batch 1** | `outputs/Qwen3.8-27B-NVFP4-W4A8`; restores BF16 vision + MTP |
 | `recipes/qwen3.8-27b-nvfp4-mixed.public-calib.yaml` | `nvfp4_mixed` | `max` | ultrachat 512 (anonymous Hub) | `outputs/Qwen3.8-27B-NVFP4-mixed` |
@@ -151,7 +182,7 @@ The Spark recipe sets both flags to `true` and leaves `kv_cache` unset because
 ModelOpt 0.47 cannot export mixed KV-cache quantizers together with quantized
 Qwen3.5 vision attention. SGLang can still select FP8 KV at serve time.
 
-Uniform quality recipes (`w4a8.yaml`, `w4a4.yaml`) use
+Default W4A8 and uniform W4A4 recipes (`w4a8.yaml`, `w4a4.yaml`) use
 `nvidia/Nemotron-Post-Training-Dataset-v2` (gated; set `HF_TOKEN`). Mixed
 **quality** (`mixed.yaml`) follows the NVIDIA card and uses
 **`nvidia/Nemotron-Post-Training-Dataset-v3`**. Anonymous Hub access: the
@@ -170,7 +201,7 @@ Uniform quality recipes (`w4a8.yaml`, `w4a4.yaml`) use
 | `*linear_attn.in_proj_a*`, `*linear_attn.in_proj_b*` | GDN extras (not `in_proj_qkv` / `in_proj_z` / `out_proj`). Mixed FP8 attention still quantizes the real GDN projections; these two stay BF16. |
 | `*mtp*` | Multi-Token Prediction stays **BF16 in the default export** (`mtp.safetensors`). `quantize_mtp: false` means do not quantize it, not delete it; the Spark recipe opts in to MTP quantization. See [MTP export](#mtp-export). |
 | **not** `*mlp*` | MLP `gate/up/down_proj` are the main NVFP4 targets. |
-| **not** `*lm_head*` | NVIDIA mixed NVFP4 quantizes `lm_head`. Uniform W4A8 / W4A4 do too. Add it in `extra_ignore` only if you want BF16 logits. |
+| **not** `*lm_head*` | NVIDIA mixed NVFP4 quantizes `lm_head`. Default W4A8 and uniform W4A4 do too. Add it in `extra_ignore` only if you want BF16 logits. |
 
 Norms are not `Linear` and stay unquantized automatically.
 
@@ -246,6 +277,14 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
   --algorithm local_hessian --num-samples 2048
 ```
 
+Spark 的可选 W4A4 MSE / Local-Hessian 实验使用同一份 256 条图文校准集，
+只改变权重 scale 搜索与导出目录。搜索要求静态 NVFP4 权重 block scale 和
+`fp8_scale_sweep=true`；输入 scale 仍为动态，激活校准仍是 max，
+NVFP4 group 16 格式不变。仅更改算法名称不足以证明 ModelOpt 执行了搜索。
+按 [Spark 校准实验](DGX_SPARK.md#controlled-w4a4-calibration-experiments)
+先运行 GPU operator gate，再做完整 PTQ、导出审计、视觉/MTP 检查和独立 GPQA。
+当前成绩见 [结果表](#当前-spark-完整结果)。
+
 ## Commands
 
 ```bash
@@ -289,6 +328,12 @@ by default) or CUDA_VISIBLE_DEVICES; expect multiple 80 GB Hopper GPUs or
 heavy CPU offload. NVFP4 **inference** still needs Blackwell SM100+.
 
 ## Single 5090 + 64 GB RAM
+
+生产配方为
+[`qwen3.8-27b-nvfp4-mixed.5090.yaml`](../recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml)：
+ModelOpt 0.46.1、max、ultrachat 256×1024、batch 1。混合导出应有 401 个
+`quantized_layers`（193 个 NVFP4、208 个 FP8）；跳过量化的视觉/MTP 分别
+恢复为 BF16 `vision.safetensors`、`mtp.safetensors` 并加入 HF index。
 
 The 27B BF16 does not fit in 32 GB. Mega-Quantification packs the box
 instead of leaving headroom idle:
@@ -360,6 +405,22 @@ Caps if you need them: `MEGAQUANT_MAX_MEMORY=0:29GiB,cpu:56GiB`,
 
 ## MTP export
 
+### Spark 量化内嵌 MTP
+
+Spark 配方设置 `model.quantize_vision: true` 和 `model.quantize_mtp: true`。
+ModelOpt 将量化 MTP 直接导出到完整 checkpoint 的 HF index，保留对应量化
+张量；这条路径不恢复 BF16 MTP，也不自动生成外置 `*-draft` helper。
+Spark 服务镜像包含配套的视觉/MTP loader 补丁。
+
+[`eval-gpqa-diamond.spark-mtp.yaml`](../recipes/eval-gpqa-diamond.spark-mtp.yaml)
+用 `serve.speculative_algorithm: EAGLE` 及其余 `serve.speculative_*` 字段开启
+内嵌 MTP。`megaquant serve` 会将这些字段生成 SGLang 参数，不添加
+`--speculative-draft-model-path`。启动、图像/OCR、draft 接受和逐 token
+对照命令见 [Spark 视觉/MTP 验证](DGX_SPARK.md#vision-and-mtp-inference)。
+这套功能检查使用 32k；完整 256k GPQA 的服务配方关闭 MTP。
+
+### 默认 BF16 导出与外置 helper
+
 Language-only PTQ skips constructing the Qwen3.5 vision tower. After export,
 the backend restores all BF16 `model.visual.*` tensors from the source into
 `vision.safetensors`, adds them to the HF index, copies the image/video processor
@@ -410,7 +471,13 @@ sglang serve --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
   --max-running-requests 1 --disable-cuda-graph --disable-flashinfer-autotune
 ```
 
-`--speculative-draft-model-path` 指 `*-draft`。64 层那个目录是 target。BF16 draft 要明确指定 `--speculative-draft-model-quantization unquant`，否则 SGLang 会继承 target 的 ModelOpt 量化设置。上面的 2048 token 配置只用于功能冒烟测试，不是 GPQA 的长上下文配置。`megaquant serve` 和 `megaquant eval` 不加投机参数，要在 `sglang serve` 的命令行上自己写。`w4a8` / `w4a4` / `mixed` 上传的是完整导出，`*-draft` 只是旁边的 1 层助手。`model.quantize_mtp: true` 会把 draft 量化，而不是拷回 BF16。
+这条 BF16 helper 路径的 `--speculative-draft-model-path` 指向 `*-draft`，
+64 层目录是 target。BF16 draft 要明确指定
+`--speculative-draft-model-quantization unquant`，否则 SGLang 会继承 target
+的 ModelOpt 量化设置。CLI 配方支持内嵌 MTP 的 `serve.speculative_*`，
+外置 helper 的路径和量化方式按上面的 `sglang serve` 命令显式指定。
+2048 token 配置用于功能冒烟测试；长上下文 GPQA 使用独立服务配方。
+上传 `w4a8` / `w4a4` / `mixed` 时使用完整导出，`*-draft` 仅为旁边的 1 层助手。
 
 ## OSS publish
 
@@ -463,8 +530,11 @@ bash scripts/serve_sglang.sh outputs/Qwen3.8-27B-NVFP4-W4A8
 sglang serve \
   --trust-remote-code \
   --model-path outputs/Qwen3.8-27B-NVFP4-W4A8 \
+  --quantization modelopt \
+  --tp-size 1 \
   --kv-cache-dtype fp8_e4m3 \
   --mem-fraction-static 0.85 \
+  --max-running-requests 32 \
   --chunked-prefill-size 2048 \
   --reasoning-parser qwen3 \
   --tool-call-parser qwen3_coder \
@@ -473,18 +543,20 @@ sglang serve \
   --mamba-ssm-dtype float32 \
   --attention-backend flashinfer \
   --context-length 262144 \
+  --disable-cuda-graph \
   --enable-hierarchical-cache \
-  --hicache-size 58 \
+  --hicache-size 12 \
   --host 0.0.0.0 \
   --port 30000
 ```
 
 The block above is the cookbook default (`eval-gpqa-diamond.yaml`). The 32 GB and 80 GB SM120 boxes use `eval-gpqa-diamond.5090.yaml` and `eval-gpqa-diamond.6000d.yaml`. See [SGLang inference and GPQA](#sglang-inference-and-gpqa).
 
-Docker: `lmsysorg/sglang:dev` or `make serve-sglang` (not `make serve-vllm`
-as the primary path). If `hf_quant_config.json` still says
-`quant_algo: W4A8_NVFP4_FP8` or a bare `NVFP4` without `quantized_layers`,
-run `megaquant rewrite-sglang <export_dir>` first. GPQA client:
+Docker: use `make serve-sglang` with the repository's pinned dependencies;
+Spark uses its separate [ARM64 serving image](DGX_SPARK.md#what-the-images-contain).
+For an old mixed / default-W4A8 export with a bare `NVFP4` tag and no
+`quantized_layers`, run `megaquant rewrite-sglang <export_dir>` first.
+Uniform W4A4 retains `NVFP4`; `W4A8_NVFP4_FP8` is unsupported. GPQA client:
 `MEGAQUANT_SGLANG_BASE_URL` (default `http://127.0.0.1:30000/v1`).
 
 ### vLLM
@@ -580,7 +652,11 @@ python scripts/check_gpqa_results.py --csv data/dataset/gpqa_diamond.csv \
 
 Use the actual dated run directory for each format. This checker reads the CSV,
 journal and summary without modifying them; it exits nonzero for incomplete or
-inconsistent evidence. The original v0.1.2 baked GPQA client predates the raw
+inconsistent evidence. Keep repeated answer options in the official CSV.
+Use a new output directory whenever weights or protocol change; resume only
+the same run with unchanged inputs and settings. Do not reuse a 32k journal
+for a 256k run, or publish raw questions and response traces.
+The original v0.1.2 baked GPQA client predates the raw
 HTTP repair, so rebuild from the current checkout or use the updated CPU client
 described in the Spark runbook before starting a new run.
 
