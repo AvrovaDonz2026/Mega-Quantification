@@ -4,6 +4,11 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+最新重复诊断确认：匿名题目 5 的源 BF16 权重在 **FP8 KV / FP32 SSM** 下也出现
+持续的原生 token 精确循环，覆盖输出末尾 11441 tokens，周期为 4。MSE 权重量化
+不是这类循环出现的必要条件；KV 根因及量化对发生概率的影响仍未确定。九组计划
+截至该快照有 6 条 validated、3 条 incomplete，见[BF16 独立证据](dgx-spark-repetition-case5-bf16-20261012.md)。
+
 ## 完整 Spark GPQA Diamond
 
 统一协议：单台 ARM64 DGX Spark / GB10、TP1、temperature 0、262144 上下文、
@@ -63,6 +68,7 @@ MSE 本轮较 max 多对 4 题，Local-Hessian 少对 4 题；单轮结果尚不
 
 ## 历史试跑与诊断
 
+- **匿名题目 5 的源 BF16 精确循环**：截至 `2026-10-12T11:59:00.794562Z`，本条输出 24576 tokens，原生周期 4、稳定后缀起点 13135、覆盖 11441 tokens，启动与终止审计通过。共同 FP8 KV / FP32 SSM 条件下，MSE 不是此类循环的必要条件，根因仍未知；九组计划有 6 条 validated、3 条 incomplete。[报告](dgx-spark-repetition-case5-bf16-20261012.md) · [JSON](dgx-spark-repetition-case5-bf16-20261012.json)。
 - **匿名题目 5 的 MSE / max 对照**：两条各用尽 24576 输出预算，停止结果仍未知，未检出支持阈值内精确循环。修正分块 prefill 审计后，九组计划有 5 条 validated、4 条 incomplete；BF16 尚无完成结果。配对语义审阅确认两条都有转录、分组、计数与对齐返工，量化根因仍未知。[报告](dgx-spark-repetition-case5-controls-20261012.md) · [JSON](dgx-spark-repetition-case5-controls-20261012.json)。
 - **匿名题目 4 的 BF16 权重对照**：MSE / max / 源 BF16 三条自然生成与严格启动 gate 均通过；三条都用尽 16384 输出预算，没有 EOS、thinking-end 或符合阈值的精确循环，结果均为 `budget_exhausted_unknown`。九组计划完成 3/9；这不是新分数，也不建立量化因果。[报告](dgx-spark-repetition-case4-control-20261012.md) · [JSON](dgx-spark-repetition-case4-control-20261012.json)。
 - **重复诊断启动补充审计**：旧 54 条 next-token 请求中，13 条 prefill 全在最终 ready 前、1 条跨标记、40 条全在标记后；18 条续写均在标记后但全部复用缓存。新的原题起点对照截至 `2026-10-12T07:48:47Z` 完成严格审计 2/9：匿名题目 4 的 MSE / max 都耗尽 16384 输出预算，停止结果未知；其余未完成，不构成新分数。[报告](dgx-spark-repetition-startup-audit-20261012.md) · [JSON](dgx-spark-repetition-startup-audit-20261012.json)。
