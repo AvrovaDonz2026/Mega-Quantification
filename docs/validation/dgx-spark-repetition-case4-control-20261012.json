@@ -609,6 +609,45 @@
     "The BF16 weight control retains FP8 KV cache and FP32 SSM states.",
     "All three starts are cold at recorded native cache level; log samples do not prove full host/GPU isolation.",
     "The old formal generated IDs are unavailable; old-reference token alignment uses retokenized journals.",
-    "Bounded semantic review and similar-sentence counts do not certify a stable semantic loop, answer quality, factual hallucination or a quantization cause."
-  ]
+    "Bounded semantic review and similar-sentence counts do not certify a stable semantic loop, answer quality, factual hallucination or a quantization cause.",
+    "Startup seeds and full resource allocations differ across the three case4 runs; their numerical effect at temperature 0 is unproved, so this is not a strict weights-only single-factor experiment."
+  ],
+  "startup_seed_and_resource_config_audit": {
+    "same_startup_seed_fixed_across_runs": false,
+    "full_resource_configuration_identical": false,
+    "strict_weights_only_single_factor_control_established": false,
+    "seed_effect_on_temperature_zero_output_established": false,
+    "resource_configuration_effect_on_output_established": false,
+    "kvcache_values_preserve_server_report_units_unverified": true,
+    "runs": [
+      {
+        "model_label": "mse",
+        "server_info_sha256": "e10dcda2b2d274eeb9ba61705bd9b8118196ca9f6aa568d32ddea0335acbaff9",
+        "random_seed": 53548583,
+        "enable_deterministic_inference": false,
+        "max_total_num_tokens": 1733240,
+        "memory_usage_kvcache_reported_value": 52.894,
+        "memory_usage_kvcache_unit": null
+      },
+      {
+        "model_label": "max",
+        "server_info_sha256": "f412b0364f64a645e1d9dc85ce407dc5abce93d5be0d6945670de82ff16372ff",
+        "random_seed": 770184176,
+        "enable_deterministic_inference": false,
+        "max_total_num_tokens": 1740110,
+        "memory_usage_kvcache_reported_value": 53.104,
+        "memory_usage_kvcache_unit": null
+      },
+      {
+        "model_label": "bf16",
+        "server_info_sha256": "7c1569732d956e71dd36fbe06efc4d3864fa68a5fe252c9bcae045f2c6e42f87",
+        "random_seed": 825460218,
+        "enable_deterministic_inference": false,
+        "max_total_num_tokens": 592730,
+        "memory_usage_kvcache_reported_value": 18.089,
+        "memory_usage_kvcache_unit": null
+      }
+    ],
+    "limit": "Recorded startup seeds and resource allocations differ; this does not prove that either changed temperature-0 output, but prevents a strict weights-only single-factor claim."
+  }
 }

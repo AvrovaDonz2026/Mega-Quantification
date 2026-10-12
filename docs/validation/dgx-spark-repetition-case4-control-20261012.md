@@ -28,6 +28,18 @@ gate 均通过。三条都用尽 16384-token 输出预算，没有 EOS、thinkin
 | 缓存与确定性 | radix cache 启用，实际本次缓存命中为 0；deterministic inference 关闭 |
 | MTP | 关闭；本次纯文本诊断不重新验证视觉或 MTP |
 
+完整 server-info 还显示三组启动种子与资源分配不同，未固定同一启动 seed：
+
+| 权重 | random_seed | max_total_num_tokens | memory_usage.kvcache 原值 |
+| --- | ---: | ---: | ---: |
+| MSE W4A4 | 53548583 | 1733240 | 52.894 |
+| max W4A4 | 770184176 | 1740110 | 53.104 |
+| 源 BF16 权重 | 825460218 | 592730 | 18.089 |
+
+KV 数值按服务报告原值保留，未核实单位。三组 deterministic inference 均关闭，
+尚未证明上述种子或资源差异影响 temperature=0 输出；这些差异仍限制归因，不能
+将三组称为严格只差权重的单因素实验。
+
 262144 是服务窗口，16384 是这条诊断的输出预算，不能将本次 length 结束称为
 耗尽 256k 窗口。后两题计划的输出上限分别为 24576 和 49152，尚无完成结果。
 新运行 c1 与正式 GPQA 的 c16 不同；本次没有重新评测 198 题，也不产生新分数。
@@ -107,6 +119,9 @@ SequenceMatcher 相似度至少 0.90、长度比至少 0.80。完全相同的计
 | 当前输入重建审计说明 | `6f5428239611579f99ae09ac1418f2ddb1560c329232dbefca2409139392b33e` |
 | 三向语义审阅 JSON | `c287eca6aea68f6db36f69e0aeead8b3593059ef804b7f992efc1f2d66319c50` |
 | 三向语义审阅说明 | `038d88a8d2b4f3ae5d597e91036138a70fc5b2d62036ca07c544817bd26250dd` |
+| MSE server-info | `e10dcda2b2d274eeb9ba61705bd9b8118196ca9f6aa568d32ddea0335acbaff9` |
+| max server-info | `f412b0364f64a645e1d9dc85ce407dc5abce93d5be0d6945670de82ff16372ff` |
+| BF16 server-info | `7c1569732d956e71dd36fbe06efc4d3864fa68a5fe252c9bcae045f2c6e42f87` |
 | 只读 processor 覆盖 | `22ae6a64ab021d93f826ee6a8edc0befad14dfb5fd04213e31de762bfd5e4dd2` |
 
 正式完整 trace 的精确循环仍已确认。本次三条有界自然生成没有建立其进入原因，
