@@ -2,7 +2,9 @@
 
 把 Hugging Face 上的 BF16 模型做训练后量化，导出 SGLang 能直接加载的 checkpoint。目前跑通的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。
 
-DGX Spark 的完整视觉/MTP 量化权重已完成 temperature 0、256k 上下文的 GPQA Diamond：混合 W4A8 **177/198（89.39%）**，均匀 W4A4 **174/198（87.88%）**，两组均为 0 截断、4 条解析失败，198 题结果通过独立校验。协议和证据见 [Spark 评测报告](docs/validation/dgx-spark-gpqa-256k-20261002.md)。
+DGX Spark 的完整视觉/MTP 量化权重已完成 temperature 0、256k 上下文的 GPQA Diamond：混合 W4A8 **177/198（89.39%）**，max 均匀 W4A4 **174/198（87.88%）**，两组均为 0 截断、4 条解析失败，198 题结果通过独立校验。协议和证据见 [Spark 评测报告](docs/validation/dgx-spark-gpqa-256k-20261002.md)。
+
+受控 W4A4 校准实验也已完成：MSE **178/198（89.90%）**，3 条长度截断、4 条未解析；Local-Hessian **170/198（85.86%）**，3 条长度截断、5 条未解析，截断均包含在未解析中。两组完整 PTQ、严格导出审计及固定视觉/MTP 功能检查通过，GPQA 时关闭 MTP。MSE 本轮较 max 多对 4 题，尚不足以证明普遍质量或停止行为恢复；实验配方继续作为可选项。见 [W4A4 校准验证报告](docs/validation/dgx-spark-w4a4-quality-20261008.md)。
 
 默认方案叫 `nvfp4_w4a8`。MLP 和 `lm_head` 是 NVFP4（group 16），注意力投影是 FP8。导出文件里的 `quant_algo` 写成 `MIXED_PRECISION`。均匀的 W4A4 是另一份配方，整层都是 NVFP4 group 16。配方名叫 W4A8，是因为层的分法和 NVIDIA 公开的混合权重一致；MLP 的激活也是 NVFP4，不是 FP8。
 
@@ -64,7 +66,9 @@ SKILL.md          给代理的入口
 
 Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLang can load. The model this tree actually runs is Qwen/Qwen3.8-27B. The pipeline has been validated in production: PTQ finished on a 32 GB RTX 5090, and GPQA Diamond finished under SGLang on an 80 GB SM120.
 
-The Spark exports with quantized vision/MTP also completed GPQA Diamond at temperature 0 and 256k context: mixed W4A8 **177/198 (89.39%)**, uniform W4A4 **174/198 (87.88%)**. Both independently verified 198-item runs had zero truncations and four unparsed answers. See the [Spark evaluation report](docs/validation/dgx-spark-gpqa-256k-20261002.md) for the protocol and evidence.
+The Spark exports with quantized vision/MTP also completed GPQA Diamond at temperature 0 and 256k context: mixed W4A8 **177/198 (89.39%)**, max uniform W4A4 **174/198 (87.88%)**. Both independently verified 198-item runs had zero truncations and four unparsed answers. See the [Spark evaluation report](docs/validation/dgx-spark-gpqa-256k-20261002.md) for the protocol and evidence.
+
+Controlled W4A4 calibration experiments are complete: MSE scored **178/198 (89.90%)**, with three length finishes and four unparsed answers; Local-Hessian scored **170/198 (85.86%)**, with three length finishes and five unparsed answers. Length finishes are included in the unparsed counts. Full PTQ, strict export audits and fixed vision/MTP functional checks passed for both; GPQA ran with MTP disabled. MSE's four additional correct answers in this run do not establish general quality or stopping recovery. These recipes remain optional. See the [W4A4 calibration validation report](docs/validation/dgx-spark-w4a4-quality-20261008.md).
 
 The default recipe, `nvfp4_w4a8`, puts NVFP4 group 16 on the MLP and `lm_head`, and FP8 on attention. The export tag is `MIXED_PRECISION`. Uniform W4A4 (`nvfp4_w4a4`) is NVFP4 group 16 on every targeted linear. The recipe is named W4A8 because the layer split matches NVIDIA's public mixed checkpoint; the MLP activations are NVFP4 as well.
 

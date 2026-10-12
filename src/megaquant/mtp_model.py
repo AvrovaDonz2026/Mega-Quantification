@@ -142,6 +142,22 @@ def attach_mtp(model: Any, source: str | Path) -> int:
     return len(tensors)
 
 
+def _move_mtp_calibration_state(mtp: Any, device: Any) -> None:
+    """Move the branch and already-collected ModelOpt max statistics together."""
+    import torch
+
+    mtp.to(device=device)
+    # ModelOpt initializes weight ranges before the first target forward.
+    # MaxCalibrator is not an nn.Module, so its ordinary tensor attribute is
+    # left on CPU by mtp.to(), unlike the quantizers' registered buffers.
+    # Preserve those ranges when following the actual target output device.
+    for module in mtp.modules():
+        calibrator = getattr(module, "_calibrator", None)
+        amax = getattr(calibrator, "_calib_amax", None)
+        if torch.is_tensor(amax) and amax.device != device:
+            calibrator._calib_amax = amax.to(device=device)
+
+
 @contextmanager
 def mtp_calibration(model: Any):
     """Run teacher-forced MTP from target forwards; remove the hook afterwards.
@@ -190,8 +206,9 @@ def mtp_calibration(model: Any):
             positions = positions[None].expand(3, -1, -1)
         # The attached branch is initially on CPU to keep model loading cheap.
         # Calibration follows the target output's execution device (including
-        # Accelerate offload), moving its quantizer buffers together with it.
-        mtp.to(device=hidden.device)
+        # Accelerate offload), preserving quantizer buffers and any weight
+        # ranges collected by ModelOpt before the target's first forward.
+        _move_mtp_calibration_state(mtp, hidden.device)
         for row in range(hidden.shape[0]):
             valid = torch.ones(hidden.shape[1] - 1, dtype=torch.bool, device=hidden.device)
             if mask is not None:

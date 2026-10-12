@@ -581,12 +581,45 @@ def _hessian_block_size(_canonical: str) -> int:
     return 16
 
 
+def _use_static_nvfp4_weight_scales(cfg: dict[str, Any]) -> None:
+    """Make NVFP4 weights eligible for ModelOpt's per-block scale search.
+
+    The default NVFP4 preset recomputes block scales dynamically. ModelOpt's
+    MSE/Local-Hessian search only refines static block scales, as used by its
+    dedicated NVFP4 calibration presets. Activation scales remain dynamic.
+    """
+    quant_cfg = cfg.get("quant_cfg")
+    if isinstance(quant_cfg, list):
+        entries = (
+            (entry.get("quantizer_name", ""), entry.get("cfg"))
+            for entry in quant_cfg if isinstance(entry, dict)
+        )
+    elif isinstance(quant_cfg, dict):
+        entries = iter(quant_cfg.items())
+    else:
+        return
+    for name, attrs in entries:
+        if "weight_quantizer" not in str(name) or not isinstance(attrs, dict):
+            continue
+        num_bits = attrs.get("num_bits")
+        num_bits = tuple(num_bits) if isinstance(num_bits, list) else num_bits
+        block_sizes = attrs.get("block_sizes")
+        if num_bits not in {(2, 1), "e2m1"} or not isinstance(block_sizes, dict):
+            continue
+        scale_bits = block_sizes.get("scale_bits")
+        scale_bits = tuple(scale_bits) if isinstance(scale_bits, list) else scale_bits
+        if scale_bits in {(4, 3), "e4m3"}:
+            block_sizes["type"] = "static"
+
+
 def _apply_algorithm(cfg: dict[str, Any], algorithm: str, canonical: str = "") -> None:
     key = algorithm.strip().lower().replace("-", "_")
     if key in {"", "max", "max_calib"}:
         cfg["algorithm"] = "max"
         return
     if key == "local_hessian":
+        if canonical.startswith("nvfp4"):
+            _use_static_nvfp4_weight_scales(cfg)
         cfg["algorithm"] = {
             "method": "local_hessian",
             "fp8_scale_sweep": True,
@@ -595,6 +628,11 @@ def _apply_algorithm(cfg: dict[str, Any], algorithm: str, canonical: str = "") -
         return
     if key == "mse":
         cfg["algorithm"] = {"method": "mse"}
+        if canonical.startswith("nvfp4"):
+            # Use NVIDIA's NVFP4 MSE preset's FP8 block-scale sweep instead of
+            # generic amax multiplier search; leave other formats' MSE intact.
+            cfg["algorithm"]["fp8_scale_sweep"] = True
+            _use_static_nvfp4_weight_scales(cfg)
         return
     cfg["algorithm"] = algorithm
 

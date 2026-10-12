@@ -29,7 +29,8 @@ def target(monkeypatch):
             self.language_model = qwen.Qwen3_5TextModel(config).eval()
 
         def forward(self, **kwargs):
-            return self.language_model(**kwargs, use_cache=False)
+            kwargs.setdefault("use_cache", False)
+            return self.language_model(**kwargs)
 
     source = torch.nn.Module()
     source.fc = torch.nn.Linear(64, 32, bias=False)
@@ -137,3 +138,58 @@ def test_modelopt_collects_real_mtp_activation_ranges(target):
         assert amax is not None, f"MTP input activation range missing: {name}"
         assert torch.isfinite(amax).all(), name
         assert (amax > 0).all(), name
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="MTP device migration requires CUDA")
+def test_mtp_device_migration_preserves_precollected_max_statistics(target):
+    mtq = pytest.importorskip("modelopt.torch.quantization")
+    from megaquant.mtp_model import _move_mtp_calibration_state
+
+    mtq.quantize(target.mtp, mtq.FP8_DEFAULT_CFG)
+    from modelopt.torch.quantization.calib.max import MaxCalibrator
+
+    quantizer = target.mtp.fc.weight_quantizer
+    quantizer._calibrator = MaxCalibrator(axis=0)
+    quantizer._calibrator.collect(target.mtp.fc.weight)
+    before = quantizer._calibrator.compute_amax().clone()
+    _move_mtp_calibration_state(target.mtp, torch.device("cuda"))
+    after = quantizer._calibrator.compute_amax()
+    assert after.device.type == "cuda"
+    assert after.dtype == before.dtype
+    assert after.shape == before.shape
+    torch.testing.assert_close(after.cpu(), before, rtol=0, atol=0)
+    _move_mtp_calibration_state(target.mtp, torch.device("cuda"))
+    assert quantizer._calibrator.compute_amax() is after
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="MTP device migration requires CUDA")
+@pytest.mark.parametrize("algorithm", ["max", "mse", "local_hessian"])
+def test_modelopt_calibrates_cpu_mtp_with_cuda_target(target, algorithm):
+    pytest.importorskip("modelopt.torch.quantization")
+    from megaquant.backends.modelopt import ModelOptBackend
+
+    target.language_model.to(device="cuda", dtype=torch.bfloat16)
+    target.mtp.to(dtype=torch.bfloat16)
+    assert all(param.device.type == "cpu" for param in target.mtp.parameters())
+    plan = {
+        "scheme": "nvfp4_w4a4", "algorithm": algorithm, "kv_cache": None,
+        "model": {"quantize_mtp": True, "quantize_vision": False},
+    }
+    batches = [{"input_ids": torch.tensor([[2, 7, 3, 8, 12]])},
+               {"input_ids": torch.tensor([[3, 8, 12, 7, 2]])}]
+    ModelOptBackend().quantize(target, plan, batches)
+
+    projections = [layer for layer in target.mtp.modules()
+                   if isinstance(layer, torch.nn.Linear)]
+    assert len(projections) == 8
+    for layer in projections:
+        for quantizer in (layer.weight_quantizer, layer.input_quantizer):
+            assert quantizer.num_bits == (2, 1)
+            assert quantizer.amax.device.type == "cuda"
+            assert torch.isfinite(quantizer.amax).all()
+            assert (quantizer.amax > 0).all()
+        if algorithm != "max":
+            assert layer.weight_quantizer.block_sizes["type"] == "static"
+            assert type(layer.weight_quantizer._calibrator).__name__ == "NVFP4MSECalibrator"
+    assert target.mtp.calibration_batches == (4 if algorithm == "local_hessian" else 2)
+    assert all(count == 2 for count in target._megaquant_calibration_coverage["mtp"].values())
