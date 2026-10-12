@@ -2,6 +2,10 @@
 
 量化和推理使用独立镜像，换机器时先装驱动，再跑 `install-host.sh`，然后 `compose build` 或 `image load`。权重、校准数据和导出留在宿主机，不进镜像。
 
+目录：[5090 首次运行](#5090-首次运行) · [DGX Spark](#dgx-spark--gb10) · [5090 量化与评测](#5090-量化与评测) · [镜像迁移](#把已经建好的镜像拷到另一台-5090) · [显存](#显存) · [5090 服务镜像](#rtx-5090--cuda-128-serve-image) · [覆盖与挂载](#常用覆盖)
+
+本文提供容器操作入口。完整 Spark 复验流程见 [Spark 容器手册](../docs/DGX_SPARK.md)，实际测试版本、结果和边界见 [验证记录索引](../docs/validation/README.md)；发布内容见 [v0.1.3 说明](../docs/releases/v0.1.3.md)。文档导航见 [文档索引](../docs/README.md)。
+
 | 镜像 | 用途 |
 |---|---|
 | `megaquant:nvfp4` | `plan` / `quantize` / `mixed` / `w4a4`（nvidia-modelopt） |
@@ -11,7 +15,9 @@
 
 SGLang 和 ModelOpt 各用各的 torch。`mixed` 服务默认是 `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`（32 GB 5090 上跑过的那次）。Local-Hessian 用 `MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml` 覆盖配方。机器配方和分数在 [Qwen3.8 手册](../docs/qwen3.8-27b.md)，代理读 [SKILL.md](../SKILL.md)。
 
-已经在 K8s GPU 容器里、没有 Docker 的机器用 `bash scripts/gpu-pod.sh`。新虚拟机：
+## 5090 首次运行
+
+已经在 K8s GPU 容器里、没有 Docker 的机器用 `bash scripts/gpu-pod.sh`。新虚拟机在仓库根目录执行：
 
 ```bash
 # 0) 驱动 570+ 已装好后
@@ -90,6 +96,13 @@ docker run --rm --gpus all --ipc=host --shm-size=64g \
 执行校准；`calibration_coverage.json` 记录视觉/MTP 各激活量化器的调用次数。
 视觉位置嵌入与 patch embedding 保持 BF16。
 
+受控 W4A4 实验另有 `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` 和
+`qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml`。它们对 NVFP4 权重使用静态
+block scales 和 `fp8_scale_sweep=true`，输入保持动态；格式仍为 group 16。
+原 max 配方和默认 W4A8 配方继续保留。执行与验证命令见
+[Spark 校准实验](../docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments)，
+完整 GPQA 结果及停止行为限制见 [实验报告](../docs/validation/dgx-spark-w4a4-quality-20261008.md)。
+
 可从固定版本的 [COCO-Caption2017](https://huggingface.co/datasets/lmms-lab/COCO-Caption2017/tree/3bdd5827e243cc3084ac69a1111e69c3ab9193ff)
 生成 128 图像 + 128 文本的数据目录。先下载 `data/val-00000-of-00002.parquet`，
 再执行（需要 `pyarrow` 和 `Pillow`）：
@@ -126,12 +139,12 @@ W4A4 的视觉/MTP 量化及导出，产物完整性和 scale 检查通过。环
 也使用 CUDA 13 镜像。
 
 ```bash
-docker compose --profile spark build serve-sglang-spark
+GIT_REVISION="$(git rev-parse HEAD)" docker compose --profile spark build serve-sglang-spark
 docker compose --profile spark run --rm --entrypoint python serve-sglang-spark \
   scripts/check_sglang_spark.py
 docker compose --profile spark up -d serve-sglang-spark
 docker compose --profile spark logs -f serve-sglang-spark
-# 服务就绪后再评测；此客户端不挂 GPU
+# 服务就绪后再评测；此客户端不挂 GPU。默认是 32k 配方。
 docker compose --profile spark run --rm eval-gpqa-spark
 ```
 
@@ -140,11 +153,20 @@ docker compose --profile spark run --rm eval-gpqa-spark
 产物。`SPARK_EVAL_RECIPE` 和 `SGLANG_SPARK_PORT` 分别覆盖配方和端口。
 也可使用 `make serve-sglang-spark` / `make eval-gpqa-spark`。
 
-Spark 配方启用视觉，初始上下文 32768、并发 4、静态内存比例 0.70，关闭
+默认 Spark 服务/视觉功能检查配方启用视觉，上下文 32768、并发 4、静态内存比例 0.70，关闭
 CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存机器的
 自动主机缓存预算。该配方的上下文限制与 262144 的完整 GPQA 配方不同，
 分数不能直接视为同一评测设置。环境检查通过只表示 CUDA 和基础依赖可用；
 必须继续验证实际权重加载、文本和图片请求。
+
+完整 GPQA 使用 `recipes/eval-gpqa-diamond.spark-gpqa.yaml`：262144 上下文、
+16 路请求、64 FP32 SSM slots，MTP 关闭。设置
+`SPARK_EVAL_RECIPE=recipes/eval-gpqa-diamond.spark-gpqa.yaml` 后，服务和评测
+客户端都要使用该配方，并为每份权重使用独立的结果目录。完整双格式命令、
+内存检查及 `check_gpqa_results.py` 门禁见
+[256k GPQA 流程](../docs/DGX_SPARK.md#full-gpqa-diamond-at-temperature-0)。
+原 v0.1.2 镜像内的评测客户端早于请求参数修复；重建当前源码镜像，或按该
+手册使用更新的独立 CPU 客户端，并记录两者的实际版本。
 
 单台 Spark 有一颗 GPU，配方默认 TP1。跨两台 Spark 的 TP2 还需要两端
 一致的镜像/权重、分布式初始化地址和网络配置，不能只把本配方的 TP 改成 2。
@@ -155,11 +177,17 @@ CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存�
 
 2026-09-30 的[视觉/MTP 服务实测](../docs/validation/dgx-spark-serving-20260930.md)
 记录了红蓝图对照、数字 OCR、实际草稿接受率和逐 token 基线比较。
-需要重新构建带 v2 补丁的镜像，以修复视觉 NVFP4 三维输入前向。
+当前源码使用 `megaquant-spark-v6` 补丁，包含视觉 NVFP4 三维输入前向与
+GDN/MTP 兼容修复；使用当前源码时需重新构建镜像并核验 manifest。
 Spark 配方的 SSM 状态使用 FP32：BF16 状态曾复现 W4A4 普通 decode 与
 MTP verify 输出分歧。这只增加循环状态缓存的内存，不改变 W4A4 权重/激活格式。
 可用 `scripts/check_sglang_multimodal.py` 分别运行 baseline 和 MTP；
 MTP 模式遇到 token 不一致或没有接受草稿时会返回非零退出码。
+
+上述历史报告保留实际测试的版本与 revision；更新源码或镜像版本标签本身
+不代表新的镜像已完成 GPU 复验。
+
+## 5090 量化与评测
 
 `mixed` 默认就是 5090 那份 `max` + ultrachat。更大的卡上改走 Local-Hessian：
 
@@ -169,7 +197,7 @@ MIXED_RECIPE=recipes/qwen3.8-27b-nvfp4-mixed.yaml docker compose --profile gpu r
 
 等价的 Make 入口：`make host-check`、`make build`、`make plan`、`make quantize`、`make mixed`、`make serve-sglang`、`make eval-gpqa`。默认推理是 SGLang `:30000`。
 
-先起 `serve-sglang`，再跑 `eval-gpqa`。32 GB 上保持 `context-length 262144`，KV 放不下就用 HiCache 放到主机内存。5090 配方是 64 GiB HiCache、24 路、bf16 GDN / 96 slot、Triton + Marlin。宿主机的 `docker-compose.override.yml`（不进 git）如果写死了 `sglang` argv，把 `--hicache-size 64`、`--max-mamba-cache-size 96`、`--mamba-ssm-dtype bfloat16` 一起写上。journal 按 `item_id` 续写，已有的 `gpqa_diamond.jsonl` 留着。导出如果还是没有 `quantized_layers` 的裸 `NVFP4`，先 `megaquant rewrite-sglang <export_dir>` 再 serve。
+先起 `serve-sglang`，再跑 `eval-gpqa`。5090 配方保持 `context-length 262144`，使用 64 GiB HiCache、24 路、bf16 GDN / 96 slot、Triton + Marlin；启动前检查宿主内存是否足够。宿主机的 `docker-compose.override.yml`（不进 git）如果写死了 `sglang` argv，把 `--hicache-size 64`、`--max-mamba-cache-size 96`、`--mamba-ssm-dtype bfloat16` 一起写上。journal 按 `item_id` 续写；仅在权重、数据及评测协议一致时续跑同一目录，修改设置后使用新目录。旧混合 W4A8 导出若缺少 `quantized_layers` 且顶层仍为 `NVFP4`，先 `megaquant rewrite-sglang <export_dir>` 再 serve；均匀 W4A4 的 `NVFP4` 是预期格式。
 
 PTQ 完成后上传（桶和端点用 `OSS_BUCKET` / `OSS_ENDPOINT`，可选
 `.oss.env`）。默认 W4A8 就是 mixed 编码：一份 mixed 导出可按
@@ -230,7 +258,9 @@ EVAL_RECIPE=recipes/eval-gpqa-diamond.5090.yaml docker compose --profile gpu up 
 
 默认 `EVAL_RECIPE` 仍是 `recipes/eval-gpqa-diamond.yaml`（flashinfer）。
 
-长期、磁盘够了再可选把 serve 镜像重建到 CUDA 12.9+ devel（FlashInfer JIT 才能编 SM 12.0）。候选 pin：`nvidia/cuda:12.9.1-devel-ubuntu24.04`（请在 NGC / Docker Hub 核对；CUDA 13.0 devel 也可以）。新镜像大约 28GB，磁盘紧张时不要现在重建。
+如需在 SM 12.0 上使用 FlashInfer JIT，可选把 serve 镜像重建到 CUDA
+12.9+ devel，并为构建缓存和镜像留足磁盘空间。下面的基础镜像覆盖只作用于
+这次构建，构建后仍需验证实际权重加载和请求：
 
 ```bash
 SGLANG_BASE_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04 docker compose build serve-sglang
@@ -273,13 +303,18 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 | `./recipes` | `/opt/megaquant/recipes` |
 | `./src` | `/opt/megaquant/src` |
 
-`compose up` bind-mounts git `./src` over `/opt/megaquant/src` so the baked `megaquant:sglang` image picks up latest Python without a rebuild.
+上表是通用 5090 服务的挂载约定；它挂载 `./src` 和 `./recipes`，因此源码修改
+可直接影响运行容器。Spark 服务只挂载输入、导出、缓存和 offload 目录，使用
+镜像内安装的 wheel 和固化配方；修改源码或配方后必须重新构建并核验镜像。
 
 ## 镜像里有什么
 
+以下是通用 5090 量化镜像；Spark 两套镜像的固定依赖与内容见
+[Spark 容器手册](../docs/DGX_SPARK.md#what-the-images-contain)。
+
 - CUDA 12.8 devel（Triton / Local-Hessian NVFP4 扫描需要）
 - PyTorch CUDA 12.8 轮子，`TORCH_CUDA_ARCH_LIST=9.0;10.0;12.0`
-- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）。镜像钉 **0.46.1**（PyPI 没有 0.48）；5090 生产算法是 **`max`**，不是 Local-Hessian。不实现 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`。
+- `nvidia-modelopt[hf]`：默认 W4A8 / mixed = NVFP4 group_size **16**（MLP + `lm_head`）+ 注意力 FP8，导出 `MIXED_PRECISION`；均匀 W4A4 = `NVFP4_DEFAULT_CFG`（block **16**）。5090 镜像钉 **0.46.1**，生产配方使用 **`max`**；Spark 单独钉 0.47.0。不实现 SGLang 拒收的均匀 `W4A8_NVFP4_FP8`。
 - llm-compressor / compressed-tensors（vLLM 路径）
 - 本仓库 `megaquant` CLI
 

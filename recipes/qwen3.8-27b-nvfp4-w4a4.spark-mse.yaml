@@ -4,8 +4,10 @@
 # The backend sets eligible NVFP4 weight block scales to static so ModelOpt
 # executes the search. Packed NVFP4 group 16 remains the same; input block scales
 # stay dynamic and activation calibration remains max. The max recipe is intact.
-# Quantized vision and MTP remain enabled. No quality improvement is established
-# until a full export audit, serving checks and independent GPQA run pass.
+# Quantized vision/MTP PTQ, strict export audits and fixed serving checks passed.
+# Verified 256k, temperature-0 GPQA: 178/198, 3 length finishes, 4 unparsed.
+# This single run does not establish general quality or stopping recovery.
+# Evidence: docs/validation/dgx-spark-w4a4-quality-20261008.md.
 
 name: qwen3.8-27b-nvfp4-w4a4-spark-mse
 backend: modelopt

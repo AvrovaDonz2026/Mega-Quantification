@@ -5,12 +5,15 @@ description: >
   NVFP4. Use when quantizing, exporting, serving, or scoring this repo; when
   the user mentions nvfp4_w4a8, nvfp4_w4a4, nvfp4_mixed, ModelOpt, SGLang GPQA,
   MTP, or OSS publish. Read this file before editing recipes, export code, or
-  docs. Human narrative lives in README.md and docs/qwen3.8-27b.md.
+  docs. Human entry points are README.md and docs/README.md; dated evidence is
+  indexed in docs/validation/README.md.
 ---
 
 # Mega-Quantification
 
-Agent entry. Humans read `README.md` and `docs/qwen3.8-27b.md`.
+Agent entry. Humans start at [README.md](README.md) and the
+[documentation index](docs/README.md). Use the
+[validation index](docs/validation/README.md) for dated evidence and scope.
 
 ## Hard rules
 
@@ -48,7 +51,7 @@ unestablished. Keep the experimental recipes optional and retain the default
 `nvfp4_w4a8` recipe. Completed PTQ, fixed vision/MTP functionality and GPQA
 evidence: `docs/validation/dgx-spark-w4a4-quality-20261008.md` and `.json`.
 
-5090 PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 1. Batch 4 can OOM at `lm_head` on a 32 GB instance. The export restores BF16 vision tensors into `vision.safetensors` and BF16 MTP tensors into `mtp.safetensors`; the HF index includes both. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` with 401 `quantized_layers` entries (193 NVFP4 + 208 FP8), which eval / serve use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. DGX Spark serves this mixed map at about 12 tok/s decode (bandwidth ceiling about 14); speculative MTP is the faster path.
+5090 PTQ is `recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml`: ModelOpt **0.46.1** (pinned), algorithm `max`, ultrachat 256×1024, batch 1. Batch 4 can OOM at `lm_head` on a 32 GB instance. The export restores BF16 vision tensors into `vision.safetensors` and BF16 MTP tensors into `mtp.safetensors`; the HF index includes both. It writes `outputs/Qwen3.8-27B-NVFP4-W4A8` with 401 `quantized_layers` entries (193 NVFP4 + 208 FP8), which eval / serve use. Quality Local-Hessian (`mixed.yaml`) still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. NVIDIA's public `nvidia/Qwen3.8-27B-NVFP4` uses the same layer map with Local-Hessian, Nemotron v3, 2048×2048, modelopt 0.48.0 (`recipes/qwen3.8-27b-nvfp4-mixed.yaml`). Card GPQA Diamond: 88.92 BF16 / 88.01 NVFP4 on GB300 vLLM. Qwen thinking card: 89.2. Spark fixed MTP functionality is recorded separately from GPQA; it does not establish a controlled speedup.
 
 Pinned in `pyproject.toml` and `docker/requirements-gpu.txt`: `nvidia-modelopt[hf]==0.46.1`. Serve image pins `sglang==0.5.20`.
 
@@ -142,7 +145,13 @@ revision with `--expected-revision` when checking export provenance.
 
 ## MTP
 
-After export, `megaquant.mtp_export` copies BF16 `mtp.*` from the in-memory module or from the original HF source. Only shards whose index entries are `mtp.*` are read. The shard is `mtp.safetensors`. A sibling `<export>-draft` directory is the 1-layer SGLang draft (`--speculative-algorithm NEXTN`). Do not point the draft path at the 64-layer export.
+Generic recipes retain BF16 MTP: `megaquant.mtp_export` copies `mtp.*` from the
+in-memory module or original HF source into `mtp.safetensors`, reading only
+shards indexed with MTP tensors. Its optional sibling `<export>-draft` is the
+1-layer BF16 SGLang draft (`--speculative-algorithm NEXTN`); do not point that
+draft path at the 64-layer export. Spark recipes explicitly quantize attached
+MTP and serve it as embedded EAGLE MTP, using `serve.speculative_*` without an
+external draft path. See [the Spark MTP workflow](docs/DGX_SPARK.md#vision-and-mtp-inference).
 
 Language-only Qwen3.5 PTQ skips constructing the vision tower. `megaquant.vision_export` copies the source BF16 `model.visual.*` tensors into `vision.safetensors` and adds them to the HF index. Existing exports missing vision can run `megaquant restore-vision <export> --source <BF16 checkpoint>`.
 

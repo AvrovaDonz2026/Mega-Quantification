@@ -1,18 +1,22 @@
 # Mega-Quantification architecture
 
-一份 YAML 进去，一个 Hugging Face checkpoint 出来。管线本身不绑死某一个模型：family adapter 加上 recipe 就够量化一份因果或 VLM 权重。现在跑通的是 Qwen/Qwen3.8-27B，BF16 进，SGLang 能加载的 NVFP4 出。
+管线把 YAML recipe 转成量化计划，再从 BF16 模型导出 checkpoint。模型适配由 family adapter、backend 和 recipe 共同完成；本仓库的完整量化与服务实测以 Qwen/Qwen3.8-27B 为主。
 
-层怎么切、机器配方、GPQA 分数写在 [Qwen3.8 手册](qwen3.8-27b.md)。代理读仓库根目录的 [SKILL.md](../SKILL.md)。
+本文说明配置、模块和导出流程。运行命令见 [Qwen3.8 手册](qwen3.8-27b.md)、[Spark 容器手册](DGX_SPARK.md) 和 [Docker 手册](../docker/README.md)；实测结果与适用范围见 [验证记录索引](validation/README.md)。更多文档见 [文档索引](README.md)，代理入口为 [SKILL.md](../SKILL.md)。
+
+目录：[量化格式](#schemes) · [仓库布局](#repository-layout) · [配置](#recipe-schema-megaquantconfig) · [模型适配](#model-family-protocol) · [ModelOpt 映射](#modelopt-mapping) · [导出流程](#pipeline-steps) · [容器](#docker--compose-rtx-5090) · [CLI](#cli)
 
 ## Schemes
 
 | Scheme | Weights | Activations | Export `quant_algo` | Runtime |
 |---|---|---|---|---|
-| `nvfp4_w4a8`, `nvfp4_mixed` | MLP + `lm_head`: NVFP4 E2M1 group 16. Attention projections: FP8 E4M3. Vision, MTP, embeddings, GDN `conv1d` / `in_proj_a` / `in_proj_b`: BF16 | MLP + `lm_head`: NVFP4 group 16. Attention: FP8. KV at serve: fp8_e4m3 | `MIXED_PRECISION`; per layer `NVFP4` or `FP8` | SGLang `modelopt_mixed` |
+| `nvfp4_w4a8`, `nvfp4_mixed` | MLP + `lm_head`: NVFP4 E2M1 group 16. Attention projections: FP8 E4M3 | MLP + `lm_head`: NVFP4 group 16. Attention: FP8 | `MIXED_PRECISION`; per layer `NVFP4` or `FP8` | SGLang `modelopt_mixed` |
 | `nvfp4_w4a4` | NVFP4 group 16 on every targeted LM linear | NVFP4 group 16 | `NVFP4` | SGLang `modelopt_fp4` |
 | `nvfp4_w4a16_mixed` | MLP + `lm_head`: NVFP4 group 16. Attention: FP8 | MLP activations stay BF16. Attention activations: FP8 | MLP entry `W4A16_NVFP4` | optional Marlin export |
 
 均匀 W4A4 走 `NVFP4_DEFAULT_CFG`。本仓库的方案停在 group 16；ModelOpt 的 `W4A8_NVFP4_FP8`（NVFP4 block 32）不在表里，SGLang 也不收那个标签。
+
+上表描述语言模型线性层。embeddings、GDN `conv1d` / `in_proj_a` / `in_proj_b` 等忽略项保留 BF16。通用配方默认保留 BF16 视觉和 MTP；Spark 配方显式启用两者量化，仍保留视觉位置与 patch embedding。KV cache 精度由服务配方控制，不属于权重量化格式。
 
 ## Repository layout
 
@@ -29,7 +33,7 @@ src/megaquant/          library
   schemes/              named quant schemes
 recipes/                quant and GPQA YAML (index: recipes/README.md)
 tests/                  CPU tests; dry-run does not download weights
-docs/                   this file and the Qwen3.8-27B runbook
+docs/                   runbooks, architecture, releases and dated validation
 docker/                 image helpers; Dockerfiles stay at the repo root
 scripts/                gpu-pod, OSS publish/fetch, serve and eval wrappers
 SKILL.md                agent entry (humans: README and the runbook)
@@ -39,14 +43,17 @@ Weights, Hub caches, journals, `.env`, `.oss.env`, and `docker-compose.override.
 
 ## Recipe schema (`megaquant.config`)
 
+量化配置来自 [config.py](../src/megaquant/config.py)，使用 Pydantic 严格校验，未知字段会报错。下面保留主要字段；服务与评测使用 [eval_gpqa.py](../src/megaquant/eval_gpqa.py) 中的独立 schema。
+
 ```python
 class PrecisionSpec(BaseModel):
     format: Literal["nvfp4", "fp8", "mxfp4", "bf16", "int4"]
     bits: int
     group_size: int | None = None   # W4A4 and SGLang/NVIDIA mixed NVFP4 layers: 16
     scale_dtype: str = "float8_e4m3fn"
-    dynamic: bool = False
+    dynamic: bool | str = False
     strategy: str | None = None     # tensor | channel | group | tensor_group | token
+    observer: str | None = None
 
 class LayerGroup(BaseModel):
     name: str
@@ -76,6 +83,7 @@ class ModelSpec(BaseModel):
     device_map: str = "auto"
     quantize_vision: bool = False
     quantize_mtp: bool = False
+    ignore_lm_head: bool | None = None
 
 class Recipe(BaseModel):
     name: str
@@ -87,6 +95,7 @@ class Recipe(BaseModel):
     kv_cache: str | None = "fp8"
     family: str | None = None       # qwen3_5 | qwen3 | llama | generic
     extra_ignore: list[str] = []
+    ignore_lm_head: bool | None = None
     calibration: CalibrationSpec
     export: ExportSpec
 ```
@@ -101,7 +110,8 @@ class QuantBackend(Protocol):
     name: str
     def available(self) -> bool: ...
     def supports(self, scheme_name: str) -> bool: ...
-    def quantize(self, model, resolved, calib_iter) -> Any: ...
+    def build_quant_cfg(self, plan) -> Any: ...
+    def quantize(self, model, plan, calib_iter) -> Any: ...
     def export(self, model, recipe, tokenizer=None) -> Path: ...
 ```
 
@@ -134,7 +144,7 @@ Default ignore for `qwen3_5` (language-model W4A8):
 - embeddings: `*embed_tokens*`, `*embed_positions*`
 - GDN extras: `*linear_attn.conv1d*`, `*linear_attn.in_proj_a*`, `*linear_attn.in_proj_b*`
 - MTP: `*mtp*` (leave BF16 **in the export** as `mtp.safetensors`; do not
-  drop the tensors. `quantize_mtp: true` quantizes the draft instead)
+  drop the tensors. `quantize_mtp: true` calibrates and quantizes the attached MTP module)
 - lm_head: **do not ignore** for mixed NVIDIA recipe; ignore only if recipe says so
 - norms stay unquantized automatically (not Linear)
 
@@ -144,9 +154,19 @@ into `vision.safetensors`, restores the image/video processor configs, and
 sets `language_model_only: false` in the exported config.
 `megaquant.mtp_export.restore_bf16_mtp` copies ignored `mtp.*` weights back
 from the in-memory module or original HF source.
-Both shards are indexed in `model.safetensors.index.json`. A sibling
-`<export>-draft` directory is a 1-layer SGLang speculative draft
-(`--speculative-draft-model-path`).
+Both restored shards are indexed in `model.safetensors.index.json`.
+When vision/MTP quantization is enabled, ModelOpt exports those modules into
+the main checkpoint and the restoration helpers retain their quantized tensors
+and metadata. Image calibration must execute the vision tower; MTP calibration
+uses target hidden states and next-token embeddings. The export records actual
+activation-quantizer calls in `calibration_coverage.json`.
+
+The BF16 MTP restoration path also writes a sibling `<export>-draft` directory
+for an optional external draft. Spark uses quantized embedded MTP in the full
+export, configured with `serve.speculative_*` fields. `megaquant serve` does
+not add `--speculative-draft-model-path`; embedded MTP must keep the full
+checkpoint's quantization metadata. See [Spark vision/MTP inference](DGX_SPARK.md#vision-and-mtp-inference)
+for the measured serving path.
 
 ## Qwen3.8-27B facts
 
@@ -158,9 +178,10 @@ Both shards are indexed in `model.safetensors.index.json`. A sibling
 - Native context 262,144; MTP present; vision encoder present
 - NVIDIA mixed NVFP4 (`nvidia/Qwen3.8-27B-NVFP4`): Local-Hessian, 2048 samples,
   `Nemotron-Post-Training-Dataset-v3`, `nvidia-modelopt` v0.48.0
-- 5090 mixed: ModelOpt 0.46.1, algorithm `max`, ultrachat 256×1024,
-  batch 1 (`qwen3.8-27b-nvfp4-mixed.5090.yaml`). Same layer map; weaker
-  calibrator. 32 GB cannot hold Hessian 2048.
+- 5090 production mixed: ModelOpt 0.46.1, algorithm `max`, ultrachat 256×1024,
+  batch 1 (`qwen3.8-27b-nvfp4-mixed.5090.yaml`). It uses the same language-layer
+  map with a different calibration dataset and algorithm. Recorded runs and
+  quality comparisons belong in the [runbook](qwen3.8-27b.md).
 - Mixed encoding: NVFP4 **group_size 16** on MLP + `lm_head`; FP8 on self-attn +
   linear-attn. Default `nvfp4_w4a8` matches this for SGLang. Not
   `W4A8_NVFP4_FP8` / NVFP4 block 32.
@@ -195,14 +216,20 @@ Algorithm mapping (`_apply_algorithm`):
 | Recipe `algorithm` | ModelOpt `cfg["algorithm"]` | Used on |
 |---|---|---|
 | `max` (default) | `"max"` — amax / RTN, no Hessian | 5090 production mixed / W4A8 / W4A4 |
-| `local_hessian` | `{method: local_hessian, fp8_scale_sweep: True, block_size: 16}` | NVIDIA quality `mixed.yaml` |
-| `mse` | `{method: mse}` | optional |
+| `local_hessian` | `{method: local_hessian, fp8_scale_sweep: True, block_size: 16}` | Mixed quality recipe and optional Spark W4A4 experiment |
+| `mse` | `{method: mse, fp8_scale_sweep: True}` for NVFP4; `{method: mse}` for other formats | Optional Spark W4A4 experiment |
 
-Local Hessian (quality recipe only):
+For NVFP4, `_apply_algorithm` switches weight block scales to `static` for
+MSE/Local-Hessian before ModelOpt calibration. Inputs retain dynamic scales,
+activation calibration remains max, and the packed group-16 export stays the
+same. An algorithm name alone would leave the default dynamic weight scales
+outside the intended scale search. The `max` configuration retains its existing
+dynamic scales.
 
-```python
-cfg["algorithm"] = {"method": "local_hessian", "fp8_scale_sweep": True}
-```
+The controlled Spark recipes are `qwen3.8-27b-nvfp4-w4a4.spark-mse.yaml` and
+`qwen3.8-27b-nvfp4-w4a4.spark-hessian.yaml`. Check actual GPU search behavior
+with `scripts/check_nvfp4_calibration.py`; complete results and stopping limits
+are recorded in the [W4A4 calibration report](validation/dgx-spark-w4a4-quality-20261008.md).
 
 VLM: quantize the language model; keep the vision encoder in BF16 unless
 `quantize_vision: true`.
@@ -231,16 +258,19 @@ serving path; the published scores all come from ModelOpt exports.
 2. Detect family from `config.json` `model_type` / `architectures` (or recipe.family)
 3. Resolve scheme catalog + family ignore + extra_ignore
 4. If `--dry-run`, print plan and stop
-5. Load tokenizer + model in BF16
-6. Build calibration iterator
-7. `backend.quantize(...)`
-8. `backend.export(...)` then restore BF16 `mtp.*` into `mtp.safetensors`
-   (and write `<export>-draft` for SGLang NEXTN/EAGLE)
+5. Load tokenizer/processor + model in BF16, attaching MTP when requested
+6. Build text or image/text calibration iterator
+7. `backend.quantize(...)`, including opt-in vision/MTP calibration coverage
+8. `backend.export(...)`; preserve quantized vision/MTP when enabled, otherwise
+   restore BF16 tensors and index them. The BF16 MTP path also writes an
+   optional `<export>-draft`. Rewrite the mixed ModelOpt layer map for SGLang.
 9. Write `provenance.json` (base model, scheme, backend, calib, git sha, timestamp)
 
 ## Docker / Compose (RTX 5090+)
 
-The supported way to run this pipeline on a Blackwell box is Compose, not a host venv.
+Compose provides the packaged Blackwell workflow. GPU pods without Docker use
+the repository's host wrapper. Spark uses separate ARM64 PTQ and serving
+images; build and provenance checks are in the [Spark runbook](DGX_SPARK.md).
 
 - Image: `Dockerfile` (CUDA 12.8 devel + PyTorch cu128 + ModelOpt + llm-compressor + megaquant)
 - Orchestration: `docker-compose.yml` — `megaquant` service dry-runs; `quantize`,
@@ -264,7 +294,7 @@ The supported way to run this pipeline on a Blackwell box is Compose, not a host
 - Host check: `bash docker/host-check.sh` (driver 570+, NVIDIA Container Toolkit)
 - Move the box: `make image-tar` then `docker image load` on the 5090
 - Weights stay on the host: `./.cache/huggingface`, `./models`, `./outputs`
-- Runbook: `docker/README.md`
+- Runbook: [docker/README.md](../docker/README.md)
 
 ## CLI
 
@@ -286,5 +316,5 @@ megaquant families
 ```
 
 CLI overrides: `--model`, `--output`, `--backend`, `--num-samples`, `--algorithm`.
-`serve` / `eval` default to SGLang `:30000` (HiCache). Pass `--engine vllm`
+`serve` / `eval` default to SGLang `:30000`; cache settings come from the selected recipe. Pass `--engine vllm`
 only when you want the optional GB300 vLLM flags.

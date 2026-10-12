@@ -4,6 +4,10 @@ Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
 
 协议是 GNU AGPL v3，或以后的版本。
 
+Start with the [documentation index](docs/README.md) for operation guides and
+the [architecture guide](docs/ARCHITECTURE.md) for extension points.
+操作指南见 [文档导航](docs/README.md)，实机结果见 [验证索引](docs/validation/README.md)。
+
 ## English
 
 - Install CPU test dependencies in a Python 3.12 virtual environment. On Linux,
@@ -27,8 +31,10 @@ Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
   SSH material, bucket names, and tenant DNS addresses.
 - Weights, Hub caches, and GPQA journals belong in `outputs/`, `.cache/`,
   `models/`, or `data/`, which are gitignored.
-- Human notes live in `docs/qwen3.8-27b.md`. Agent constraints live in
-  `SKILL.md`. Update both when the public protocol changes.
+- Human guides are indexed in `docs/README.md`; model details live in
+  `docs/qwen3.8-27b.md` and Spark execution in `docs/DGX_SPARK.md`. Agent
+  constraints live in `SKILL.md`. Update the relevant guides and agent
+  constraints when the public protocol changes; preserve dated evidence.
 
 ## 中文
 
@@ -42,4 +48,6 @@ Mega-Quantification is AGPL-3.0-or-later. Copyright 2026 Donz. See `LICENSE`.
   SSH、桶名、租户 DNS。
 - 权重、Hub 缓存和 GPQA journal 放在 `outputs/`、`.cache/`、`models/` 或
   `data/`，这些目录已被忽略。
-- 给人读的说明在 `docs/qwen3.8-27b.md`，给代理的约定在 `SKILL.md`。公开协议变了，两处一起改。
+- 操作说明以 `docs/README.md` 为入口，模型细节在 `docs/qwen3.8-27b.md`，
+  Spark 流程在 `docs/DGX_SPARK.md`，代理约定在 `SKILL.md`。公开协议变动时，
+  同步相关指南与代理约定，保留日期命名的历史证据。

@@ -1,86 +1,118 @@
 # Mega-Quantification
 
-把 Hugging Face 上的 BF16 模型做训练后量化，导出 SGLang 能直接加载的 checkpoint。目前跑通的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)。这条管线经过工业级验证：量化在 32 GB RTX 5090 上跑完，GPQA Diamond 在 80 GB SM120 上用 SGLang 跑完。
+把 Hugging Face BF16 模型做训练后量化（PTQ），导出 SGLang 可加载的 checkpoint。
+当前完整验证的模型是 [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)：
+32 GB RTX 5090 上完成量化，80 GB SM120 和 DGX Spark 上完成 GPQA Diamond。
+Spark 配方还包含视觉塔和 MTP 量化、图像/OCR 与内嵌 MTP 功能验证。
 
-DGX Spark 的完整视觉/MTP 量化权重已完成 temperature 0、256k 上下文的 GPQA Diamond：混合 W4A8 **177/198（89.39%）**，max 均匀 W4A4 **174/198（87.88%）**，两组均为 0 截断、4 条解析失败，198 题结果通过独立校验。协议和证据见 [Spark 评测报告](docs/validation/dgx-spark-gpqa-256k-20261002.md)。
+**当前版本：[v0.1.3](https://github.com/AvrovaDonz2026/Mega-Quantification/releases/tag/v0.1.3)**
+· [文档导航](docs/README.md) · [配方索引](recipes/README.md) · [验证结果](docs/validation/README.md)
+· [English](#english)
 
-受控 W4A4 校准实验也已完成：MSE **178/198（89.90%）**，3 条长度截断、4 条未解析；Local-Hessian **170/198（85.86%）**，3 条长度截断、5 条未解析，截断均包含在未解析中。两组完整 PTQ、严格导出审计及固定视觉/MTP 功能检查通过，GPQA 时关闭 MTP。MSE 本轮较 max 多对 4 题，尚不足以证明普遍质量或停止行为恢复；实验配方继续作为可选项。见 [W4A4 校准验证报告](docs/validation/dgx-spark-w4a4-quality-20261008.md)。
+## 快速开始
 
-默认方案叫 `nvfp4_w4a8`。MLP 和 `lm_head` 是 NVFP4（group 16），注意力投影是 FP8。导出文件里的 `quant_algo` 写成 `MIXED_PRECISION`。均匀的 W4A4 是另一份配方，整层都是 NVFP4 group 16。配方名叫 W4A8，是因为层的分法和 NVIDIA 公开的混合权重一致；MLP 的激活也是 NVFP4，不是 FP8。
-
-仓库里是代码和 YAML。27B 权重和量化结果不进 git。再跑一遍量化会重新估计 scale，文件不会和旧导出逐字节相同。机器差异、测过的分数、MTP 和上传方式写在 [Qwen3.8 手册](docs/qwen3.8-27b.md)。给代理用的约定在 [SKILL.md](SKILL.md)。
-
-协议是 GNU AGPL v3，或以后的版本（`AGPL-3.0-or-later`）。Copyright 2026 Donz。全文在 `LICENSE`。
-
-## 先看计划
-
-不需要 GPU，也不会去拉 27B。
+使用 Python 3.10 或更新版本，从仓库根目录执行。查看计划只需要基础依赖，
+不需要 GPU，也不会下载 27B 权重。
 
 ```bash
-pip install -e '.[dev]'
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+megaquant plan -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml
+megaquant serve -c recipes/eval-gpqa-diamond.spark-gpqa.yaml --dry-run
+megaquant eval -c recipes/eval-gpqa-diamond.spark-gpqa.yaml --dry-run
 ```
 
-## 在卡上量化
+实际量化需要 GPU、完整 BF16 模型与校准数据。先按机器选择指南：
+
+| 环境 | 使用入口 |
+|---|---|
+| RTX 5090，32 GB | [单卡量化与内存配置](docs/qwen3.8-27b.md#single-5090--64-gb-ram) |
+| DGX Spark，ARM64 / GB10 | [构建、量化、视觉/MTP 和完整 GPQA](docs/DGX_SPARK.md) |
+| x86 CUDA / Docker / GPU Pod | [镜像和宿主机配置](docker/README.md) |
+| 添加模型或量化后端 | [架构与扩展接口](docs/ARCHITECTURE.md)、[开发检查](CONTRIBUTING.md) |
+
+## 选择量化方案
+
+| 方案 / Scheme | 权重与激活布局 | 导出 / SGLang |
+|---|---|---|
+| `nvfp4_w4a8`（默认）、`nvfp4_mixed` | MLP 和 `lm_head` 的权重、激活均为 NVFP4 group 16；注意力投影为 FP8 | `MIXED_PRECISION` / `modelopt_mixed` |
+| `nvfp4_w4a4` | 所有目标线性层的权重、激活均为 NVFP4 group 16，包括注意力投影 | `NVFP4` / `modelopt_fp4` |
+| `nvfp4_w4a16_mixed`（可选） | MLP 权重为 NVFP4，激活保留 BF16；注意力为 FP8 | Marlin 导出；详见[配方索引](recipes/README.md) |
+
+仓库的 W4A8 名称指上述混合布局；其中 MLP 的激活仍是 NVFP4。
+默认配方保留 BF16 视觉塔与 MTP，Spark 配方显式量化这两部分。
+MSE 和 Local-Hessian W4A4 校准实验是可选配方，详见
+[Spark 实验流程](docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments)。
+
+32 GB 5090 上使用过的量化命令：
 
 ```bash
-pip install -e '.[hf,modelopt]'
-
-# 32 GB 5090 上实际用过的配方：算法 max，ultrachat 256×1024，batch 1
-MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
-
-# 均匀 W4A4
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.yaml
-
-# 更大的卡、想贴近 NVIDIA 公开卡的校准时再用 Local-Hessian
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.yaml
+python -m pip install -e '.[hf,modelopt]'
+MEGAQUANT_LOW_MEMORY=1 megaquant quantize \
+  -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
 ```
 
-有 Docker 的机器看 [docker/README.md](docker/README.md)。镜像把 ModelOpt 钉在 0.46.1，和这次 5090 量化用的版本相同。
+这份配方使用 ModelOpt 0.46.1、`max` 校准、ultrachat 256×1024、batch 1。
+Spark 使用独立的 ARM64 / CUDA 13 镜像和 ModelOpt 0.47.0，按 Spark 指南构建。
+推理时传入量化后的本地目录；[模型手册](docs/qwen3.8-27b.md)包含导出恢复、服务与 OSS 命令。
 
-已经导出、但目录里没有视觉塔或 MTP 的 checkpoint，不必重跑量化：
+## 已验证结果
 
-```bash
-megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
-megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
-```
+以下为单台 DGX Spark / GB10、TP1、temperature 0、262144 上下文、16 并发、
+seed 0、打乱选项、保留 `xhigh` thinking、关闭 MTP 的完整 GPQA Diamond 结果。
+每轮 198 个唯一题目均通过独立校验，长度截断和未解析回答计错。
 
-## 目录
+| 权重 / Export | 正确 / Correct | 准确率 / Accuracy | 长度截断 / Length | 未解析 / Unparsed |
+|---|---:|---:|---:|---:|
+| 混合 W4A8，max | 177/198 | 89.39% | 0 | 4 |
+| 均匀 W4A4，max | 174/198 | 87.88% | 0 | 4 |
+| 均匀 W4A4，MSE | 178/198 | 89.90% | 3 | 4 |
+| 均匀 W4A4，Local-Hessian | 170/198 | 85.86% | 3 | 5 |
 
-```
-src/megaquant/    库和命令行
-recipes/          量化和 GPQA 的 YAML，索引在 recipes/README.md
-docs/             架构说明和 Qwen3.8 手册
-docker/           镜像脚本；Dockerfile 在仓库根目录
-scripts/          OSS、gpu-pod、serve / eval 包装
-SKILL.md          给代理的入口
-```
+长度截断包含在未解析数中，两列不能相加。MSE 本轮较 max 多对 4 题，仍有长输出与
+长度截断，普遍质量和停止行为恢复尚未证实。视觉/OCR 与 MTP 另有固定功能检查；
+这些检查不代表广泛视觉质量、256k MTP 质量或 TP2 已验证。
+[验证索引](docs/validation/README.md)提供完整报告、机器可读证据与历史运行的区别。
 
-密钥放在不会进 git 的 `.env` 和 `.oss.env`。`docker-compose.override.yml` 也不要提交。
+## 复现与发布
 
-## 接一个新模型
+仓库和 [GitHub Release](https://github.com/AvrovaDonz2026/Mega-Quantification/releases/tag/v0.1.3)
+提供代码、配方、安装包与验证记录。模型权重、校准数据和原始评测轨迹单独保存。
+重新量化会重新估计 scale；需要相同权重字节时，应获取相同的 content-hash 导出。
 
-在 `src/megaquant/models/` 里加一个 family，实现 `default_ignore` 和 `load_kwargs`，从 `models/__init__.py` 导入，让它在 import 时注册。再写一份 `recipes/*.yaml`，然后 `megaquant plan -c` 看忽略列表。embedding、视觉塔、GDN 的 conv 留在 BF16。不要把整个 `*mlp*` 放进忽略列表，那是要量化的 GEMM。
+v0.1.3 安装包通过离线安装、源码包重建一致性及 CLI 计划检查。
+GPU 和容器验证记录保留实际运行版本与冻结 revision，范围见
+[发布说明](docs/releases/v0.1.3.md)。密钥和机器配置放在被 git 忽略的 `.env`、`.oss.env`
+与 `docker-compose.override.yml`。
 
 ## English
 
-Mega-Quantification post-trains a BF16 Hugging Face model into a checkpoint SGLang can load. The model this tree actually runs is Qwen/Qwen3.8-27B. The pipeline has been validated in production: PTQ finished on a 32 GB RTX 5090, and GPQA Diamond finished under SGLang on an 80 GB SM120.
+Mega-Quantification performs post-training quantization of BF16 Hugging Face
+models and exports checkpoints for SGLang. Qwen/Qwen3.8-27B has completed PTQ
+on a 32 GB RTX 5090 and GPQA Diamond on an 80 GB SM120 and DGX Spark.
+Spark recipes also quantize vision and MTP; fixed image/OCR and embedded MTP
+functional checks are recorded separately from the text benchmark above.
 
-The Spark exports with quantized vision/MTP also completed GPQA Diamond at temperature 0 and 256k context: mixed W4A8 **177/198 (89.39%)**, max uniform W4A4 **174/198 (87.88%)**. Both independently verified 198-item runs had zero truncations and four unparsed answers. See the [Spark evaluation report](docs/validation/dgx-spark-gpqa-256k-20261002.md) for the protocol and evidence.
+Run the quick-start commands from the repository root to install the base
+package and inspect plans without a GPU or model download. For execution, use
+the [Spark runbook](docs/DGX_SPARK.md), [Docker guide](docker/README.md),
+[recipe index](recipes/README.md) or [model guide](docs/qwen3.8-27b.md).
+The [architecture guide](docs/ARCHITECTURE.md) covers extension points.
 
-Controlled W4A4 calibration experiments are complete: MSE scored **178/198 (89.90%)**, with three length finishes and four unparsed answers; Local-Hessian scored **170/198 (85.86%)**, with three length finishes and five unparsed answers. Length finishes are included in the unparsed counts. Full PTQ, strict export audits and fixed vision/MTP functional checks passed for both; GPQA ran with MTP disabled. MSE's four additional correct answers in this run do not establish general quality or stopping recovery. These recipes remain optional. See the [W4A4 calibration validation report](docs/validation/dgx-spark-w4a4-quality-20261008.md).
+The default `nvfp4_w4a8` uses NVFP4 group 16 for MLP/LM-head weights and
+activations, and FP8 for attention. `nvfp4_mixed` uses the same encoding.
+Uniform `nvfp4_w4a4` applies NVFP4 weights and activations to all targeted
+linears. Generic recipes retain BF16 vision/MTP; Spark opts into their
+quantization. MSE and Local-Hessian W4A4 recipes remain optional.
 
-The default recipe, `nvfp4_w4a8`, puts NVFP4 group 16 on the MLP and `lm_head`, and FP8 on attention. The export tag is `MIXED_PRECISION`. Uniform W4A4 (`nvfp4_w4a4`) is NVFP4 group 16 on every targeted linear. The recipe is named W4A8 because the layer split matches NVIDIA's public mixed checkpoint; the MLP activations are NVFP4 as well.
+The table records complete, independently verified 256k GPQA runs with MTP
+disabled. Length finishes are included in unparsed counts. MSE's four extra
+correct answers in this run do not establish general quality or stopping
+recovery. See the [validation index](docs/validation/README.md) and
+[v0.1.3 release notes](docs/releases/v0.1.3.md) for frozen revisions and scope.
+Recalibration does not reproduce an older export byte for byte.
 
-Weights are not in git. A second PTQ pass estimates scales again, so the files will differ from an older export. The runbook is [docs/qwen3.8-27b.md](docs/qwen3.8-27b.md). Agents should start at [SKILL.md](SKILL.md).
-
-License: GNU AGPL version 3 or later (`AGPL-3.0-or-later`). Copyright 2026 Donz.
-
-```bash
-pip install -e '.[dev]'
-megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml --dry-run
-pip install -e '.[hf,modelopt]'
-MEGAQUANT_LOW_MEMORY=1 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-mixed.5090.yaml
-```
-
-Dry-run does not download the 27B. The 5090 recipe above is what fit in 32 GB (`max`, ultrachat). `recipes/qwen3.8-27b-nvfp4-mixed.yaml` is the Local-Hessian run for a larger GPU. Docker notes are in [docker/README.md](docker/README.md).
+License: [GNU AGPL version 3 or later](LICENSE) (`AGPL-3.0-or-later`). Copyright 2026 Donz.
+Agent instructions: [SKILL.md](SKILL.md).
