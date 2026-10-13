@@ -28,6 +28,55 @@ remain active after the check. TP2 inference has not yet run: the remaining
 gates are verbs/NCCL collective checks, matching image and runtime identity on
 both hosts, and a short distributed SGLang smoke test.
 
+## Fresh Robo PTQ run
+
+The dedicated PTQ run on `robo-dog-ab93` used the public MegaQuant revision
+`11407cdc7bdd79e28e57c82a43f0f519260f0ff2` and a dedicated PTQ image derived
+from base image
+`sha256:20f41d6ea8897ac17a3a2c43edbcc1ff051da71607297a0d107d24f9715bacd0`.
+The resulting image ID was
+`sha256:ab4831056abce468f1e96917c7968c5dd4fce38b0072533fc3a6a0e8d978e876`.
+The GB10/SM121 preflight passed with CUDA 13.0, PyTorch `2.13.0+cu130`,
+Transformers `5.12.1`, and ModelOpt `0.47.0`.
+
+Calibration was freshly prepared from 128 COCO images and 128 WikiText rows
+(seed 42, maximum image side 448, text limit 600 characters). The manifest is at
+`/home/zhiman/megaquant-robo-env-20261013/auxiliary-e2e/data-parent/calibration/manifest.json`
+and has SHA256
+`d421c63ff95f844a03d95a1747d3db24363f5e7f8e2fd674e9af3042ee2d96ed`. Its
+256-row `calibration.jsonl` has SHA256
+`2e36b6bf0b775aba5601a5c5ce7e702654d44e8f8eb674798d09b55fafbf49cd`.
+The calibration is a new upstream-integration fixture and differs from the
+historical frozen calibration.
+
+Both full quantization stages and their strict export audits returned code 0:
+
+| Format | Quantized output | Quantization log | Audit log | Calibration coverage |
+|---|---|---|---|---|
+| W4A4 | `/home/zhiman/megaquant-robo-env-20261013/auxiliary-e2e/outputs/w4a4` | `validation/w4a4-quantize.log` | `validation/w4a4-export-audit.log` | 165 vision quantizers × 128 calls; 8 MTP quantizers × 256 calls |
+| W4A8 | `/home/zhiman/megaquant-robo-env-20261013/auxiliary-e2e/outputs/w4a8` | `validation/w4a8-quantize.log` | `validation/w4a8-export-audit.log` | 165 vision quantizers × 128 calls; 8 MTP quantizers × 256 calls |
+
+The stage return codes and timestamps are recorded in
+`validation/quant-job-status.json`; the preflight result is in
+`validation/spark-preflight.json`, and the inherited package baseline is in
+`validation/base-pip-check.log` under the same remote run root.
+
+The audit verifies export structure, source/provenance coverage, calibration
+execution evidence, packed shapes, and finite scale payloads. It does not
+measure generation accuracy, multimodal quality, MTP acceptance quality, or
+serving performance. The base container has 14 pre-existing `pip check`
+conflicts; the dependency-delta check found no new conflicts introduced by the
+PTQ image.
+
+The remaining gate is a separate full serving run from each fresh output,
+covering text, image/OCR, and embedded MTP requests with the final serving
+runtime. The benchmark client also needs an explicit review of its
+`python_code` output budget and length/truncation gate before any score is
+reported. TP2 and broad generation accuracy remain unverified. A separate
+natural KV A/B investigation is still incomplete: the FP8-KV arm is the only
+arm observed so far and the BF16-KV recovery arm is still running, so it does
+not support a conclusion about repetition or stopping behavior.
+
 ## Gates to resume
 
 1. Select one image identity and verify it on both hosts. The frozen image is

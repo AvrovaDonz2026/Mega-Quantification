@@ -9,7 +9,8 @@
 完整模型视觉/MTP、精度、性能与 TP2 仍待验证。
 
 2026-10-13 的 [robo-dog-ab93 环境状态](dgx-spark-robo-environment-20261013.md)
-记录了 BF16 源文件匹配情况及 TP2 当前阻塞门槛；它不是 TP2 运行结果。
+记录了 BF16 源文件匹配情况、Robo 新 W4A4/W4A8 PTQ 与审计结果及 TP2 当前阻塞门槛；
+它不是完整 serving、TP2 或生成精度结果。
 
 [配置哈希口径勘误](dgx-spark-server-info-hash-erratum-20261013.md)确认：题目 3 的
 MSE / max 与题目 5 BF16 三组完整 server-info 对象均匹配生成前记录的 canonical
