@@ -76,10 +76,16 @@ dependency gate before any request: the image contains `flashinfer-python`
 result is claimed. The runner preserved the full container ID and log, then
 removed only that owned container. The selected host ports `31000/31001` were
 also found to belong to existing nginx/Python services and were not touched;
-the retry plan uses `31100/31101`. A reproducible derived image with only
-`flashinfer-python==0.7.1` is being prepared; the serving gate remains pending
-until that dependency is available and the four sequential baseline/MTP runs
-pass. TP2 and broad generation accuracy remain unverified.
+the retry plan uses `31100/31101`. A derived image with
+`flashinfer-python==0.7.1` was built, but its import exposed a second
+compatibility requirement: the base image also contains `flashinfer-cubin` and
+`flashinfer-jit-cache` `0.6.18`. The 0.7.1 Python package rejects the old cubin
+version, and its provider API is not compatible with the old jit-cache shim. A
+clean derived-image Dockerfile that removes both old packages before installing
+the pinned wheel is prepared but could not be tested after the Teleport
+certificate expired. The serving gate remains pending until that dependency
+closure is built and the four sequential baseline/MTP runs pass. TP2 and broad
+generation accuracy remain unverified.
 
 The natural KV A/B recovery is complete. Under the same seed, 262144 context,
 24576 output budget, `cached_tokens=0`, and 385 stream events, both arms ended
