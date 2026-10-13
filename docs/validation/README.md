@@ -4,6 +4,9 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+2026-10-13 的 [robo-dog-ab93 环境状态](dgx-spark-robo-environment-20261013.md)
+记录了 BF16 源文件匹配情况及 TP2 当前阻塞门槛；它不是 TP2 运行结果。
+
 [配置哈希口径勘误](dgx-spark-server-info-hash-erratum-20261013.md)确认：题目 3 的
 MSE / max 与题目 5 BF16 三组完整 server-info 对象均匹配生成前记录的 canonical
 摘要。saved 原始字节哈希与 actual 对象哈希口径不同；此前因此限制完整对象绑定
