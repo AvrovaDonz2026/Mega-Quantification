@@ -4,6 +4,10 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+[SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
+贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
+完整模型视觉/MTP、精度、性能与 TP2 仍待验证。
+
 2026-10-13 的 [robo-dog-ab93 环境状态](dgx-spark-robo-environment-20261013.md)
 记录了 BF16 源文件匹配情况及 TP2 当前阻塞门槛；它不是 TP2 运行结果。
 
