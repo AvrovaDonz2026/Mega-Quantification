@@ -46,6 +46,11 @@ megaquant eval -c recipes/eval-gpqa-diamond.spark-gpqa.yaml --dry-run
 MSE 和 Local-Hessian W4A4 校准实验是可选配方，详见
 [Spark 实验流程](docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments)。
 
+导出 Spark 的均匀 W4A4 时，`hf_quant_config.json` 和 `config.json` 必须包含
+真实 safetensors 中视觉与 MTP NVFP4 线性层的 `quantized_layers`。导出器会从
+权重 header 自动补齐这份 metadata，并排除恢复为 BF16 的层；缺少它会让 SGLang
+按 BF16 构造视觉层，随后在加载 packed NVFP4 权重时产生 shape mismatch。
+
 32 GB 5090 上使用过的量化命令：
 
 ```bash
@@ -105,7 +110,10 @@ The default `nvfp4_w4a8` uses NVFP4 group 16 for MLP/LM-head weights and
 activations, and FP8 for attention. `nvfp4_mixed` uses the same encoding.
 Uniform `nvfp4_w4a4` applies NVFP4 weights and activations to all targeted
 linears. Generic recipes retain BF16 vision/MTP; Spark opts into their
-quantization. MSE and Local-Hessian W4A4 recipes remain optional.
+quantization. MSE and Local-Hessian W4A4 recipes remain optional. For Spark
+uniform W4A4 exports, both `hf_quant_config.json` and `config.json` must name
+the serialized visual and MTP NVFP4 linears in `quantized_layers`; the exporter
+derives this map from safetensors headers and excludes BF16 restores.
 
 The table records complete, independently verified 256k GPQA runs with MTP
 disabled. Length finishes are included in unparsed counts. MSE's four extra
