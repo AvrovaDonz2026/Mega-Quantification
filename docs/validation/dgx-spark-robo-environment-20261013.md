@@ -70,22 +70,38 @@ PTQ image.
 
 The separate full serving run is prepared with the exact `f22670d` SGLang
 checkout, immutable PTQ image ID, and fresh export manifests. Its first
-W4A4-baseline launch was intentionally stopped by the pinned runtime's
-dependency gate before any request: the image contains `flashinfer-python`
-`0.6.18`, while this SGLang revision requires at least `0.7.1`. No serving
-result is claimed. The runner preserved the full container ID and log, then
-removed only that owned container. The selected host ports `31000/31001` were
-also found to belong to existing nginx/Python services and were not touched;
-the retry plan uses `31100/31101`. A derived image with
-`flashinfer-python==0.7.1` was built, but its import exposed a second
-compatibility requirement: the base image also contains `flashinfer-cubin` and
-`flashinfer-jit-cache` `0.6.18`. The 0.7.1 Python package rejects the old cubin
-version, and its provider API is not compatible with the old jit-cache shim. A
-clean derived-image Dockerfile that removes both old packages before installing
-the pinned wheel is prepared but could not be tested after the Teleport
-certificate expired. The serving gate remains pending until that dependency
-closure is built and the four sequential baseline/MTP runs pass. TP2 and broad
+W4A4-baseline launch reached container import and failed before model loading:
+the image's `sglang-kernel 0.4.9` wheel is built against `torch==2.14.1`, while
+the Spark base has `torch 2.13.0+cu130`; the missing
+`CUDAErrorLogCapture` symbol is an ABI mismatch. The runner preserved the full
+container ID and log, then removed only that owned container. The selected host
+ports `31000/31001` belong to existing nginx/Python services and were not
+touched; retries use `31100/31101`.
+
+The dependency closure was rebuilt locally on `robo-dog-ab93`: the image keeps
+`flashinfer-python/cubin/jit-cache 0.7.1`, restores the base's ABI-compatible
+`sglang-kernel 0.4.6.post1`, and sets
+`SGLANG_SKIP_SGL_KERNEL_VERSION_CHECK=1` while the base remains on Torch 2.13.
+The derived image is
+`megaquant-aux-ptq:11407cd-20261013-fi071-kernel046` with local ID
+`sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be`.
+It passed a GPU import smoke with the exact checkout. The four sequential
+baseline/MTP runs, vision requests, and the independent quantized-execution
+probe remain pending; no serving quality claim is made yet. TP2 and broad
 generation accuracy remain unverified.
+
+The first compatible-image launch then exposed a metadata bug in the W4A4
+export. Its serialized visual tensors were correctly packed (`proj`
+`[1152,576]`, `qkv` `[3456,576]`), but `hf_quant_config.json` had no
+`quantized_layers` map. SGLang consequently constructed BF16 visual matrices
+and rejected the packed weights (`[1152,1152]` versus `[1152,576]`). The
+exporter fix now derives auxiliary entries from safetensors headers and writes
+110 visual plus 8 MTP NVFP4 entries while preserving `quant_algo=NVFP4`; BF16
+restored tensors are excluded. A metadata-only repair of the remote W4A4
+validation export reproduced the expected 110/8 coverage, and a new serving
+job was started. Its final serving and MTP/vision request results remain
+pending because the Teleport resource lease expired while the model was
+loading.
 
 The natural KV A/B recovery is complete. Under the same seed, 262144 context,
 24576 output budget, `cached_tokens=0`, and 385 stream events, both arms ended
