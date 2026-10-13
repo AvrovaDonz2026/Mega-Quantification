@@ -68,14 +68,32 @@ serving performance. The base container has 14 pre-existing `pip check`
 conflicts; the dependency-delta check found no new conflicts introduced by the
 PTQ image.
 
-The remaining gate is a separate full serving run from each fresh output,
-covering text, image/OCR, and embedded MTP requests with the final serving
-runtime. The benchmark client also needs an explicit review of its
-`python_code` output budget and length/truncation gate before any score is
-reported. TP2 and broad generation accuracy remain unverified. A separate
-natural KV A/B investigation is still incomplete: the FP8-KV arm is the only
-arm observed so far and the BF16-KV recovery arm is still running, so it does
-not support a conclusion about repetition or stopping behavior.
+The separate full serving run is prepared with the exact `f22670d` SGLang
+checkout, immutable PTQ image ID, and fresh export manifests. Its first
+W4A4-baseline launch was intentionally stopped by the pinned runtime's
+dependency gate before any request: the image contains `flashinfer-python`
+`0.6.18`, while this SGLang revision requires at least `0.7.1`. No serving
+result is claimed. The runner preserved the full container ID and log, then
+removed only that owned container. The selected host ports `31000/31001` were
+also found to belong to existing nginx/Python services and were not touched;
+the retry plan uses `31100/31101`. A reproducible derived image with only
+`flashinfer-python==0.7.1` is being prepared; the serving gate remains pending
+until that dependency is available and the four sequential baseline/MTP runs
+pass. TP2 and broad generation accuracy remain unverified.
+
+The natural KV A/B recovery is complete. Under the same seed, 262144 context,
+24576 output budget, `cached_tokens=0`, and 385 stream events, both arms ended
+by the length budget without EOS or a thinking-end marker. The FP8-KV arm
+entered an exact 4-token cycle at native output index 13135 and stayed in it
+for 11441 tokens (46.55% of output). The BF16-KV arm did not meet the exact
+cycle threshold (at least four cycles over 512 tokens), but also exhausted its
+budget. The arms shared three initial tokens and first diverged at zero-based
+index 3. This single non-deterministic pair supports KV-dtype sensitivity for
+this case; it does not establish stopping recovery, general quality, or a
+unique root cause. The private statistics record is
+`natural-kv-ab-statistics-20261013.json` (SHA256
+`b0404f297f6d758ed2bc44d258954002c782bb79c42da39fd9f93e706ccc88df`); source
+text and token IDs were not downloaded.
 
 ## Gates to resume
 

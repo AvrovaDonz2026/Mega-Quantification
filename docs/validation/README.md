@@ -25,9 +25,12 @@ MSE / max 与题目 5 BF16 三组完整 server-info 对象均匹配生成前记�
 不同种子、容量与数值路径仍限制量化因果和算法排序。旧 dated 报告保留各自时点。
 
 此前匿名题目 5 的源 BF16 权重在 **FP8 KV / FP32 SSM** 下也出现
-持续的原生 token 精确循环，覆盖输出末尾 11441 tokens，周期为 4。MSE 权重量化
-不是这类循环出现的必要条件；KV 根因及量化对发生概率的影响仍未确定。九组计划
-截至该快照有 6 条 validated、3 条 incomplete，见[BF16 独立证据](dgx-spark-repetition-case5-bf16-20261012.md)。
+持续的原生 token 精确循环，覆盖输出末尾 11441 tokens，周期为 4。新的同条件
+BF16-KV 对照在相同 seed、262144 上下文和 24576 输出预算下没有达到精确循环
+阈值，但同样耗尽预算，且两臂均无 EOS 或 thinking-end；共同前 3 tokens，索引
+3 首次分歧。该单次非确定性对照只支持本题对 KV dtype 敏感，不能称为停止恢复、
+整体质量改善或唯一根因。[自然 KV A/B 统计](dgx-spark-robo-environment-20261013.md)
+记录了私有统计文件及 SHA，原文和 token IDs 未下载。
 
 ## 完整 Spark GPQA Diamond
 
