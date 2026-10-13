@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "publication_date": "2026-10-13",
+  "status": "completed_cold_prefill_probes_independently_cpu_verified",
+  "source_audit_created_at_fields_available": false,
+  "scope": {
+    "models": ["mse", "max", "bf16"],
+    "models_verified": 3,
+    "fixed_history_cold_prefill_only": true,
+    "new_gpu_requests_from_this_cpu_audit": false,
+    "formal_journals_or_scores_modified": false,
+    "prior_dated_evidence_modified": false,
+    "new_gpqa_score_established": false
+  },
+  "common_prefix": {
+    "complete_model_runs": 3,
+    "requests_verified": 9,
+    "requests_per_model": 3,
+    "prompt_only_cold_replay_budget_tokens": 16,
+    "fixed_prefix_tokens": 7,
+    "fixed_prefix_continuation_budgets_tokens": [1, 512],
+    "native_generated_positions_verified": 1587,
+    "requested_candidate_position_scores_verified": 7935,
+    "returned_top_position_scores_verified": 31740,
+    "requested_candidate_exceeds_selected_count": 0,
+    "selected_top_score_disagreement_count": 0,
+    "overlapping_top_candidate_score_disagreement_count": 0,
+    "first16_matches_bound_prior_native_record_models": 3,
+    "cold_prefill_and_incremental_candidate_scores_differ_models": 3,
+    "frozen_sampling_plan_matches": true,
+    "ready_flush_sequential_time_gate_passed": true,
+    "extra_health_generation_requests": 0,
+    "all_native_cached_tokens_zero": true,
+    "all_native_retractions_zero": true,
+    "all_requests_length_finished": true,
+    "thinking_end_occurrences": 0,
+    "eos_occurrences": 0,
+    "rollouts_with_detected_exact_cycle_under_checked_method": 0,
+    "different_budget_first_step_consistency": {
+      "comparison_scope": "within_each_model_across_budgets",
+      "budgets_tokens": [1, 512],
+      "models_with_same_selected_token": 3,
+      "models_with_exactly_equal_ordered_candidate_rows": 3,
+      "models_with_equal_canonical_candidate_row_bytes": 3,
+      "requested_candidates_per_position": 5,
+      "same_budget_repeat_stability_established": false
+    },
+    "eventual_stopping_or_later_cycle_behavior": "budget_censored_unknown",
+    "first_branch_attribution_permitted": false
+  },
+  "semantic_history": {
+    "complete_model_runs": 3,
+    "fixed_histories": 2,
+    "requests_verified": 6,
+    "requests_per_model": 2,
+    "continuation_budget_tokens_per_request": 256,
+    "native_generated_positions_verified": 1536,
+    "requested_candidates_per_position": 5,
+    "requested_candidate_position_scores_verified": 7680,
+    "requested_candidate_exceeds_selected_count": 0,
+    "frozen_sampling_plan_matches": true,
+    "all_native_cached_tokens_zero": true,
+    "all_native_retractions_zero": true,
+    "first_step_matches_saved_history_source_successor_requests": 6,
+    "all_requests_length_finished": true,
+    "thinking_end_occurrences": 0,
+    "eos_occurrences": 0,
+    "rollouts_with_detected_exact_cycle_under_checked_method": 0,
+    "max_source_history": {
+      "lcp_with_saved_source_continuation_tokens_by_target": {
+        "mse": 22,
+        "max": 22,
+        "bf16": 22
+      },
+      "target_pairwise_comparisons_with_lcp_23_tokens": 2,
+      "target_pairwise_lcp_replaces_source_comparison": false
+    },
+    "eventual_stopping_or_later_cycle_behavior": "budget_censored_unknown"
+  },
+  "supported_inference": {
+    "local_cold_prefill_observations_only": true,
+    "original_incremental_kv_ssm_state_reconstructed": false,
+    "bf16_imposed_history_replay_equals_natural_trajectory": false,
+    "natural_first_error_or_loop_cause_located": false,
+    "quantization_causal_branch_established": false,
+    "stopping_recovery_established": false,
+    "algorithm_quality_ranking_established": false
+  },
+  "evidence_sha256": {
+    "completed_capture_manifest": "00f87af1fa3e2608b2b9f6b9a4072e39885361b46f5ee3e18879121f5b1a6099",
+    "common_and_semantic_capture_cpu_audit": "a9788ff673a46b5334be3a566f178e7de8446e9f10216715b9654374c2afcd3f",
+    "common_independent_allposition_audit": "437bac51c318eb2c5569661ddd45efc9437184c4f004cc1b36920a20dbcffa02",
+    "common_different_budget_firststep_supplement": "b295accadbc25d2c4c5729751530bbc2a4bff81eda143798c9df6248d74d9b64",
+    "semantic_independent_allposition_audit": "079c43b4b90303bfc5d205537c6d79e5550248db8b4440073a8643fff3edd0d7"
+  },
+  "limitations": [
+    "Cold prefill does not reconstruct the original incremental FP8 KV or SSM state, including BF16 replay on imposed histories.",
+    "First16 native identity and cross-budget first-step equality do not prove state or candidate-score path equivalence.",
+    "Same-budget repeated-request stability was not estimated.",
+    "Length-finished rollouts remain censored at their diagnostic token budgets.",
+    "No checked exact cycle does not exclude semantic recurrence, approximate repetition or a later cycle.",
+    "Audited candidate and top logprobs are processed response scores, not a complete raw logits tensor.",
+    "Zero cached tokens and ready/flush/request timing gates do not establish global host/GPU isolation or attest every weight byte.",
+    "These probes do not establish natural first-error attribution, causal loop entry, general stopping recovery or a quality ranking."
+  ],
+  "privacy": {
+    "raw_questions_answers_generated_text_or_native_id_sequences_published": false,
+    "raw_candidate_scores_published": false,
+    "item_ids_host_paths_or_credentials_published": false
+  }
+}

@@ -80,6 +80,7 @@ MSE 本轮较 max 多对 4 题，Local-Hessian 少对 4 题；单轮结果尚不
 
 ## 历史试跑与诊断
 
+- **固定前缀探针补充**：共同前缀 9 请求与语义历史 6 请求均完成，独立 CPU 逐位置核验通过。零缓存 cold prefill 和跨预算首步一致性不恢复自然轨迹的 incremental KV / SSM 状态，也不能定位自然首次分叉、循环根因或证明停止恢复。[2026-10-13 报告](dgx-spark-repetition-prefix-probes-20261013.md) · [JSON](dgx-spark-repetition-prefix-probes-20261013.json)。
 - **匿名题目 3 的完成自然三权重对照**：截至 `2026-10-13T02:08:02.781567Z`，九组自然诊断全部完成，启动 gate 有 9 条 validated、0 条 incomplete、0 条 invalid。同题 MSE 精确循环并耗尽 49152 输出预算；max 在 22569 tokens 停止、后续判定答错；源 BF16 权重在共同 FP8 KV / FP32 SSM 下于 16685 tokens 停止、后续判定答对。不是新 GPQA 分数，也不建立量化根因或普遍重复恢复。[报告](dgx-spark-repetition-case3-natural-20261013.md) · [JSON](dgx-spark-repetition-case3-natural-20261013.json)。
 - **配置哈希口径勘误**：三组完整 server-info 对象、六份 natural / decoded 记录的字节与 canonical 摘要复算通过；纠正因两种编码哈希不同而限制完整对象身份绑定的表述，不建立全过程运行认证，不改变停止、循环或判分结论。[2026-10-13 报告](dgx-spark-server-info-hash-erratum-20261013.md) · [JSON](dgx-spark-server-info-hash-erratum-20261013.json)。
 - **匿名题目 3 的 max 原生停止**：截至 `2026-10-12T13:03:12.992792Z`，max 输出 22569 tokens，以 EOS 停止，thinking-end 与 EOS 各一次，未检出支持阈值内精确循环，零缓存启动与终止审计通过。后续 CPU 判定最终答案可解析但答错，正式分数未改。同题 MSE 已循环，BF16 未完成；九组计划有 8 条 validated、1 条 incomplete，配对行为不建立算法排序或因果。[报告](dgx-spark-repetition-case3-max-20261012.md) · [JSON](dgx-spark-repetition-case3-max-20261012.json)。
