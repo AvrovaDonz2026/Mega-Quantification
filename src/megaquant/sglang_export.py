@@ -505,6 +505,10 @@ def rewrite_sglang_nvfp4_export(export_dir: str | Path) -> dict[str, dict[str, A
     config = _read_json(config_path)
     config_quant = config.get("quantization_config")
     config_quant = config_quant if isinstance(config_quant, dict) else {}
+    quant_payload = dict(old_quant)
+    for key in ("quant_algo", "group_size", "kv_cache_quant_algo", "exclude_modules"):
+        if key not in quant_payload and key in config_quant:
+            quant_payload[key] = config_quant[key]
     existing_layers = old_quant.get("quantized_layers")
     layers: dict[str, dict[str, Any]] = {}
     for source in (existing_layers, config_quant.get("quantized_layers")):
@@ -526,7 +530,7 @@ def rewrite_sglang_nvfp4_export(export_dir: str | Path) -> dict[str, dict[str, A
         return {}
 
     hf_payload = dict(existing)
-    hf_payload["quantization"] = dict(old_quant)
+    hf_payload["quantization"] = quant_payload
     hf_payload["quantization"]["quantized_layers"] = layers
     (root / "hf_quant_config.json").write_text(
         json.dumps(hf_payload, indent=2) + "\n", encoding="utf-8"
