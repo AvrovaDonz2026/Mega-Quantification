@@ -51,9 +51,25 @@ identity comparison, rather than described as a new final-commit pytest run.
 | `test_model_config.py` | 12 passed, 8 subtests, 17 warnings | 12 passed |
 
 The three suites total **43 tests and 34 subtests**, with no failures or skips.
-Changed-line coverage has not been measured: the validation image lacked the
-coverage tools, and their installation in the disposable container could not
-reach PyPI. No coverage percentage or completion of that gate is claimed.
+The new tests also detect the corresponding faults in pinned upstream baseline
+`7ff3a112846a3fcc12a27bba09d644885a226e4d`: visual alias resolution returns no
+NVFP4 configuration, the quantized MTP `fc` selects a plain `Linear` instead of
+`ReplicatedLinear`, and draft depth remains 8 instead of being normalized to 1.
+
+Coverage tools were installed only in disposable validation containers. The
+vision/MTP coverage run passed **43 tests and 34 subtests**, with 18 warnings;
+the logprob coverage run passed five tests, with 17 warnings. `diff-cover`
+measured changed production lines against the same pinned upstream baseline:
+
+| Contribution | Changed production-line coverage | Changed lines | Uncovered lines |
+|---|---:|---:|---:|
+| Logprob, `60bd318b` | 100% | 2 | 0 |
+| Vision/MTP, tested `0042e3d8` with final-source file identity | 87% | 81 | 10 |
+
+Both checks exited 0 with `--fail-under=60`, satisfying the registered unit
+test guide's changed-line coverage threshold. These percentages describe the
+changed production lines in the CPU test scope; they do not measure model
+accuracy or full GPU execution coverage.
 
 ## Real GPU NVFP4 regression
 
