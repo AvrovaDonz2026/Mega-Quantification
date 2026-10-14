@@ -34,6 +34,17 @@ not map its native tracer from the temporary target directory. Those failures
 are isolated to the coverage invocation. The direct test evidence is retained
 in the private Aitop result directory; changed-line coverage remains unclaimed.
 
+A coverage-only retry was then run with `COVERAGE_CORE=pytrace`, plugin
+autoload disabled, an explicit `pytest_cov` plugin, and fresh writable paths.
+Both source identity probes and offline tool installation passed, but the
+coverage commands still did not produce coverage data: the logprob collection
+raised `ValueError: module functions cannot set METH_CLASS or METH_STATIC`
+while importing the image's Torch, and the vision/MTP command terminated with
+return code `-11` (segmentation fault) while rendering the pytest failure.
+This is a fixed-image Python/Torch/coverage runtime failure; it is not evidence
+of a source regression. The direct retry2 passes remain the valid CPU test
+evidence, and changed-line coverage is still unclaimed.
+
 ## Historical model inventory
 
 The available full checkpoints are the scored 2026-10-01 exports, quantized
@@ -65,16 +76,17 @@ The first GPU environment attempt stopped at dependency resolution because
 the CUDA 13 index has no `flashinfer-cubin==0.7.1` package entry. The official
 v0.7.1 release does publish that cubin wheel and the AArch64 CUDA-13 generic
 and SM121 JIT wheels, so a second detached build now downloads those exact
-release assets and records their hashes. The GPU regression container and
-full-model serving job have not passed yet. A subsequent `tsh ssh` attempt entered Teleport's
-single-use MFA callback path; the local callback listener could not bind under
-the current execution environment. Further remote commands require a working
-Teleport login/session so the prepared jobs can be staged and observed.
+release assets over host networking and records their hashes. The Python wheel
+download step is active; the 1.5-GB cubin asset is still downloading, so no
+GPU image, regression result, or serving result exists yet. The model identity
+gate has passed for both historical metadata views: W4A4 and W4A8 each have
+immutable file hashes, the metadata-fix revision `a0c6163d15601529a424384124471f44ea579310`,
+110 visual entries, and 8 MTP entries. This validates inventory/provenance only;
+it does not establish runtime serving.
 
-Remaining gates are: finish the optional changed-line coverage retry; build
-and verify the pinned FlashInfer 0.7.1 GPU derivative while retaining the
-image's Torch/kernel ABI; run the public SM121 NVFP4 regression; validate the
-immutable model inventory and isolated metadata views; then run the fixed
-baseline/MTP text and image checks and the separate quantized-layer execution
-probe. GPQA is a later, separate run and requires a complete journal plus the
-repository's formal checker.
+Remaining gates are: build and verify the pinned FlashInfer 0.7.1 GPU
+derivative while retaining the image's Torch/kernel ABI; run the public SM121
+NVFP4 regression; run the fixed baseline/MTP text and image checks and the
+separate quantized-layer execution probe; then assess whether a compatible
+coverage environment can be supplied. GPQA is a later, separate run and
+requires a complete journal plus the repository's formal checker.
