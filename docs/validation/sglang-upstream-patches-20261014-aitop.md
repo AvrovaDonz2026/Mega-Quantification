@@ -3,7 +3,9 @@
 This is an in-progress follow-up to
 [`sglang-upstream-patches-20261013.md`](sglang-upstream-patches-20261013.md).
 It records the exact newer source heads and the checks attempted after moving
-to a second DGX Spark. No new model-serving or GPQA result is established here.
+to a second DGX Spark. The current v4 run passed the public GPU regression and
+W4A4 baseline fixtures, but failed W4A4 MTP output parity. Full validation is
+incomplete; no new GPQA result is established here.
 
 | Gate | Latest established result |
 |---|---|
@@ -11,8 +13,10 @@ to a second DGX Spark. No new model-serving or GPQA result is established here.
 | Pytest under coverage | Logprob 5 passed; vision/MTP 43 passed, with 34 subtests |
 | Changed-line coverage threshold | Passed: logprob 100% (2/2 executable changed lines), vision/MTP 87% (71/81); minimum 60% |
 | Historical model identities | Both isolated metadata views passed |
-| Public SM121 GPU regression | Dependency download failed; verified-cache recovery being prepared |
-| Full-model baseline/MTP and auxiliary apply probe | Dependent continuation stopped before serving |
+| Public SM121 GPU regression | v4 passed: exactly 1 test, no skips, container exit 0 |
+| W4A4 full-model baseline | Five fixed text/vision fixtures passed |
+| W4A4 full-model MTP | Functional checks passed; `python_code` baseline parity failed in 7/7 trials |
+| W4A8 baseline/MTP and auxiliary apply probe | Not run: v4 continuation stopped at W4A4 MTP parity failure |
 
 ## Pinned inputs
 
@@ -104,20 +108,21 @@ metadata-fix revision. The original scored checkpoints remain intact. The
 model identity gate passed after hashing all model files and verifying both
 views; its manifest SHA256 is
 `27a9e5c83ec796bd589f5078a82a7f9ad69b83e0dcd838144fa64c840fd5fb1c`.
-No serving request, vision/MTP execution probe, or new GPQA run has completed.
+At completion of this inventory gate, no serving request, vision/MTP execution
+probe, or new GPQA run had completed. Later v4 serving results are recorded below.
 
-## Current status and next gate
+## Earlier download attempts and continuation plan
 
 Initial Aitop inspection found the GB10 idle, with no SGLang inference process.
 The first GPU environment attempt stopped at dependency resolution because
 the CUDA 13 index has no `flashinfer-cubin==0.7.1` package entry. The official
 v0.7.1 release does publish that cubin wheel and the AArch64 CUDA-13 generic
 and SM121 JIT wheels, so a second detached build attempted those exact
-release assets over host networking. No GPU image, regression result, or
-serving result exists yet. The original host
+release assets over host networking. At that stage, no GPU image, regression
+result, or serving result existed. The original host
 supervisor exceeded its 3600-second download timeout while the owned download
-container kept running. A new detached continuation observes that same full
-container ID and validates its labels, source archive and all 10,577 source
+container kept running. A new detached continuation observed that same full
+container ID and validated its labels, source archive and all 10,577 source
 files. It was configured to wait for a clean download exit, verify the four
 wheel filenames, versions and hashes, then build offline and run the public
 GPU test. At 07:20:50 UTC the downloader exited 1 with `incomplete-download`:
@@ -129,9 +134,9 @@ immutable file hashes, the metadata-fix revision `a0c6163d15601529a424384124471f
 110 visual entries, and 8 MTP entries. This validates inventory/provenance only;
 it does not establish runtime serving.
 
-The complete serving continuation was also detached. It waits for
+The complete serving continuation was also detached. It was configured to wait for
 the GPU resume record's final successful exit and strict one-test/no-skip proof,
-then reuses that exact image ID for W4A4 baseline/MTP and W4A8 baseline/MTP.
+then reuse that exact image ID for W4A4 baseline/MTP and W4A8 baseline/MTP.
 Only after all four ordinary modes pass does it start the separate four-mode
 auxiliary apply probe. Each result is bound to this run's metadata, full
 container ID and image/source hashes; MTP reports also bind their current
@@ -143,8 +148,84 @@ all four assets to match their official release SHA256 digests before an
 offline build. Neither a launched supervisor nor a downloaded artifact is a
 serving pass.
 
-Remaining gates are: build and verify the pinned FlashInfer 0.7.1 GPU
+At the end of the failed download attempt, the remaining gates were: build and
+verify the pinned FlashInfer 0.7.1 GPU
 derivative while retaining the image's Torch/kernel ABI; run the public SM121
 NVFP4 regression; run the fixed baseline/MTP text and image checks and the
 separate quantized-layer execution probe. GPQA is a later, separate run and
 requires a complete journal plus the repository's formal checker.
+
+## Current v4 results — 2026-10-14
+
+A separate verified-cache run recovered the GPU environment without changing
+the pinned SGLang source or restarting the failed download attempts. All four
+FlashInfer wheels matched the SHA256 digests in the official
+[v0.7.1 release](https://github.com/flashinfer-ai/flashinfer/releases/tag/v0.7.1)
+(release ID `408296015`), both locally and after transfer. The derivative built
+with `--pull=false --network=none`, installing the wheels with
+`--no-index --no-deps`; all 73 base image layers, Torch `2.13.0+cu130`, and
+`sglang-kernel==0.4.6.post1` were retained. Source verification compared all
+10,577 archived files. The wrapper also verified source imports and SM121
+capability before running the unchanged public test:
+
+```bash
+python test/registered/kernels/ops/quantization/test_modelopt_nvfp4_vision.py -f
+```
+
+The test reported exactly **1 test, OK, no skips**, and the retained container
+exited 0 without OOM. The GPU gate completed at **10:41:57 UTC**.
+
+| v4 identity | Value |
+|---|---|
+| GPU job | `a00f1a83b1624d61b243b32907465cbc` |
+| Source archive SHA256 | `ac27ebc4ada7c0e895ad3366501bd8213ca7d0c92abed98f77057ac9ab24ef9e` |
+| Derivative image ID | `sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf` |
+| Dockerfile SHA256 | `84cf9bef0779a173b99105fa648c0df04ee791fe16c38bff4c9706fdd41a25ee` |
+| Official release manifest SHA256 | `3236d374e7c567dadcf9126d93438fddc996233ca0f36254220f8fc97b2385ea` |
+| GPU record SHA256 | `c9fabf8e39ae4c65da81d64266b00e181697b355dfd6b0e76a80110b751b2055` |
+| Public GPU log SHA256 | `0a7b74d649869b926b41edad5b8104315f9451e5c41f34568953ec9ca6f064d6` |
+
+| Verified official wheel | SHA256 |
+|---|---|
+| `flashinfer_cubin-0.7.1-py3-none-any.whl` | `502eaa5f71e768950ada429618481a886388fcb34a5da6a2258979713cbaa327` |
+| `flashinfer_jit_cache-0.7.1+cu130-cp39-abi3-manylinux_2_28_aarch64.whl` | `759f35213fca2aca68d9afecf324888fdf95f20628e8a944dde031bcbbed25de` |
+| `flashinfer_jit_cache_sm121a-0.7.1+cu130-cp39-abi3-manylinux_2_28_aarch64.whl` | `712231a38b301cfdb507045f125ce07906bbb6b97ec05f87a3a2d353fea0aaa5` |
+| `flashinfer_python-0.7.1-py3-none-any.whl` | `69302ed6e91314a85a4392324becc194594a782ba181646d25d5c305e1b7e8c4` |
+
+The serving continuation verified the completed GPU record and reused its exact
+derivative image with the historical W4A4 metadata view. It used TP1, one running
+request, context length 32,768, FP8 E4M3 KV cache, FlashInfer attention and
+`flashinfer_cutlass` FP4 GEMM, PyTorch sampling, Triton linear attention/Mamba,
+and disabled prefill/decode CUDA graphs. MTP used EAGLE with 2 steps, top-k 1,
+and 3 draft tokens. The context limit belongs to these fixed smoke tests;
+256K GPQA validation is a separate gate.
+
+Each of the five fixtures ran 2 warmup and 5 measured trials with temperature 0,
+thinking disabled, and a confirmed prefix-cache flush before every request.
+W4A4 baseline passed all 35 trials, including output/logprob alignment,
+successful stopping without length termination, code AST checks, the red/blue
+image counterfactual, and OCR. Code checks do not execute the generated code
+or establish algorithmic correctness.
+
+W4A4 MTP executed and passed all functional checks, but the `python_code`
+fixture failed exact token-output parity against this run's baseline in all
+7 trials: baseline produced **277 tokens**, MTP produced **272 tokens**. Both
+outputs passed the code structure and successful-stop checks. Arithmetic and
+all three vision fixtures had identical baseline/MTP token-output digests in
+all 7 trials each. The MTP report therefore has `validation_passed=false`;
+its failed code trials are excluded from valid measured-trial summaries.
+Passing visual responses do not establish that all quantized visual/MTP layers
+executed: the independent auxiliary apply probe has not run.
+
+| Serving evidence | SHA256 |
+|---|---|
+| Fixture source | `f0e8ff85f40b4aaa9847ab95dd9098591845f137faab574ca6d146f0be3f04da` |
+| W4A4 baseline report | `79ef2ba4cfbf64c2ebc3dd2d59910356ce935ca4d0e9ecf2ab629f51579dc59b` |
+| W4A4 MTP report, bound to that baseline | `4ff6ab53f3295a362e626363371dd81a635bd4e3f3f0e0f93388629413493a72` |
+| Serving continuation terminal status | `2b50cb309d65d90e2bbafda49c3373cc00106316945a92387020d50bfb953b83` |
+
+The continuation correctly stopped at **10:53:19 UTC**. W4A8 baseline/MTP and
+the four-mode auxiliary apply probe were not started. The next gate is to
+isolate the reproducible W4A4 MTP parity difference while retaining these failed
+reports, then rerun the required serving modes and execution probe. There is
+no new GPQA score or release validation result.
