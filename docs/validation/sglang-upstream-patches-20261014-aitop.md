@@ -25,6 +25,15 @@ source mismatch. No CPU regression or coverage result is claimed. A retry
 needs `SGLANG_CACHE_DIR` and the Inductor/Triton caches redirected to writable
 temporary storage, then a fresh uniquely named container and result directory.
 
+The retry with writable caches passed the exact source identity checks for both
+heads and ran all four direct registered-test commands successfully: logprob
+5 tests, and vision/MTP 13, 18, and 12 tests. Its optional `pytest-cov`
+collection still failed inside the fixed image before test execution: importing
+Torch under coverage raised `SystemError: bad call flags`; coverage also could
+not map its native tracer from the temporary target directory. Those failures
+are isolated to the coverage invocation. The direct test evidence is retained
+in the private Aitop result directory; changed-line coverage remains unclaimed.
+
 ## Historical model inventory
 
 The available full checkpoints are the scored 2026-10-01 exports, quantized
@@ -52,16 +61,20 @@ vision/MTP execution probe, or GPQA run has completed yet.
 ## Current status and next gate
 
 Initial Aitop inspection found the GB10 idle, with no SGLang inference process.
-The GPU regression container and full-model serving job were prepared locally
-but were not started. A subsequent `tsh ssh` attempt entered Teleport's
+The first GPU environment attempt stopped at dependency resolution because
+the CUDA 13 index has no `flashinfer-cubin==0.7.1` package entry. The official
+v0.7.1 release does publish that cubin wheel and the AArch64 CUDA-13 generic
+and SM121 JIT wheels, so a second detached build now downloads those exact
+release assets and records their hashes. The GPU regression container and
+full-model serving job have not passed yet. A subsequent `tsh ssh` attempt entered Teleport's
 single-use MFA callback path; the local callback listener could not bind under
 the current execution environment. Further remote commands require a working
 Teleport login/session so the prepared jobs can be staged and observed.
 
-Remaining gates are: rerun the two exact-head CPU suites and changed-line
-coverage with writable caches; build and verify the pinned FlashInfer 0.7.1
-GPU derivative while retaining the image's Torch/kernel ABI; run the public
-SM121 NVFP4 regression; validate the immutable model inventory and isolated
-metadata views; then run the fixed baseline/MTP text and image checks and the
-separate quantized-layer execution probe. GPQA is a later, separate run and
-requires a complete journal plus the repository's formal checker.
+Remaining gates are: finish the optional changed-line coverage retry; build
+and verify the pinned FlashInfer 0.7.1 GPU derivative while retaining the
+image's Torch/kernel ABI; run the public SM121 NVFP4 regression; validate the
+immutable model inventory and isolated metadata views; then run the fixed
+baseline/MTP text and image checks and the separate quantized-layer execution
+probe. GPQA is a later, separate run and requires a complete journal plus the
+repository's formal checker.
