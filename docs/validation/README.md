@@ -7,6 +7,9 @@
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
 完整模型视觉/MTP、精度、性能与 TP2 仍待验证。
+[Aitop 后续验证](sglang-upstream-patches-20261014-aitop.md)记录更新的 PR 源码头、
+第二台 Spark 的环境检查、尚未完成的 CPU 重试及历史权重元数据核验；没有新 GPU
+回归、完整模型服务或 GPQA 结果。
 
 2026-10-13 的 [robo-dog-ab93 环境状态](dgx-spark-robo-environment-20261013.md)
 记录了 BF16 源文件匹配情况、Robo 新 W4A4/W4A8 PTQ 与审计结果及 TP2 当前阻塞门槛；

@@ -104,6 +104,11 @@ the tested inputs.
 
 ## Remaining scope
 
+The follow-up attempt on newer PR heads is recorded separately in
+[`sglang-upstream-patches-20261014-aitop.md`](sglang-upstream-patches-20261014-aitop.md).
+It does not add a passing CPU/GPU test or full-model result to the evidence
+below.
+
 The GPU result establishes synthetic linear/kernel integration. It does not
 establish full-model `/generate` behavior, visual or MTP accuracy, warmed-up
 inference speed, TP2 operation, or recovery from repetitive generation. The
