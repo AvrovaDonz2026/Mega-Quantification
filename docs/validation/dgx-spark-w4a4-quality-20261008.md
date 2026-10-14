@@ -14,6 +14,11 @@ Local-Hessian 正式结果检查通过，成绩为 **170/198（85.86%）**，较
 `quality_recovery_established=false`。
 详见[机器可读记录](dgx-spark-w4a4-quality-20261008.json)。
 
+2026-10-12 的后续完整 trace 检查已确认两轮的 6 条截断均有精确循环，覆盖 5 道匿名
+题目。六组 72 次固定前缀诊断全部完成，恢复 BF16 输出头、注意力投影或两者均未
+打断选定的 3 条 MSE 循环；见
+[重复输出诊断](dgx-spark-mse-repetition-20261012.md)。该诊断不修改这里的正式结果。
+
 ## 本次修复
 
 NVFP4 MSE 配置现在显式启用 FP8 block-scale 搜索。MSE 和 Local-Hessian 使用

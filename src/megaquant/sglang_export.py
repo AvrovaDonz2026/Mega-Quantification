@@ -256,6 +256,45 @@ def quantized_layers_from_weight_map(
     return dict(sorted(layers.items()))
 
 
+def auxiliary_quantized_layers_from_weight_map(
+    weight_map: dict[str, Any],
+    *,
+    tensor_metadata: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Return serialized NVFP4 auxiliary modules for SGLang's opt-in paths.
+
+    SGLang deliberately keeps vision and MTP in BF16 unless the checkpoint
+    metadata names those modules.  Uniform ModelOpt NVFP4 exports historically
+    omitted that map, even when the exporter had quantized the auxiliary
+    modules.  Infer only from the serialized tensor headers so BF16 restores
+    cannot be mislabeled.
+    """
+    tensor_metadata = tensor_metadata or {}
+    layers: dict[str, dict[str, Any]] = {}
+    for tensor_name in weight_map:
+        module = _module_from_tensor(str(tensor_name))
+        if module is None or not (
+            module.startswith("model.visual.")
+            or module.startswith("visual.")
+            or module.startswith("mtp.")
+        ):
+            continue
+        weight_name = module + ".weight"
+        if weight_name not in weight_map:
+            continue
+        weight_info = tensor_metadata.get(weight_name, {})
+        if weight_info.get("dtype") in {"BF16", "F16", "F32", "F64"}:
+            continue
+        entry = _entry_from_exported_tensors(module, weight_map, tensor_metadata)
+        if entry is not None and entry["quant_algo"] == "NVFP4":
+            layers[module] = entry
+    return dict(sorted(layers.items()))
+
+
+def _is_auxiliary_module(module: str) -> bool:
+    return module.startswith(("model.visual.", "visual.", "mtp."))
+
+
 def _entry_from_exported_tensors(
     module: str, weight_map: dict[str, Any], tensor_metadata: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -448,3 +487,57 @@ def rewrite_sglang_mixed_export(
     if config_path.is_file() or config:
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return section["quantized_layers"]
+
+
+def rewrite_sglang_nvfp4_export(export_dir: str | Path) -> dict[str, dict[str, Any]]:
+    """Add auxiliary metadata while preserving uniform ``quant_algo=NVFP4``."""
+    root = Path(export_dir)
+    weight_map = load_weight_map(root)
+    if not weight_map:
+        raise FileNotFoundError(f"No safetensors weight map under {root}")
+    tensor_metadata = _read_tensor_metadata(root, weight_map)
+    auxiliary_layers = auxiliary_quantized_layers_from_weight_map(
+        weight_map, tensor_metadata=tensor_metadata
+    )
+    existing = _read_json(root / "hf_quant_config.json")
+    old_quant = _quant_section(existing)
+    config_path = root / "config.json"
+    config = _read_json(config_path)
+    config_quant = config.get("quantization_config")
+    config_quant = config_quant if isinstance(config_quant, dict) else {}
+    quant_payload = dict(old_quant)
+    for key in ("quant_algo", "group_size", "kv_cache_quant_algo", "exclude_modules"):
+        if key not in quant_payload and key in config_quant:
+            quant_payload[key] = config_quant[key]
+    existing_layers = old_quant.get("quantized_layers")
+    layers: dict[str, dict[str, Any]] = {}
+    for source in (existing_layers, config_quant.get("quantized_layers")):
+        if not isinstance(source, dict):
+            continue
+        layers.update(
+            {
+                str(module): dict(entry)
+                for module, entry in source.items()
+                if (
+                    isinstance(module, str)
+                    and isinstance(entry, dict)
+                    and not _is_auxiliary_module(module)
+                )
+            }
+        )
+    layers.update(auxiliary_layers)
+    if not layers:
+        return {}
+
+    hf_payload = dict(existing)
+    hf_payload["quantization"] = quant_payload
+    hf_payload["quantization"]["quantized_layers"] = layers
+    (root / "hf_quant_config.json").write_text(
+        json.dumps(hf_payload, indent=2) + "\n", encoding="utf-8"
+    )
+
+    quant_config = dict(config_quant)
+    quant_config["quantized_layers"] = layers
+    config["quantization_config"] = quant_config
+    config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return layers
