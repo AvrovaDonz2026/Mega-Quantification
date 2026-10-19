@@ -11,6 +11,11 @@ decode-beta 在 token 264 分叉。编排器顶层保留该有意消融失败并
 不代表通过的候选作业失败。候选功能矩阵已完成；GPQA 长上下文、视觉/MTP
 quantized-apply 数值 gate 和发布评审仍独立，不能外推为原 GPQA 长循环已解决。
 
+同日的 [MSE native-prefix sensitivity 实验](dgx-spark-gdn-parity-20261019.md)是独立
+negative result：同一份真正 MSE 历史权重 view 使用 original / all-beta 源码，均在固定 41,760-token 前缀后
+精确复现 512-token native 窗口并以 length 结束。它不证明自然生成已修复或更长预算
+最终会停止，也不改变历史 GPQA 记录。
+
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
 完整模型视觉/MTP、精度、性能与 TP2 仍待验证。

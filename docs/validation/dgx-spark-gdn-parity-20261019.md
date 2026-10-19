@@ -93,4 +93,17 @@ SHA 和上传包 SHA 也保留。历史 `max` 权重在候选 metadata 中只是
 候选功能矩阵本身已完成；发布仍需单独评审 GPQA、长上下文停止行为、视觉/MTP 数值
 误差和权重发布范围。当前结果不足以宣称原 GPQA 长循环已解决或普遍质量恢复。
 
+## MSE native-prefix sensitivity（negative result）
+
+独立固定前缀实验在同一份真正的 MSE 历史权重 view 上比较 original 与 all-beta 源码（PTQ revision
+`14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d`，不是候选矩阵使用的 max metadata
+view）。前缀 41,472 tokens，加 288-token prompt，共 41,760 tokens；服务窗口
+65,536，TP1、temperature 0、无 MTP、radix cache disabled、FP8 KV、FP32 SSM。
+两臂各运行两次，512-token 输出窗口均与 native 旧周期后继逐 token exact，prompt
+exact，cold cache 为 0，重复稳定；四次均因 `length` 结束，没有 EOS 或 thinking-end。
+
+这是明确的 negative result：beta 补丁没有打破该固定前缀的 512-token 窗口。它不等同
+自然生成轨迹已修复，也不能判断更长预算是否最终停止。native IDs 和原始响应不发布，
+只保留相邻 JSON 中的摘要与 SHA；四个服务/client cleanup 均已移除且无残留容器。
+
 机器可读脱敏结果：[dgx-spark-gdn-parity-20261019.json](dgx-spark-gdn-parity-20261019.json)。

@@ -169,5 +169,29 @@
     "mean_accept_length": 2.8854166666666665
   },
   "shared_decode_note": "Diagnostic force_shared_decode runs require both ReplaySSM-related flags disabled because its ring buffer is not written; all-beta force=0 does not use this diagnostic switch.",
-  "pending": ["GPQA long-context review", "quantized-apply numerical error review", "release decision"]
+  "pending": ["GPQA long-context review", "quantized-apply numerical error review", "release decision"],
+  "mse_prefix_sensitivity": {
+    "status": "negative_result",
+    "report_sha256": "97c322e4f57feeed6365e72f28373e5acb18f2317cc531f19df6a9e3b70df5fc",
+    "evidence_sha256": "75678d44f3e4b92d87501d6af337b712e820ce67dab7dd1764c84e3b929ff7de",
+    "arms": ["original", "all-beta"],
+    "quantization_view": "MSE historical metadata view",
+    "quantization_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+    "prefix_tokens": 41472,
+    "prompt_tokens": 288,
+    "input_tokens": 41760,
+    "context_length": 65536,
+    "output_window": 512,
+    "protocol": {"tp": 1, "temperature": 0, "mtp": false, "radix_cache": false, "kv_cache_dtype": "fp8_e4m3", "ssm_dtype": "float32"},
+    "repetitions_per_arm": 2,
+    "all_trials": {"native_reference_exact": true, "native_reference_lcp": 512, "native_reference_match_count": 512, "finish": "length", "contains_eos": false, "contains_thinking_end": false, "cached_tokens": 0, "prompt_echo_exact": true, "repeat_stable": true},
+    "original_source_revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
+    "all_beta_source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+    "original_archive_sha256": "9e907775dfe30d6dccbab58438a09948e6b1c07ba124b3d5d7f73e797a43e216",
+    "all_beta_archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+    "runtime_source_sha256": {"original": "79ee33b08692ae9bd05db58e23e0f057e3db3220b369daa2ea4bbac236f6fe62", "all_beta": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498"},
+    "cleanup_removed": true,
+    "remaining_containers": 0,
+    "interpretation": "Beta patch did not break this fixed-prefix 512-token native window; this does not establish natural-generation repair or long-budget stopping behavior."
+  }
 }
