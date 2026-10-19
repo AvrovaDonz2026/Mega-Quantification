@@ -106,4 +106,23 @@ exact，cold cache 为 0，重复稳定；四次均因 `length` 结束，没有 
 自然生成轨迹已修复，也不能判断更长预算是否最终停止。native IDs 和原始响应不发布，
 只保留相邻 JSON 中的摘要与 SHA；四个服务/client cleanup 均已移除且无残留容器。
 
+## MLP-only BF16 recovery pilot（awaiting GPU）
+
+该诊断目前只完成静态导出与 payload gate，尚未完成 GPU serving。MLP 变体从真正的
+MSE 导出恢复 192 个语言 MLP 投影，移除 576 个 scale tensor，输出共 2,180 个
+tensors 和 327 个 NVFP4 量化层；视觉 110 个投影和 MTP 8 个投影保持量化。weights
+与 input activation 都属于 `modelopt_mixed` 恢复范围，不是 weight-only、新 PTQ 或
+W4A8。逐张量 payload gate 通过，input inventory SHA 为
+`f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6`，output
+inventory SHA 为 `74591b904b9724b25556af2925bd3c28b8efa9cd0c6270e2824a5513c73420d1`。
+
+自然起点 pilot controller 已准备 4,096-token 预算、两臂各两次、65,536 context、
+all-beta、temperature 0、无 MTP、radix disabled、FP8 KV、FP32 SSM；脚本位于
+[`mlp-pilot`](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/)。AITOP 的
+r1 因 GPU idle gate 被拦截且没有启动实验容器；r2 当前 `waiting_for_gpu`，证据显示
+有 1 个活动 GPU 进程，最长等待 2 小时。Robo 与 AITOP 均有其他 GLM GPU 作业。
+
+因此本节不宣称 MLP 修复、自然输出改善或视觉/MTP 功能通过；待 GPU 空闲后才可运行
+pilot。详细脱敏 gate、工具 SHA、量化计数和队列证据见相邻 JSON。
+
 机器可读脱敏结果：[dgx-spark-gdn-parity-20261019.json](dgx-spark-gdn-parity-20261019.json)。

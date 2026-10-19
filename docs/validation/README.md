@@ -16,6 +16,10 @@ negative result：同一份真正 MSE 历史权重 view 使用 original / all-be
 精确复现 512-token native 窗口并以 length 结束。它不证明自然生成已修复或更长预算
 最终会停止，也不改变历史 GPQA 记录。
 
+MLP-only BF16 recovery pilot 目前处于 `awaiting_gpu`：静态 payload gate 已通过，AITOP
+因活动 GPU 作业排队，尚无 serving 结果。该准备工作不代表 MLP 修复、视觉/MTP 功能
+或新的 PTQ/W4A8 结果。
+
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
 完整模型视觉/MTP、精度、性能与 TP2 仍待验证。
