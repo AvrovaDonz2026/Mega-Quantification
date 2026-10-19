@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-10-19",
+  "status": "pending",
+  "evidence_sha256": "2b1723334eb1444caf52898cd884d1137798cd112861f4de182860acf5db15d2",
+  "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
+  "hardware": {"device": "NVIDIA GB10", "compute_capability": [12, 1]},
+  "software": {"torch": "2.13.0+cu130", "triton": "3.7.1", "fla_use_fast_ops": "0"},
+  "fixture_sha256": "31fbf33194ea1f7429472bf02a9951bb08c9ba37edceb628e8a15f01b63ae3e0",
+  "local_beta": [
+    {"variant": "original", "revision": "4a667614d810f7b5570be23eb75956c603a85c3a", "report_sha256": "a86f9a7d5d3af51429f6e9d36e81e56541076527c5c4b8253a743014d11186b0", "status": "passed", "decode": "mismatch", "prefill": "mismatch", "random_decode": "mismatch", "guards": true},
+    {"variant": "decode-beta", "revision": "a3b5d8376f4205fb1f4eb0c0108e4f4b1cdc4a77ed1638b69ed6de04151b6eb0a", "status": "passed", "decode": "match", "prefill": "mismatch", "random_decode": "match", "guards": true},
+    {"variant": "all-beta", "revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499", "report_sha256": "b7c9bd09c235e848f7edcff84624b115303366a684d7e48506322a7142754361", "status": "passed", "decode": "match", "prefill": "match", "random": "match", "guards": true},
+    {"variant": "shared-decode", "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116", "report_sha256": "75535f376c2a03c9154641b1fc80e68002c8e14c53eeaa97d89e8f3f8507d49d", "status": "passed", "decode": "match", "prefill": "match", "random": "match", "guards": true, "note": "archive includes all-beta changes"}
+  ],
+  "full_model_r2": [
+    {"job_id": "parity-w4a4-python-code-decode-beta-force0", "revision": "a3b5d8376f4206ce78d11d31f4a7f4a8d1ffb568", "report_sha256": "541f0345e75c6daf7941e903f4a2bf6d9f5cc561c0bc3466554ab03b671a3d61", "status": "parity_failed", "model_scheme": "w4a4", "max_new_tokens": 768, "baseline_len": 271, "mtp_len": 272, "first_divergence": 264, "baseline_stop": "stop", "mtp_stop": "stop", "equal_outputs": false, "ast_gate": true},
+    {"job_id": "parity-w4a4-python-code-all-beta-force0", "revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499", "report_sha256": "64aa1a3e9be450506b8e60be6e55e8af66f0bd085a89de90492cfd246fcf5440", "status": "passed", "model_scheme": "w4a4", "max_new_tokens": 768, "baseline_len": 277, "mtp_len": 277, "first_divergence": null, "baseline_stop": "stop", "mtp_stop": "stop", "equal_outputs": true, "ast_gate": true},
+    {"job_id": "parity-w4a4-python-code-shared-decode-force0", "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116", "report_sha256": "f518f81e0e486c48b9c0694afed006b75ddd2079c2cf6fc99fe014859bb140e8", "status": "passed", "model_scheme": "w4a4", "max_new_tokens": 768, "baseline_len": 277, "mtp_len": 277, "first_divergence": null, "baseline_stop": "stop", "mtp_stop": "stop", "equal_outputs": true, "ast_gate": true},
+    {"job_id": "parity-w4a4-python-code-shared-decode-force1", "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116", "report_sha256": "9886f8a9724476255f204b09a0f3752517620324e2da9b3447dd1224f7de3bc3", "status": "passed", "model_scheme": "w4a4", "max_new_tokens": 768, "baseline_len": 277, "mtp_len": 277, "first_divergence": null, "baseline_stop": "stop", "mtp_stop": "stop", "equal_outputs": true, "ast_gate": true, "force_shared_decode": "1"}
+  ],
+  "shape_probe": {"report_sha256": "5144b1d6f054df5274b3770ff1346a8613be3a24cfdb8f1984a7e204c100d9ff", "status": "ok", "backend": "cutlass", "dispatch": "flashinfer.mm_fp4", "custom_runtime_gate": false, "shape_count": 3, "m_values": [1, 2, 3, 4, 8], "output_comparisons": 15, "all_first_rows_exact": true, "all_outputs_finite": true, "synthetic": true},
+  "orchestration_note": "Top-level parity_failed is intentional because the decode-beta ablation is retained as a failing control; all-beta and both shared-decode jobs passed.",
+  "pending": ["W4A8 full-model parity", "W4A4/W4A8 visual/OCR/MTP candidate matrix", "release decision"]
+}

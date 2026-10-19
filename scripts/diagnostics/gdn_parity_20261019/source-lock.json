@@ -1,0 +1,23 @@
+{
+  "schema": "gdn-parity-source-lock-v1",
+  "summary": "source-package/summary.json",
+  "repository": "/Users/zxy/sglang",
+  "variants": {
+    "original": {
+      "commit": "4a667614d810f7b5570be23eb75956c603a85c3a",
+      "archive_sha256": "9e907775dfe30d6dccbab58438a09948e6b1c07ba124b3d5d7f73e797a43e216"
+    },
+    "decode-beta": {
+      "commit": "a3b5d8376f4206ce78d11d31f4a7f4a8d1ffb568",
+      "archive_sha256": "bf36cf2d0aaf76dc1f27d46a0bbfb959dc2dd9930043ce7bfa82036f25c4c02b"
+    },
+    "all-beta": {
+      "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+      "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033"
+    },
+    "shared-decode": {
+      "commit": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
+      "archive_sha256": "d83d2987c03bb8e11f366a321d69d57f970ff6df40d5d3c2894997bd75436e18"
+    }
+  }
+}
