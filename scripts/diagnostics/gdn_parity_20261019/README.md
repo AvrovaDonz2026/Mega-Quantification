@@ -3,9 +3,9 @@
 This directory is a small, reproducible copy of the diagnostic runners used
 for the 2026-10-19 AITOP validation. It targets NVIDIA GB10 / SM121 and keeps
 the source identity separate from the large source archives and model files.
-The five subdirectories contain the parity-v7 runner, beta regression,
-experiment driver, same-prefix prefill logits probe, and the synthetic NVFP4
-shape probe. The runners retain the completed experiments' protocol and add
+The subdirectories contain the parity-v7 runner, beta regression,
+experiment driver, candidate text/vision/MTP matrix, same-prefix prefill logits
+probe, and the synthetic NVFP4 shape probe. The runners retain the completed experiments' protocol and add
 an enforced source lock so future runs reject unlisted commits or archives.
 
 Run commands from this bundle directory. The paths beginning with
