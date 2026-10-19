@@ -3,9 +3,10 @@
 This is an in-progress follow-up to
 [`sglang-upstream-patches-20261013.md`](sglang-upstream-patches-20261013.md).
 It records the exact newer source heads and the checks attempted after moving
-to a second DGX Spark. The current v4 run passed the public GPU regression and
-W4A4 baseline fixtures, but failed W4A4 MTP output parity. Full validation is
-incomplete; no new GPQA result is established here.
+to a second DGX Spark. The latest v6 matrix used the beta-only GDN precision
+patch with the retained v4 image and completed all four serving modes and all
+four independent execution probes. The fixed-fixture MTP code parity gate still
+fails; no new GPQA result is established here.
 
 | Gate | Latest established result |
 |---|---|
@@ -14,9 +15,11 @@ incomplete; no new GPQA result is established here.
 | Changed-line coverage threshold | Passed: logprob 100% (2/2 executable changed lines), vision/MTP 87% (71/81); minimum 60% |
 | Historical model identities | Both isolated metadata views passed |
 | Public SM121 GPU regression | v4 passed: exactly 1 test, no skips, container exit 0 |
-| W4A4 full-model baseline | Five fixed text/vision fixtures passed |
-| W4A4 full-model MTP | Functional checks passed; `python_code` baseline parity failed in 7/7 trials |
-| W4A8 baseline/MTP and auxiliary apply probe | Not run: v4 continuation stopped at W4A4 MTP parity failure |
+| v6 W4A4/W4A8 baseline | Both passed: 5 fixtures, each with 2 warmup + 5 measured trials |
+| v6 W4A4/W4A8 MTP | Functional, stop, AST and vision checks passed; code baseline parity failed 7/7 trials per mode |
+| v6 auxiliary apply probes | All four passed; 110 visual runtime layers per mode and 5 MTP runtime layers per MTP mode |
+| v6 cleanup | All 8 serving/probe cleanup gates passed (`removed=true`, return code 0) |
+| New GPQA / release gate | Not established: this is a 32K fixed-fixture experiment, and source identity is not a verifiable commit |
 
 ## Pinned inputs
 
@@ -229,3 +232,110 @@ the four-mode auxiliary apply probe were not started. The next gate is to
 isolate the reproducible W4A4 MTP parity difference while retaining these failed
 reports, then rerun the required serving modes and execution probe. There is
 no new GPQA score or release validation result.
+
+## Latest v6 beta-only matrix — 2026-10-14
+
+The detached v6 job ran from `2026-10-14T13:24:39Z` through
+`2026-10-14T14:01:42Z`:
+
+| Matrix identity | Value |
+|---|---|
+| Job | `5074b1bec1db47bbbc5ad891a8f338ca` |
+| Source input | `4a667614d810f7b5570be23eb75956c603a85c3a` plus `beta-only.patch` |
+| Source archive SHA256 | `cf1a72861bcd59735a38f2050b6876ef2a009bd4f989e0d998c845e66c853b2e` |
+| Source manifest SHA256 | `d1d747980444f814cd4aaf4773394e4bdbdc8baa2b58f82fc6c7b0d1cf247ff4` |
+| Serving image | Retained v4 image `sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf` |
+| Deployment detail | Read-only source bind mount replaced the image source; no beta derivative image was built |
+| Model generation | Historical 2026-10-01 W4A4 and W4A8 exports |
+| Protocol | TP1, 32,768 context, temperature 0, thinking disabled |
+
+The ordinary matrix completed all four modes. Each mode ran five fixtures with
+two warmups and five measured trials, so each mode had **35 total requests and
+25 measured requests**. Both baseline modes passed all functional checks,
+including output/logprob alignment, successful stop, AST structure, and the
+red/blue image counterfactual. Both MTP modes passed functional, stop, AST, and
+vision checks. Arithmetic and all three vision fixtures had exact baseline/MTP
+token parity.
+
+The code fixture did not meet the MTP baseline parity gate in either scheme:
+
+| Scheme | Baseline code tokens | MTP code tokens | Exact parity |
+|---|---:|---:|---|
+| W4A4 | 271 | 272 | Failed in 7/7 trials |
+| W4A8 | 271 | 277 | Failed in 7/7 trials |
+
+The code outputs still stopped normally and passed the AST checks. Failed code
+parity trials are excluded from valid timing summaries, so the MTP reports are
+not passing validation reports. MTP draft metrics are reported for observation,
+including trials that fail parity: W4A4 accepted `960/980` drafts (97.959%)
+over `490` verify calls; W4A8 accepted `965/1010` (95.545%) over `505` verify
+calls. These acceptance figures do not establish output correctness.
+
+All four independent metadata-only execution probes passed. Each scheme
+reported 110 visual quantized runtime layers. The packed MTP path reported 5
+runtime layers (this is not the same count as the 8 MTP checkpoint entries).
+W4A4 used `ModelOptFp4LinearMethod` for all 5 MTP runtime layers; W4A8 used
+3 FP4 and 2 FP8 MTP runtime layers. All eight serving/probe cleanup gates
+reported `removed=true` with return code 0.
+
+The baseline code fixture's client timing was:
+
+| Scheme | Median end-to-end throughput | Median wall time | Output tokens |
+|---|---:|---:|---:|
+| W4A4 | 14.06686 tokens/s | 19.26513 s | 271 |
+| W4A8 | 12.22726 tokens/s | 22.1636 s | 271 |
+
+These are single-request timings for the fixed fixture, including request
+preprocessing, prefill, decode, and transport. They are not a representative
+throughput benchmark; the 256K GPQA evaluation uses a separate protocol.
+
+### v6 evidence hashes
+
+The detached evidence was downloaded into the private audit bundle and checked
+against its manifest. The matrix status and four ordinary mode reports have
+these SHA-256 digests:
+
+| Evidence | SHA256 |
+|---|---|
+| Matrix status | `630be91a29679abceae22332bca688aae8ce8c1277591f68cfe1a421cd7ab30d` |
+| W4A4 baseline report | `32201d14fb7a45751800f450407450e17e58fdaca6d83e8a1a65e6536c7a61e8` |
+| W4A4 MTP report | `b74c24c5f87fd0de3c09d603bfb58e8b85ae1489495a6f2df322e4596736cd60` |
+| W4A8 baseline report | `f0e02eb4c316cc2ee7b36613b378c0dcf7dbda1546213d674895eddfb5b29299` |
+| W4A8 MTP report | `c787b233ff7bc8733cd844d81252144bd17b54b1ef0a051ffa33d998abd4d4e2` |
+
+### Beta-only GDN ablation
+
+The isolated packed-GDN ablation supports the suspected precision mechanism. With
+`FLA_USE_FAST_OPS=0`, FP32 strided state, BF16 `a/b`, and 32 steps, the
+unpatched variant produced the expected mismatch for both GQA fixtures:
+`(4,8)` had output/state difference counts `8630/540565`, and `(16,48)` had
+`50676/3206618`; both first diverged at step 0. The beta-only FP32 sigmoid
+variant produced zero output and state differences on those fixtures. A random
+Q/K check also produced zero differences, but is observational evidence only.
+
+The fixture file hashes differ between the unpatched and patched runs
+(`b144de711b7261f32a5d1ad236fe38ac16aee190de974fd32469039a42b5658b` versus
+`acc1aa2a94a7a8162d19ef7672cf7674d15be60bc471fd1072b5533fb848d8e9`), due to an
+additional cache guard. They are therefore not a single identical-fixture
+paired gate. The unpatched report hash is
+`91ae00c58e2645f02edd7cd9003ee58942379f01b902425ff2966387e6050887`; the
+beta-only report hash is
+`6cb9fcdfd3fa7bd4180be46f61496b1860d307fdbdc9b2cc5f64d67244a6601a`.
+The ablation is local kernel evidence and does not by itself prove that the
+full-model parity issue is fixed. The full-model v6 matrix above used this
+beta-only source patch through a read-only source mount.
+
+### Reproducibility boundary
+
+The matrix records `sglang_revision=73d91d5216455ede7eb33633cb2ccfe5ddf35076`,
+but this value is a file blob object ID rather than a verifiable Git commit.
+The source archive, manifest, patch, image ID, and result hashes pin the
+experiment's contents, and all eight runtime source-hash gates observed the
+patched kernel SHA256
+`4664a9202cbd528a2647804bc96d0ab92eacbe06c1c97a742c139591e93d4470`.
+However, the revision field does not identify a patched commit that can be
+checked out. This is experimental evidence, not validation of a release pinned
+to a real patched Git commit. A formal rerun should commit the beta patch,
+regenerate the source manifest with that commit ID, and rerun the required
+gates with the exact image and source deployment recorded. The original v4
+reports and JSON evidence remain unchanged.
