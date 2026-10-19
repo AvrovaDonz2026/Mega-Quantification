@@ -20,6 +20,10 @@ _SPEC.loader.exec_module(ablation)
 ATTN = "model.language_model.layers.0.self_attn.q_proj"
 LINEAR = "model.language_model.layers.1.linear_attn.in_proj_qkv"
 MLP = "model.language_model.layers.0.mlp.gate_proj"
+MLP_PROJECTIONS = tuple(
+    f"model.language_model.layers.0.mlp.{projection}"
+    for projection in ("gate_proj", "up_proj", "down_proj")
+)
 VISION = "model.visual.blocks.0.attn.qkv"
 MTP = "mtp.layers.0.self_attn.q_proj"
 
@@ -54,9 +58,14 @@ def checkpoints(tmp_path):
     export.mkdir()
     source.mkdir()
     edited = {**_packed("lm_head"), **_packed(ATTN), **_packed(LINEAR),
+              **{name + suffix: value for name in MLP_PROJECTIONS
+                 for suffix, value in ((".weight", ("U8", [2, 8])),
+                                       (".weight_scale", ("F8_E4M3", [2, 1])),
+                                       (".weight_scale_2", ("F32", [])),
+                                       (".input_scale", ("F32", [])))},
               "model.language_model.norm.weight": ("BF16", [2]),
               "model.language_model.layers.1.linear_attn.in_proj_a.weight": ("BF16", [2, 16])}
-    preserved = {**_packed(MLP), **_packed(VISION), **_packed(MTP)}
+    preserved = {**_packed(VISION), **_packed(MTP)}
     _shard(export, "edited.safetensors", edited)
     _shard(export, "preserved.safetensors", preserved)
     _json(export / ablation.INDEX_NAME, {"weight_map": {
@@ -67,6 +76,7 @@ def checkpoints(tmp_path):
         "model.language_model.lm_head.weight": ("BF16", [2, 16]),
         ATTN + ".weight": ("BF16", [2, 16]),
         LINEAR + ".weight": ("BF16", [2, 16]),
+        **{name + ".weight": ("BF16", [2, 16]) for name in MLP_PROJECTIONS},
     }
     _shard(source, "model.safetensors", bf16)
     # Existing bogus aliases must not label BF16 weights or survive restoration.
@@ -93,6 +103,7 @@ def _payloads(root):
 @pytest.mark.parametrize("variant,restored", [
     ("control", set()), ("lm-head", {"lm_head"}),
     ("attention", {ATTN, LINEAR}), ("both", {"lm_head", ATTN, LINEAR}),
+    ("mlp", set(MLP_PROJECTIONS)),
 ])
 def test_variants_preserve_all_unselected_payloads_and_branches(checkpoints, tmp_path,
                                                                variant, restored):
@@ -137,6 +148,34 @@ def test_selected_never_matches_vision_mtp_or_small_bf16_gates():
     assert not ablation.selected("mtp.lm_head", "lm-head")
     assert not ablation.selected("model.mtp.layers.0.self_attn.q_proj", "attention")
     assert not ablation.selected(VISION, "attention")
+    for module in MLP_PROJECTIONS:
+        assert ablation.selected(module, "mlp")
+        assert not ablation.selected(module, "attention")
+    assert not ablation.selected("model.language_model.layers.0.mlp.other_proj", "mlp")
+    assert not ablation.selected("model.visual.layers.0.mlp.gate_proj", "mlp")
+    assert not ablation.selected("mtp.layers.0.mlp.gate_proj", "mlp")
+
+
+def test_mlp_export_restores_only_language_mlp_and_updates_metadata(checkpoints, tmp_path):
+    export, source = checkpoints
+    output = tmp_path / "mlp"
+    summary = ablation.write_ablation(export, source, output, "mlp")
+    tensors, _ = ablation.read_checkpoint(output)
+    for module in MLP_PROJECTIONS:
+        weight = tensors[module + ".weight"]
+        assert weight.dtype == "BF16"
+        assert weight.shape == (2, 16)
+        assert module + ".weight_scale" not in tensors
+        assert module + ".input_scale" not in tensors
+    assert MLP_PROJECTIONS[0] + ".weight" in tensors
+    assert VISION + ".weight" in tensors and tensors[VISION + ".weight"].dtype == "U8"
+    assert MTP + ".weight" in tensors and tensors[MTP + ".weight"].dtype == "U8"
+    config = json.loads((output / "config.json").read_text())
+    quant = config["quantization_config"]
+    assert quant["quant_algo"] == "MIXED_PRECISION"
+    assert all(module not in quant["quantized_layers"] for module in MLP_PROJECTIONS)
+    assert VISION in quant["quantized_layers"] and MTP in quant["quantized_layers"]
+    assert summary["restored_modules"] == 3
 
 
 def test_dry_run_reads_headers_without_creating_output(checkpoints, tmp_path, capsys):

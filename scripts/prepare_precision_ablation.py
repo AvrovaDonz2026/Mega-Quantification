@@ -174,6 +174,10 @@ def selected(module: str, variant: str) -> bool:
     ) or (
         variant in {"attention", "both"}
         and re.fullmatch(r"layers\.\d+\.(?:self_attn|linear_attn)\.[^.]+", name) is not None
+    ) or (
+        variant == "mlp"
+        and re.fullmatch(r"layers\.\d+\.mlp\.(?:gate_proj|up_proj|down_proj)", name)
+        is not None
     )
 
 
@@ -447,7 +451,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Existing scored ModelOpt export")
     parser.add_argument("--bf16", type=Path, required=True,
                         help="Original local BF16 HF checkpoint")
-    parser.add_argument("--variant", choices=("control", "lm-head", "attention", "both"),
+    parser.add_argument("--variant", choices=("control", "lm-head", "attention", "mlp", "both"),
                         required=True)
     parser.add_argument("--output", type=Path, help="New independent checkpoint directory")
     parser.add_argument("--write", action="store_true", help="Create and verify the derived export")
