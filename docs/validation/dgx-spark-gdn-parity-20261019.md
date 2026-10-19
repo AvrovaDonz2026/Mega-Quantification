@@ -1,6 +1,6 @@
 # DGX Spark GDN parity 验证：2026-10-19
 
-**状态：W4A4 `python_code` 矩阵完成，候选修复仍在验证。** 本记录绑定 Aitop 的 GB10 / SM121
+**状态：W4A4/W4A8 候选功能矩阵完成，GPQA 和发布质量结论仍独立。** 本记录绑定 Aitop 的 GB10 / SM121
 实验，不是新的 GPQA 分数，也不构成 release 结论。原始响应、token 序列和中间
 张量未写入仓库；机器可读记录只保留脱敏后的长度、状态、哈希和标量摘要。
 
@@ -12,11 +12,11 @@ NVIDIA GB10 / SM121、Torch `2.13.0+cu130`、Triton `3.7.1`、
 `FLA_USE_FAST_OPS=0`。局部回归使用固定 fixture（SHA-256
 `31fbf33194ea1f7429472bf02a9951bb08c9ba37edceb628e8a15f01b63ae3e0`），覆盖
 isolated 和 random 两类输入、GQA `(4,8)` 与 `(16,48)`、32 steps、有限性和
-guard 检查。整模型 parity 使用 W4A4、TP1、temperature 0、thinking disabled、
+guard 检查。候选矩阵使用 W4A4/W4A8、TP1、32k 上下文、temperature 0、thinking disabled、
 FP8 KV、FP32 SSM、关闭 CUDA graphs；baseline 和 MTP 各重复两次。`python_code`
 fixture 的预算是 768 tokens，四次响应必须自然 `stop`，并通过完整 AST gate。all-beta
 MTP 实际完成 96 次 verify，提出 192 个 draft token，其中 181 个被接受（94.27%），
-平均接受长度为 2.885。
+平均接受长度为 2.885。两种方案共 5 个 case、baseline/MTP 双重复，共 40 次请求。
 
 ## 局部 beta 回归
 
@@ -52,6 +52,27 @@ ReplaySSM flags 的设置下执行。实际 all-beta 候选使用 force=0，不�
 首轮 r1 使用 192-token 上限并以 `length` 结束，只能证明截断前缀相同，已标记为
 无效的完整回答证据；本报告不把它计入 r2 结论。
 
+## 候选 W4A4/W4A8 矩阵
+
+两种方案均完成 arithmetic、python_code、red_square、blue_square、ocr_3729 五个
+固定 case。每个 case 的 baseline/MTP 输出 exact match、两次重复 stable、两侧自然
+`stop`，prompt/fixture/image identity 和 expected-answer/AST gate 全部通过。
+
+| 方案 | arithmetic | python_code | red_square | blue_square | ocr_3729 | 总体 |
+|---|---|---|---|---|---|---|
+| W4A4 | 4/4 stop, exact, stable | 277/277 stop, exact, stable | 2/2 stop, exact, stable | 2/2 stop, exact, stable | 5/5 stop, exact, stable | passed |
+| W4A8 | 4/4 stop, exact, stable | 276/276 stop, exact, stable | 2/2 stop, exact, stable | 2/2 stop, exact, stable | 5/5 stop, exact, stable | passed |
+
+MTP execution is independently checked. W4A4 `python_code` recorded 96 verify steps,
+181/192 accepted draft tokens (94.27%), mean acceptance length 2.885. W4A8 recorded
+96 verify steps, 180/192 accepted (93.75%), mean acceptance length 2.875. The shorter
+cases also have finite positive verify counts. Baseline verify counts are zero or absent;
+MTP verify counts are finite and positive.
+
+This is a 32k, TP1, `thinking=false`, CUDA graphs off functional matrix. It is not a
+256k GPQA result, does not infer anything about the historical GPQA long-loop behavior,
+and does not provide an independent numerical quantized-apply error gate for vision/MTP.
+
 ## FP4 shape probe
 
 SM121 的 Qwen3.x custom NVFP4 runtime gate 为 false（该 gate 只接受 SM120，
@@ -64,12 +85,12 @@ capability `(12,0)`）。因此本探针实际走 FlashInfer `mm_fp4`，测试
 ## 身份、范围与发布门槛
 
 四个 source commit、归档 SHA、模型 metadata、镜像、fixture 和运行时 import hash
-均保存在相邻 JSON 的脱敏字段中；报告 SHA 也保留。完整 W4A8、视觉/OCR、MTP
-候选矩阵仍待运行。语言 `python_code` parity 不代表视觉质量、256k MTP 质量、TP2
-或吞吐改善。
+均保存在相邻 JSON 的脱敏字段中；候选报告 SHA、四份 checkpoint SHA、四份 cleanup
+SHA 和上传包 SHA 也保留。历史 `max` 权重在候选 metadata 中只是历史 metadata view，
+不是 MSE 权重，也不转移 GPQA 结论。候选矩阵的视觉/OCR/MTP 功能 gate 已通过，但
+不代表视觉/MTP quantized-apply 的独立数值误差验证、256k MTP 质量、TP2 或吞吐改善。
 
-在发布前，仍需要 W4A8 与 W4A4 的完整视觉/MTP 矩阵、
-自然停止和重复稳定性证据，以及更新后的 README/运行记录。当前结果不足以发布新的
-量化权重或宣称普遍质量恢复。
+候选功能矩阵本身已完成；发布仍需单独评审 GPQA、长上下文停止行为、视觉/MTP 数值
+误差和权重发布范围。当前结果不足以宣称原 GPQA 长循环已解决或普遍质量恢复。
 
 机器可读脱敏结果：[dgx-spark-gdn-parity-20261019.json](dgx-spark-gdn-parity-20261019.json)。

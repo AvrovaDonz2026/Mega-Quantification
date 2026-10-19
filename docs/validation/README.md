@@ -5,11 +5,11 @@
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
 2026-10-19 的 [GDN parity 验证](dgx-spark-gdn-parity-20261019.md)记录了 GB10/SM121
-上的局部 beta 回归、W4A4 `python_code` baseline/MTP 对照和 synthetic FP4 shape probe。
+上的局部 beta 回归、W4A4/W4A8 五 case baseline/MTP 候选矩阵和 synthetic FP4 shape probe。
 all-beta 与 shared-decode force=0/1 在当前 768-token fixture 上通过完整 parity gate；
 decode-beta 在 token 264 分叉。编排器顶层保留该有意消融失败并显示 `parity_failed`，
-不代表通过的候选作业失败。该记录仍为 pending：
-W4A8、视觉/OCR、候选 MTP 全矩阵及发布门槛尚未完成，不能外推为完整质量恢复。
+不代表通过的候选作业失败。候选功能矩阵已完成；GPQA 长上下文、视觉/MTP
+quantized-apply 数值 gate 和发布评审仍独立，不能外推为原 GPQA 长循环已解决。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

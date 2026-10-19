@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
   "created_at_utc": "2026-10-19",
-  "status": "pending",
-  "evidence_sha256": "2b1723334eb1444caf52898cd884d1137798cd112861f4de182860acf5db15d2",
+  "status": "passed",
+  "evidence_sha256": "8d39c7fcdf322a5e986bb4753618e4c432369b55d781329ed9c7d9009d1bdfc2",
+  "candidate_upload_sha256": "4932d9dfa07030f41adc0689ff33d63b5ec677a07954f7d158bbe9eb1c7ab96b",
   "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
   "hardware": {
     "device": "NVIDIA GB10",
@@ -142,6 +143,22 @@
     "all_outputs_finite": true,
     "synthetic": true
   },
+  "candidate_matrix": {
+    "status": "passed",
+    "schemes": {
+      "w4a4": {"report_sha256": "3f19021fb2ea036f1521b5ffa59f9b94a001ca438d87c0356ce2602975fab819", "python_code": {"baseline_len": 277, "mtp_len": 277, "stop": true, "exact": true, "stable": true, "mtp_verify_ct": 96, "mtp_correct": 181, "mtp_proposed": 192, "mtp_accept_rate": 0.9427083333333334, "mtp_accept_length": 2.8854166666666665}},
+      "w4a8": {"report_sha256": "b7da01bb9ecb13922d88c2fa166e15777f5434c0dea6a749555df605ea24b10c", "python_code": {"baseline_len": 276, "mtp_len": 276, "stop": true, "exact": true, "stable": true, "mtp_verify_ct": 96, "mtp_correct": 180, "mtp_proposed": 192, "mtp_accept_rate": 0.9375, "mtp_accept_length": 2.875}}
+    },
+    "cases": ["arithmetic", "python_code", "red_square", "blue_square", "ocr_3729"],
+    "requests": 40,
+    "all_cases_stop_exact_stable": true,
+    "checkpoint_sha256": ["16b760742a4d9aec1a9c54d8ad873d532b3c9ae7cd3cbe160fadcfdd7551e697", "c3e05c86ce3c739d66e653a49079b16f87c5a5438534270c588053b71af18892", "ddafb953f50f048df45427aaf150d380f5880854a2e07074564954c5639de951", "48b0e220046132fe21b252f76698f69d9e36ea864121d36376401839c8f0e4ba"],
+    "cleanup_sha256": ["78021b1baf95b724982fbdb44b7ffbd09d933aa1a2e95bd361d95440c663a617", "dcfb67a78fad1870030a76a85bde6f051f2fa0d316523118a1c1e0bb3918549d", "8b77e38bbec4171dc72ac74ca9c003a92b1b343a612a23f02755ae0e6305ca54", "5907e47afe4e99705bd09f2929b9fe85f930eb481f349032cbfc75afff30cef6"],
+    "containers_remaining": 0,
+    "source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+    "source_archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+    "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498"
+  },
   "orchestration_note": "Top-level parity_failed is intentional because the decode-beta ablation is retained as a failing control; all-beta and both shared-decode jobs passed.",
   "all_beta_mtp": {
     "verify_count": 96,
@@ -152,9 +169,5 @@
     "mean_accept_length": 2.8854166666666665
   },
   "shared_decode_note": "Diagnostic force_shared_decode runs require both ReplaySSM-related flags disabled because its ring buffer is not written; all-beta force=0 does not use this diagnostic switch.",
-  "pending": [
-    "W4A8 full-model parity",
-    "W4A4/W4A8 visual/OCR/MTP candidate matrix",
-    "release decision"
-  ]
+  "pending": ["GPQA long-context review", "quantized-apply numerical error review", "release decision"]
 }

@@ -62,11 +62,11 @@ matching manifest for every parity job.
 
 ## Scope and limits
 
-This round completed the W4A4 `python_code` whole-model parity for the
-all-beta source: baseline and MTP both produced 277 tokens and passed the
-strict parity gates. The full W4A8 visual/OCR/MTP matrix is still pending; see
-the [validation record](../../../docs/validation/dgx-spark-gdn-parity-20261019.md)
-for the exact scope and evidence. Synthetic NVFP4 shape results are diagnostic
-signals and do not replace GPQA or a full-model visual evaluation. Reports
-should retain only the sanitized scalar outputs produced by the runners; do
-not add raw prompts, token data, tensors, or model files to this bundle.
+This round completed the W4A4 and W4A8 candidate matrix with five fixed
+text/image/OCR cases, baseline/MTP exact parity, natural stops, stable repeats
+and MTP execution checks. See the [validation record](../../../docs/validation/dgx-spark-gdn-parity-20261019.md)
+for the final sanitized evidence and SHA values. This 32k TP1,
+`thinking=false`, CUDA-graphs-off matrix does not replace GPQA or establish
+long-context stopping behavior, quantized-apply numerical error, TP2, or
+throughput. Reports should retain only sanitized scalar outputs; do not add
+raw prompts, token data, tensors, or model files to this bundle.
