@@ -223,5 +223,51 @@
     "direct_zero_counter_retained": false,
     "new_run_policy": "Require canonical exact integer zero and persist the scalar; missing speculation count is unobserved.",
     "limit": "Completed trial rows remain frozen; do not relabel them as direct zero-retraction observations."
+  },
+  "historical_replay_live_observation": {
+    "experiment": "historical-replay-r1",
+    "state": "request_streaming",
+    "experiment_started_at_utc": "2026-10-20T15:57:27+00:00",
+    "progress_observed_at_utc": "2026-10-20T16:32:18.306709+00:00",
+    "progress": {
+      "elapsed_seconds": 2076.454,
+      "stream_lines": 800,
+      "output_tokens_observed": null,
+      "stream_line_count_is_not_token_count": true
+    },
+    "throughput_observed_at_utc": "2026-10-20T16:34:14.356570+00:00",
+    "last_gen_throughput_tokens_per_second": 12.9640206986353,
+    "experiment_container_running": true,
+    "experiment_container_oom_killed": false,
+    "paired_maintenance_heartbeats_observed_at_utc": "2026-10-20T16:37:56.781043+00:00",
+    "paired_maintenance_heartbeats_alive": true,
+    "historical_protocol": {
+      "context_length": 262144,
+      "disable_radix_cache": false,
+      "max_running_requests": 16,
+      "max_mamba_cache_size": 64,
+      "mamba_ssm_dtype": "float32",
+      "random_seed": 213087260,
+      "quantization": "modelopt",
+      "mtp_enabled": false,
+      "submitted_requests": 1,
+      "max_new_tokens": 49152
+    },
+    "terminal_outcome_observed": false,
+    "historical_cycle_reproduced": null,
+    "original_pair_restoration": "pending_experiment_completion",
+    "application_readiness_established": false,
+    "source_hashes": {
+      "maintenance.py": "98e5d7e952932af965d778f15bdf137adfdcbe83623621c16bb7232cac31aaeb",
+      "controller.py": "3578178c5d608976ededb45107780d5250a414ae2badef7f363ce3c486d6b566",
+      "runtime_client.py": "a3650b607425f7beddfec65e2d1121a100714766aa451a47809da89da4fbe3a9"
+    },
+    "systemd_dummy_recovery_probe": {
+      "cases_passed": 5,
+      "continuous_stability_seconds_each": 120,
+      "docker_gpu_or_glm_actions": false,
+      "probe_sha256": "b5df0d0b18a4001e883b48b1ec8765da1f5435590721e2b57ef4ff124c99628d"
+    },
+    "causal_limit": "Running diagnostic only. No terminal result, historical-cycle reproduction, MSE repair or actual GLM restoration is established."
   }
 }
