@@ -120,14 +120,28 @@ r1 被 GPU idle gate 拦截；r2 于 2026-10-19 11:40 UTC 等满两小时后以
 GLM 服务并在实验后恢复的授权后，r3 已实际启动。
 
 2026-10-20 04:16 UTC 的观察：短阶段两臂各完成两次 4,096-token 请求，臂内均逐
-token 一致，冷缓存为 0、logprob 有限，全部因达到预算结束，没有 EOS 或 thinking-end。
+token 一致，冷缓存为 0、logprob 有限，全部因达到预算结束，没有 thinking-end。
 control 耗时 289.24 / 288.87 秒，MLP 耗时 699.05 / 696.29 秒；MLP 本次短请求平均
 耗时约为 control 的 2.41 倍。两臂输出在前 7 个 token 后分叉，各自与历史自然输出的
 LCP 为 7 / 12。两臂都未检出确认的 2,032-token 周期，但该短预算无法覆盖历史循环
 起点，因此不构成停止恢复或循环修复。短阶段两个容器均已清理。
 
-监督进程于 04:05:30 UTC 接上 long 阶段；control trial 1 于 04:09:51 UTC 开始
-最多 49,152-token 的请求。当前尚无 long 完成结果，MLP long 尚未开始。
+监督进程于 04:05:30 UTC 接上 long 阶段。最新 progress-10（05:41:55 UTC）显示
+control 两次均在 34,189 tokens 后返回 `stop`，耗时 2,503.58 / 2,505.88 秒，
+各出现一次 thinking-end（index 33,901），两次输出 SHA 一致、repeat stable=true，
+未检出确认的 2,032-token 周期。MLP long trial 1 于 05:40:43 UTC 开始，尚无完成
+结果。control 的历史循环尚未复现，不能预设这次对照会循环。
+
+两条 control 记录的 `contains_eos=false`、`terminal_eos=false`、`natural_termination=false`
+仅使用了运行中诊断器从 config 读取的 EOS 集合。只读元数据核对发现，control、MLP
+和原始 BF16 都是 config 一种 EOS、generation config 两种 EOS，tokenizer 的 EOS
+也不在 config 集合中。该判据漏读停止元数据，不能把此处的 false 当作没有发生
+EOS 停止。原始响应与完整 matched stop reason 未留存，当前不追溯改标；远端 r3
+代码保持原 SHA。新工具合并 config、generation config、tokenizer EOS 与固定
+additional stops，并保存脱敏的 matched-stop 摘要，22 项相关回归测试通过。
+05:54 UTC 通过 stdin 在三份实际模型元数据上核对，新 helper 的停止集合均为两种；
+这只验证元数据读取，没有加载模型或修改远端文件，也不重标既有结果。
+输出出现 thinking-end 也不证明答案正确。
 
 两臂均从原题的 288-token prompt 起点运行，65,536 context、temperature 0、
 seed 20261020、TP1、无 MTP、FP8 KV、FP32 SSM，关闭 radix cache 和 CUDA graphs。

@@ -5,7 +5,6 @@ reduction-order differences. All comparisons are exact, including the full
 nonzero FP32 state after every token of the verify chain.
 """
 
-import os
 import unittest
 
 import torch

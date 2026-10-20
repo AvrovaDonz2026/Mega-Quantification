@@ -17,7 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 FIXTURE = ROOT / "fixture.py"
 REVISION_RE = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -57,13 +56,9 @@ def source_variant(packed_path: Path, gating_path: Path) -> dict[str, object]:
     # Restrict the packed check to the ordinary GDN packed kernel, not KDA.
     packed_body = packed.split("def fused_recurrent_gated_delta_rule_packed_decode_kernel", 1)[1]
     packed_body = packed_body.split("def fused_recurrent_gated_delta_rule_packed_decode(", 1)[0]
-    packed_fp32 = not bool(
-        re.search(r"beta_val\s*=.*\.to\(b\.dtype\.element_ty\)", packed_body)
-    )
+    packed_fp32 = not bool(re.search(r"beta_val\s*=.*\.to\(b\.dtype\.element_ty\)", packed_body))
     gating_body = gating.split("def fused_gdn_gating_kernel", 1)[1]
-    gating_fp32 = not bool(
-        re.search(r"blk_beta_output.*\.to\(b\.dtype\.element_ty\)", gating_body)
-    )
+    gating_fp32 = not bool(re.search(r"blk_beta_output.*\.to\(b\.dtype\.element_ty\)", gating_body))
     if packed_fp32 and gating_fp32:
         observed = "all-beta"
     elif packed_fp32:
@@ -170,9 +165,7 @@ def run_gating_case(torch, gating_fn) -> dict[str, object]:
     import triton
     import triton.language as tl
 
-    expected_g, expected_beta = reference_gdn_gating(
-        torch, triton, tl, A_log, a, b, dt_bias
-    )
+    expected_g, expected_beta = reference_gdn_gating(torch, triton, tl, A_log, a, b, dt_bias)
     g_diff = scalar_diff(g, expected_g)
     beta_diff = scalar_diff(beta, expected_beta)
     g_tolerance = 1e-5
@@ -180,9 +173,7 @@ def run_gating_case(torch, gating_fn) -> dict[str, object]:
         "heads": heads,
         "beta_input_bf16": b.dtype == torch.bfloat16,
         "beta_non_bf16_representable": bool(
-            torch.any(
-                expected_beta != expected_beta.to(torch.bfloat16).to(torch.float32)
-            )
+            torch.any(expected_beta != expected_beta.to(torch.bfloat16).to(torch.float32))
         ),
         "finite_outputs": bool(torch.isfinite(g).all() and torch.isfinite(beta).all()),
         "g_tolerance": g_tolerance,
@@ -232,12 +223,14 @@ def main() -> int:
     import triton
 
     fixture = load_fixture()
-    from sglang.kernels.ops.attention.fla.fused_gdn_gating import fused_gdn_gating
     from sglang.kernels.ops.attention.fla import fused_recurrent, fused_sigmoid_gating_recurrent
+    from sglang.kernels.ops.attention.fla.fused_gdn_gating import fused_gdn_gating
 
     packed_path = Path(fused_recurrent.__file__).resolve()
     gating_path = Path(
-        __import__("sglang.kernels.ops.attention.fla.fused_gdn_gating", fromlist=["__file__"]).__file__
+        __import__(
+            "sglang.kernels.ops.attention.fla.fused_gdn_gating", fromlist=["__file__"]
+        ).__file__
     ).resolve()
     verify_path = Path(fused_sigmoid_gating_recurrent.__file__).resolve()
     source_info = source_variant(packed_path, gating_path)
@@ -282,9 +275,7 @@ def main() -> int:
     guards = decode_guards and prefill_valid
     want_decode, want_prefill, validation_gate = expected_gate(args.variant, args.fla_use_fast_ops)
     behavior_pass = (
-        (decode_match and random_match)
-        if want_decode
-        else (decode_mismatch and random_mismatch)
+        (decode_match and random_match) if want_decode else (decode_mismatch and random_mismatch)
     ) and (prefill_match if want_prefill else prefill_mismatch)
     # Fast-ops runs are observational: retain their scalar results but do not
     # turn a different exponential implementation into a validation failure.
@@ -294,9 +285,7 @@ def main() -> int:
         "schema_version": 2,
         "source_revision": args.source_revision or local_revision or "unavailable",
         "source_revision_source": (
-            "explicit"
-            if args.source_revision
-            else "local-git" if local_revision else "unavailable"
+            "explicit" if args.source_revision else "local-git" if local_revision else "unavailable"
         ),
         "variant": args.variant,
         "observed_variant": source_info["observed_variant"],

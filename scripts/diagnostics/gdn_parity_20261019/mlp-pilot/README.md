@@ -154,6 +154,29 @@ other repetition is absent. `stopping_outcome` and `known_cycle_outcome` are
 independent summaries; a length-limited output is not treated as a failed
 experiment, and a run without a detected cycle does not establish a repair.
 
+The deployed r3 snapshot has controller SHA
+`679297e5eeef5e464dbf979e77b73af2c2f4aa2297583836220447c6ccc14673`.
+Its EOS check uses only `config.json`, which omits generation/tokenizer EOS
+IDs for these models. Its `natural_termination=false` therefore cannot prove
+that an EOS stop did not occur. The original matched stop reason and token
+sequence are not retained, so existing r3 records must keep their original
+labels and this limitation. Keep a running snapshot unchanged; record a new
+controller SHA and use fresh evidence directories for any corrected run.
+
+The current helper combines config, generation-config, tokenizer EOS, and the
+three additional stop tokens recognized by the pinned SGLang tokenizer hook.
+For config EOS it prefers the root field, falling back to `text_config` when
+the root field is absent, matching the pinned config propagation behavior.
+It records only source counts/hashes and a sanitized `finish_reason_matched`
+summary (`match_kind`, `matched_is_eos`, `matched_equals_terminal`). A natural
+termination still requires a terminal EOS after thinking-end; when a matched
+stop value is supplied, it must match that terminal token. A service `stop`
+alone is insufficient. This correction has not been deployed into the running
+r3 snapshot and cannot retrospectively relabel its results.
+The corrected controller SHA is
+`58abf92c21790043b5861c3be1cfb5399d0bc79a4831bfea993265317f3364cd`;
+the example supervisor config uses this hash for a new deployment.
+
 ## Scope
 
 The derived weights and activation behavior are restored through the existing
@@ -168,10 +191,14 @@ promises iterative or cyclic repair.
 ## 4. Remote supervisor deployment
 
 The checked-in `supervisor.py`, `fallback_restore.py`, and
-`supervisor-config.example.json` are deployment references copied from the
-run snapshot. On the GPU host, place both Python files beside the real
-`config.json` in `mlp-run-r3` and use the exact remote paths in that config. A systemd
-transient unit can be started with:
+`supervisor-config.example.json` are references for a fresh deployment. The
+example hashes identify the current checked-in controller and model gate;
+the actual r3 deployment retains its original files and hashes. Replace all
+example paths, experiment prefix, and unit name with a fresh namespace before
+deployment. On the GPU host, place both Python files beside the real
+`config.json` in the new supervisor directory and use its exact remote paths.
+The following shows the historical r3 unit settings; do not reuse its live
+namespace:
 
 ```bash
 systemd-run --unit=megaquant-mlp-r3-20261020 \

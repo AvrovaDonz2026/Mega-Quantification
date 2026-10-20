@@ -13,7 +13,7 @@ import argparse
 import hashlib
 import json
 import sys
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def _parse_shapes(text: str) -> list[tuple[int, int]]:
@@ -201,8 +201,8 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        import torch
         import flashinfer
+        import torch
     except ImportError as exc:
         print(json.dumps({"status": "unavailable", "error": str(exc)}))
         return 2
@@ -229,7 +229,9 @@ def main() -> int:
     }
     for k, n in args.shapes:
         try:
-            report["shapes"].append(_run_shape(k, n, args.rows, args.seed, args.backend, torch, flashinfer))
+            report["shapes"].append(
+                _run_shape(k, n, args.rows, args.seed, args.backend, torch, flashinfer)
+            )
         except Exception as exc:  # Keep one JSON result useful for CI logs.
             report["shapes"].append({"k": k, "n": n, "error": f"{type(exc).__name__}: {exc}"})
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))

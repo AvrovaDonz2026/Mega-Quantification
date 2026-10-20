@@ -307,7 +307,7 @@
       "error_type": "GateError",
       "serving_containers_started": false
     },
-    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions, all ending at the budget. Long control trial 1 is running. No long-budget result, MLP repair, natural stopping recovery, or visual/MTP accuracy claim.",
+    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions, all ending at the budget. Long control completed two stable 34189-token stop trials; long MLP trial 1 is running. No completed long MLP result or repair claim. The running controller checks only config EOS metadata, which omits other EOS sources; its natural_termination field is incomplete.",
     "queue_snapshot_20261019": {
       "state": "waiting_for_gpu",
       "snapshot_at_utc": "2026-10-19T09:42:52.411635+00:00",
@@ -323,18 +323,18 @@
       "pilot_evidence_root_exists": false
     },
     "latest_observation": {
-      "observed_at_utc": "2026-10-20T04:16:13.662176+00:00",
+      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
       "phase": "long",
-      "arm": "control",
-      "at_utc": "2026-10-20T04:09:51.890770+00:00",
+      "arm": "mlp",
+      "at_utc": "2026-10-20T05:40:43.387603+00:00",
       "state": "request",
       "trial": 1,
       "completed_early_control_trials": 2,
       "completed_early_mlp_trials": 2,
-      "completed_long_trials": 0,
+      "completed_long_trials": 2,
       "glm_running": false,
       "active_compute_processes": 2,
-      "evidence_sha256": "1f57f787145faf3dc29b57376c0f1359edbe1260a4d1bf92d9fadfc87917dc8b"
+      "evidence_sha256": "648a08c840ef671fc56066f5915e6e3965b6cc1c4a6666d4e102bfe5ca284608"
     },
     "long_phase_prepared": {
       "budget": 49152,
@@ -357,7 +357,7 @@
     "r3": {
       "state": "running_inference",
       "supervisor_state": "phase_running",
-      "observed_at_utc": "2026-10-20T04:16:13.662176+00:00",
+      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
       "early": {
         "at_utc": "2026-10-20T04:05:30.384675+00:00",
         "state": "completed"
@@ -508,10 +508,10 @@
           }
         ]
       },
-      "interpretation": "Each arm repeats exactly at 4096 tokens, but control and MLP differ after seven initial tokens. Both arms reach the budget without EOS or thinking-end; neither is a natural stop. Historical trajectory LCPs are 7/12, so the historical loop has not been reproduced under this protocol. Long control trial 1 has started; known-period detection only tests lag 2032.",
+      "interpretation": "Each arm repeats exactly at 4096 tokens but differs after seven initial tokens. Both long control trials returned the same 34189-token stop output with thinking-end and no confirmed lag-2032 repetition. Long MLP trial 1 is running. Only config EOS IDs were checked, so natural_termination is an incomplete diagnostic; no repair or accuracy conclusion.",
       "long": {
-        "arm": "control",
-        "at_utc": "2026-10-20T04:09:51.890770+00:00",
+        "arm": "mlp",
+        "at_utc": "2026-10-20T05:40:43.387603+00:00",
         "state": "request",
         "trial": 1
       },
@@ -662,8 +662,290 @@
         "control": 289.05264031805564,
         "mlp": 697.6687734730076
       },
-      "early_mlp_over_control_latency_ratio": 2.4136391651892057
+      "early_mlp_over_control_latency_ratio": 2.4136391651892057,
+      "long_control": {
+        "cleanup": {
+          "container_id": "bde9c41c174f77d9db09b2f0bc0f780154a508ecdb1af46ca5a7d73e356799e5",
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T05:33:21.471308+00:00",
+        "model_proof": {
+          "config_sha256": "b1dd2e1baee445c501cf3f72b95d20fca66024a76e1603953dc25eac6122bcbd",
+          "hf_quant_config_sha256": "b566faf30260068a2a58de0b890aa544148fb0f6c6eeaa8f311db42e2702fc28",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "passed": true,
+          "payload_sha256_count": 2756,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 0,
+          "tensor_count": 2756,
+          "tokenizer_files": 2,
+          "variant_mlp": false,
+          "visual_quantized_layers": 110
+        },
+        "repeat_stable": true,
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "server_identity": {
+          "expected": {
+            "allow_auto_truncate": false,
+            "attention_backend": "flashinfer",
+            "context_length": 65536,
+            "disable_radix_cache": true,
+            "enable_multimodal": true,
+            "fp4_gemm_runner_backend": "flashinfer_cutlass",
+            "host": "127.0.0.1",
+            "kv_cache_dtype": "fp8_e4m3",
+            "linear_attn_backend": "triton",
+            "mamba_backend": "triton",
+            "mamba_ssm_dtype": "float32",
+            "max_running_requests": 1,
+            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
+            "port": 32262,
+            "quantization": "modelopt_mixed",
+            "random_seed": 20261020,
+            "sampling_backend": "pytorch",
+            "speculative_algorithm": null,
+            "tp_size": 1
+          },
+          "model_info_sha256": "c4b77f6451f19c41c3d75c4427f6e8a74811264e8a61aff6e64fc1e51e0b585b",
+          "passed": true,
+          "server_info_sha256": "d38910161022b7144a5ffdba2d1aa4243bb2f0c860df5bbe7db04421fd874dc3"
+        },
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 2503.575954520027,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 33901,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19160305073680295,
+            "natural_termination": false,
+            "output_ids_sha256": "54cecc7dc6b839e97e79027ecd37d2f97eea81442762acb435ba8d09cef16a6d",
+            "output_tokens": 34189,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 8,
+            "periodic_extent": 2040,
+            "periodic_lag": 2032,
+            "periodic_onset": 27850,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 2505.8751641819254,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 33901,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19160305073680295,
+            "natural_termination": false,
+            "output_ids_sha256": "54cecc7dc6b839e97e79027ecd37d2f97eea81442762acb435ba8d09cef16a6d",
+            "output_tokens": 34189,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 8,
+            "periodic_extent": 2040,
+            "periodic_lag": 2032,
+            "periodic_onset": 27850,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 2
+          }
+        ]
+      },
+      "long_control_completed_trials": 2,
+      "long_stopping_interpretation": "Both control trials returned the same service stop after 34189 tokens with thinking-end and no confirmed lag-2032 cycle. The running controller records no terminal EOS under its config-only EOS set and natural_termination=false. Config metadata omits generation/tokenizer EOS IDs, so this does not establish absence of an EOS stop. The matched stop reason and token sequence were not retained; no retrospective corrected termination label is asserted.",
+      "termination_metadata_audit": {
+        "evidence_sha256": "c19f436ae278051f35ba0917396c89b34fda358a215bd14e953b3b9006be910a",
+        "models": {
+          "control": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          },
+          "mlp": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          },
+          "bf16": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          }
+        },
+        "running_controller_unchanged": true,
+        "scope": "EOS-source metadata counts and hashes only. No observed final token or matched stop metadata retained; cannot relabel existing trial."
+      }
     },
-    "gpu_serving_scope": "Model/source/runtime/server identity gates and two completed short requests passed for both control and MLP; long control trial 1 is in flight."
+    "gpu_serving_scope": "Early phase gates and two short requests passed for each arm. Both long control trials returned stable stop outputs; long MLP trial 1 is running.",
+    "diagnostic_tool_update": {
+      "deployed_to_running_r3": false,
+      "metadata_validation": {
+        "observed_at_utc": "2026-10-20T05:54:17.819638+00:00",
+        "controller_sha256": "58abf92c21790043b5861c3be1cfb5399d0bc79a4831bfea993265317f3364cd",
+        "execution": "stdin_metadata_only_no_model_load",
+        "models": {
+          "control": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          },
+          "mlp": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          },
+          "bf16": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          }
+        }
+      },
+      "evidence_sha256": "c14c6a0a6143b6f1be108f81b45a8c9efd377e64be7caeb13ffaac5ebbd4abcd",
+      "regression_tests_passed": 22,
+      "scope": "Corrected EOS helper executed from stdin against model metadata only. No model load, generation, or remote file update. Existing r3 termination labels are not retrospectively changed."
+    }
   }
 }

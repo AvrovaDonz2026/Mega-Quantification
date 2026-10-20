@@ -5,11 +5,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
-
 
 SUPERVISOR_PATH = (
     Path(__file__).resolve().parents[1]
@@ -120,13 +119,15 @@ def test_supervisor_always_attempts_glm_restore(
     monkeypatch.setattr(module.signal, "signal", lambda *_args: None)
     result = module.main()
 
-    status = json.loads((Path(module_file).parent / "remote" / "supervisor-status.json").read_text())
+    status_path = Path(module_file).parent / "remote" / "supervisor-status.json"
+    status = json.loads(status_path.read_text())
     assert result == (1 if controller_fails or stop_times_out else 0)
     assert [call[:2] for call in calls].count(["docker", "start"]) == 1
     assert status["glm_restore_required"] is False
     if not controller_fails and not stop_times_out:
         assert status["state"] == "completed"
-        assert (Path(module_file).parent / "remote" / "mlp-pilot-r3-test-early" / "report.json").is_file()
-        assert (Path(module_file).parent / "remote" / "mlp-pilot-r3-test-long" / "report.json").is_file()
+        remote_root = Path(module_file).parent / "remote"
+        assert (remote_root / "mlp-pilot-r3-test-early" / "report.json").is_file()
+        assert (remote_root / "mlp-pilot-r3-test-long" / "report.json").is_file()
     else:
         assert status["state"] == "failed"

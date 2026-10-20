@@ -4,6 +4,7 @@
 This file intentionally has no project imports and performs no network access.
 The controller is the only component which talks to the local HTTP server.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -11,13 +12,12 @@ import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
-
 
 OWNER = "aitop-parity-v7"
 JOBS = frozenset(("mlp-pilot-control", "mlp-pilot-mlp"))
@@ -36,7 +36,9 @@ class Interrupted(SupervisorError):
 
 
 def utc_now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
 
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -65,8 +67,14 @@ def canonical_sha(value: Any) -> str:
 
 def command(argv: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
     # Never expose command output: Docker and nvidia-smi can contain host details.
-    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, text=True, check=False, timeout=timeout)
+    return subprocess.run(
+        argv,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
+    )
 
 
 def require_command(argv: list[str], *, timeout: float | None = None) -> str:
@@ -99,7 +107,10 @@ def glm_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "image": config.get("Image"),
         "image_id": row.get("Image"),
         "name": row.get("Name"),
-        "restartpolicy": {"name": restart.get("Name"), "maximum_retry_count": restart.get("MaximumRetryCount")},
+        "restartpolicy": {
+            "name": restart.get("Name"),
+            "maximum_retry_count": restart.get("MaximumRetryCount"),
+        },
         "running": state.get("Running") is True,
         "config_hostconfig_sha256": canonical_sha({"Config": config, "HostConfig": host}),
     }
@@ -120,11 +131,25 @@ def parse_created(row: dict[str, Any]) -> float | None:
 
 def labels(row: dict[str, Any]) -> dict[str, Any]:
     config = row.get("Config")
-    return config.get("Labels", {}) if isinstance(config, dict) and isinstance(config.get("Labels", {}), dict) else {}
+    return (
+        config.get("Labels", {})
+        if isinstance(config, dict) and isinstance(config.get("Labels", {}), dict)
+        else {}
+    )
 
 
 def container_ids_by_owner() -> list[str]:
-    out = require_command(["docker", "ps", "-a", "--filter", f"label=io.megaquant.parity-v7.owner={OWNER}", "--format", "{{.ID}}"])
+    out = require_command(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"label=io.megaquant.parity-v7.owner={OWNER}",
+            "--format",
+            "{{.ID}}",
+        ]
+    )
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
@@ -141,7 +166,7 @@ def matching_owned_rows() -> list[tuple[str, dict[str, Any]]]:
 
 
 def preflight_no_residuals() -> None:
-    for cid, row in matching_owned_rows():
+    for _cid, row in matching_owned_rows():
         if labels(row).get("io.megaquant.parity-v7.job") in JOBS:
             raise SupervisorError("pre-existing experiment container")
 
@@ -151,10 +176,13 @@ def cleanup_experiment_containers(started_at: float) -> int:
     for cid, row in matching_owned_rows():
         tag = labels(row)
         created = parse_created(row)
-        if (tag.get("io.megaquant.parity-v7.job") in JOBS
-                and tag.get("io.megaquant.parity-v7.source") == SOURCE
-                and row.get("Image") == IMAGE
-                and created is not None and created >= started_at):
+        if (
+            tag.get("io.megaquant.parity-v7.job") in JOBS
+            and tag.get("io.megaquant.parity-v7.source") == SOURCE
+            and row.get("Image") == IMAGE
+            and created is not None
+            and created >= started_at
+        ):
             result = command(["docker", "rm", "-f", cid], timeout=30)
             if result.returncode != 0:
                 raise SupervisorError("experiment container cleanup failed")
@@ -165,7 +193,9 @@ def cleanup_experiment_containers(started_at: float) -> int:
 def gpu_idle_gate() -> None:
     deadline = time.monotonic() + 120
     while True:
-        result = command(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader,nounits"], timeout=15)
+        result = command(
+            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader,nounits"], timeout=15
+        )
         if result.returncode != 0:
             raise SupervisorError("nvidia-smi query failed")
         pids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -184,16 +214,27 @@ def expected_value(config: dict[str, Any], *names: str) -> Any:
 
 
 def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
-    expected_id = expected_value(config, "expected_glm_id_full", "expected_glm_full", "expected_glm_id")
+    expected_id = expected_value(
+        config, "expected_glm_id_full", "expected_glm_full", "expected_glm_id"
+    )
     expected_image = expected_value(config, "expected_glm_image")
-    expected_image_id = expected_value(config, "expected_glm_image_id", "expected_glm_image_full", "expected_glm_image_id_full")
-    if not isinstance(expected_id, str) or not expected_id or not isinstance(expected_image, str) or not expected_image:
+    expected_image_id = expected_value(
+        config, "expected_glm_image_id", "expected_glm_image_full", "expected_glm_image_id_full"
+    )
+    if (
+        not isinstance(expected_id, str)
+        or not expected_id
+        or not isinstance(expected_image, str)
+        or not expected_image
+    ):
         raise SupervisorError("GLM identity config missing")
     row = docker_inspect(expected_id)
     actual_id = row.get("Id")
     if actual_id != expected_id:
         raise SupervisorError("GLM container id mismatch")
-    config_image = (row.get("Config") or {}).get("Image") if isinstance(row.get("Config"), dict) else None
+    config_image = (
+        (row.get("Config") or {}).get("Image") if isinstance(row.get("Config"), dict) else None
+    )
     image_id = row.get("Image")
     if expected_image.startswith("sha256:"):
         if image_id != expected_image:
@@ -205,11 +246,21 @@ def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, A
     expected_name = expected_value(config, "expected_glm_name")
     if not isinstance(expected_name, str) or not expected_name or row.get("Name") != expected_name:
         raise SupervisorError("GLM name mismatch")
-    expected_config_host = expected_value(config, "expected_config_hostconfig_sha256", "expected_glm_config_hostconfig_sha256")
-    if not isinstance(expected_config_host, str) or canonical_sha({
-        "Config": row.get("Config") if isinstance(row.get("Config"), dict) else {},
-        "HostConfig": row.get("HostConfig") if isinstance(row.get("HostConfig"), dict) else {},
-    }) != expected_config_host:
+    expected_config_host = expected_value(
+        config, "expected_config_hostconfig_sha256", "expected_glm_config_hostconfig_sha256"
+    )
+    if (
+        not isinstance(expected_config_host, str)
+        or canonical_sha(
+            {
+                "Config": row.get("Config") if isinstance(row.get("Config"), dict) else {},
+                "HostConfig": row.get("HostConfig")
+                if isinstance(row.get("HostConfig"), dict)
+                else {},
+            }
+        )
+        != expected_config_host
+    ):
         raise SupervisorError("GLM config/hostconfig hash mismatch")
     state = row.get("State") if isinstance(row.get("State"), dict) else {}
     if state.get("Running") is not True:
@@ -255,7 +306,11 @@ def valid_report(path: Path) -> bool:
         return False
     for arm_name in ("control", "mlp"):
         arm = arms.get(arm_name)
-        if not isinstance(arm, dict) or not isinstance(arm.get("trials"), list) or len(arm["trials"]) != 2:
+        if (
+            not isinstance(arm, dict)
+            or not isinstance(arm.get("trials"), list)
+            or len(arm["trials"]) != 2
+        ):
             return False
         cleanup = arm.get("cleanup")
         if not isinstance(cleanup, dict) or cleanup.get("removed") is not True:
@@ -277,12 +332,20 @@ def terminate_child(proc: subprocess.Popen[Any]) -> None:
         try:
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            raise SupervisorError("controller did not terminate")
+            raise SupervisorError("controller did not terminate") from None
 
 
-def run_phase(config: dict[str, Any], root: Path, evidence: Path, phase: str, budget: int,
-              timeout_seconds: int, supervisor_started_at: float, status: dict[str, Any],
-              status_path: Path) -> None:
+def run_phase(
+    config: dict[str, Any],
+    root: Path,
+    evidence: Path,
+    phase: str,
+    budget: int,
+    timeout_seconds: int,
+    supervisor_started_at: float,
+    status: dict[str, Any],
+    status_path: Path,
+) -> None:
     log_path = root / f"{evidence.name}.supervisor.log"
     if log_path.exists():
         raise SupervisorError("phase log is not fresh")
@@ -292,8 +355,13 @@ def run_phase(config: dict[str, Any], root: Path, evidence: Path, phase: str, bu
         atomic_json(status_path, status)
         proc: subprocess.Popen[Any] | None = None
         try:
-            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                                    start_new_session=True)
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
             status.update({"pid": proc.pid, "at_utc": utc_now()})
             atomic_json(status_path, status)
             try:
@@ -350,9 +418,17 @@ def main() -> int:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise SupervisorError("another supervisor is running") from exc
-        status.update({"root": str(root), "experiment_prefix": prefix, "pid": os.getpid(),
-                       "supervisor_started_at_epoch": supervisor_started_at,
-                       "glm_restore_required": False, "state": "preflight", "at_utc": utc_now()})
+        status.update(
+            {
+                "root": str(root),
+                "experiment_prefix": prefix,
+                "pid": os.getpid(),
+                "supervisor_started_at_epoch": supervisor_started_at,
+                "glm_restore_required": False,
+                "state": "preflight",
+                "at_utc": utc_now(),
+            }
+        )
         atomic_json(status_path, status)
         evidence = fresh_evidence_roots(root, prefix)
 
@@ -362,7 +438,10 @@ def main() -> int:
             raise SupervisorError("gate file missing")
         expected_controller = config.get("controller_sha256")
         expected_gate = config.get("model_gate_sha256")
-        if not isinstance(expected_controller, str) or sha256_file(controller) != expected_controller:
+        if (
+            not isinstance(expected_controller, str)
+            or sha256_file(controller) != expected_controller
+        ):
             raise SupervisorError("controller hash gate failed")
         if not isinstance(expected_gate, str) or sha256_file(model_gate) != expected_gate:
             raise SupervisorError("model gate hash failed")
@@ -370,7 +449,11 @@ def main() -> int:
         if not isinstance(base, list) or not base:
             raise SupervisorError("base command missing")
         base_strings = [str(value) for value in base]
-        if str(controller.resolve()) not in [str(Path(value).expanduser().resolve()) for value in base_strings if value.endswith(".py")]:
+        if str(controller.resolve()) not in [
+            str(Path(value).expanduser().resolve())
+            for value in base_strings
+            if value.endswith(".py")
+        ]:
             raise SupervisorError("base command controller differs from controller_path")
         # Validate the command before touching the serving container.
         build_phase_argv(base, evidence["early"], "early", 4096)
@@ -389,7 +472,17 @@ def main() -> int:
         atomic_json(status_path, status)
         gpu_idle_gate()
         for phase, budget, timeout_seconds in PHASES:
-            run_phase(config, root, evidence[phase], phase, budget, timeout_seconds, supervisor_started_at, status, status_path)
+            run_phase(
+                config,
+                root,
+                evidence[phase],
+                phase,
+                budget,
+                timeout_seconds,
+                supervisor_started_at,
+                status,
+                status_path,
+            )
             status.update({"state": "phase_completed", "phase": phase, "at_utc": utc_now()})
             atomic_json(status_path, status)
         status.update({"state": "completed", "at_utc": utc_now()})
@@ -424,14 +517,24 @@ def main() -> int:
                 try:
                     row = docker_inspect(glm_id)
                     snap = glm_snapshot(row)
-                    status["glm_restore"] = {"running": snap.get("running"), "health": snap.get("health")}
+                    status["glm_restore"] = {
+                        "running": snap.get("running"),
+                        "health": snap.get("health"),
+                    }
                     if snap.get("running") is not True:
                         restored = False
                 except Exception:
                     restored = False
             if not restored:
                 restore_error = SupervisorError("GLM restore failed")
-                status.update({"state": "failed", "restore_failed": True, "error_type": type(restore_error).__name__, "at_utc": utc_now()})
+                status.update(
+                    {
+                        "state": "failed",
+                        "restore_failed": True,
+                        "error_type": type(restore_error).__name__,
+                        "at_utc": utc_now(),
+                    }
+                )
             else:
                 status["glm_restore_required"] = False
             if status_path is not None:
@@ -460,4 +563,4 @@ if __name__ == "__main__":
     except Exception as exc:
         # Keep terminal output limited to a safe type name; never print child output.
         sys.stderr.write(f"supervisor failed: {type(exc).__name__}\n")
-        raise SystemExit(1)
+        raise SystemExit(1) from None

@@ -17,9 +17,11 @@ negative result：同一份真正 MSE 历史权重 view 使用 original / all-be
 最终会停止，也不改变历史 GPQA 记录。
 
 MLP-only BF16 recovery pilot 已在 2026-10-20 完成短阶段：control / MLP 各两次
-4,096-token 输出均臂内逐 token 一致、全部达到预算。04:16 UTC 观察时，长阶段 control
-trial 1 正在推理，MLP 长阶段尚未开始。短阶段无法观察历史约 3.3 万 token 后的循环，
-尚无修复结论。r2 队列过期未启动的记录保留；r3 的临时 GLM 暂停与实验后恢复由
+4,096-token 输出均臂内逐 token 一致、全部达到预算。05:41 UTC 最新观察时，长阶段
+control 两次均在 34,189 tokens 后返回 `stop` 且输出稳定，MLP long trial 1 正在推理。
+首条未检出已知周期，但运行中诊断器的 EOS 集合漏读 generation/tokenizer 元数据，
+不能按其 `natural_termination=false` 认定未正常停止，亦无修复结论。
+r2 队列过期未启动的记录保留；r3 的临时 GLM 暂停与实验后恢复由
 远端监督进程托管。[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP

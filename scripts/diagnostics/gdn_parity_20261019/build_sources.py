@@ -10,7 +10,6 @@ import subprocess
 import tarfile
 from pathlib import Path
 
-
 VARIANTS = ("original", "decode-beta", "all-beta", "shared-decode")
 
 
@@ -91,14 +90,16 @@ def main() -> int:
             "archive_member_count": member_count,
             "file_count": file_count,
             "metadata": {"commit": commit, "git_cat_file_type": "commit"},
-            "revisions": [{
-                "name": "vision-mtp",
-                "variant": variant,
-                "commit": commit,
-                "archive": archive_path.name,
-                "archive_prefix": prefix,
-                "archive_sha256": archive_hash,
-            }],
+            "revisions": [
+                {
+                    "name": "vision-mtp",
+                    "variant": variant,
+                    "commit": commit,
+                    "archive": archive_path.name,
+                    "archive_prefix": prefix,
+                    "archive_sha256": archive_hash,
+                }
+            ],
         }
         (output / f"{prefix}.manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n"
@@ -117,7 +118,12 @@ def main() -> int:
         summary["revisions"].append(item)
         summary["packages"].append(item)
     (output / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"output": str(output), "summary": str(output / "summary.json"), "status": "pass"}, sort_keys=True))
+    print(
+        json.dumps(
+            {"output": str(output), "summary": str(output / "summary.json"), "status": "pass"},
+            sort_keys=True,
+        )
+    )
     return 0
 
 

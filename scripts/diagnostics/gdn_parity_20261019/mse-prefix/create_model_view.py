@@ -4,6 +4,7 @@
 The view hard-links model weights to the scored export and rewrites only the
 two JSON metadata files through the pinned SGLang export helper.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,6 @@ import re
 import shutil
 import sys
 from pathlib import Path
-
 
 SCHEME = "w4a4"
 EXPECTED_SCHEME = "nvfp4_w4a4"
@@ -177,7 +177,9 @@ def build(args: argparse.Namespace) -> dict:
         },
     }
     identity_path = output / "model-identity.json"
-    identity_path.write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    identity_path.write_text(
+        json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
     spec = importlib.util.spec_from_file_location("mse_input_gates", gates_path)
     if spec is None or spec.loader is None:

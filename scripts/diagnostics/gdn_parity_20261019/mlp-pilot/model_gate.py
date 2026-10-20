@@ -10,9 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-EXPECTED_PROVENANCE_SHA256 = (
-    "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c"
-)
+EXPECTED_PROVENANCE_SHA256 = "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c"
 _CHUNK = 8 * 1024 * 1024
 
 
@@ -93,7 +91,10 @@ def verify_model(
     if variant not in {"control", "mlp"}:
         raise RuntimeError("variant must be control or mlp")
     export, bf16, model, ablation_tool = (
-        Path(export).resolve(), Path(bf16).resolve(), Path(model).resolve(), Path(ablation_tool).resolve()
+        Path(export).resolve(),
+        Path(bf16).resolve(),
+        Path(model).resolve(),
+        Path(ablation_tool).resolve(),
     )
     tool = _load_tool(ablation_tool)
     plan = tool.prepare_plan(export, bf16, variant)
@@ -122,8 +123,14 @@ def verify_model(
     _assert(config_quant.get("quantized_layers") == layers, "config quantized_layers mismatch")
     with tempfile.TemporaryDirectory(prefix="mlp-gate-") as staging:
         tool._metadata(export, Path(staging), layers)
-        _assert(_json(model / "config.json") == _json(Path(staging) / "config.json"), "config transform mismatch")
-        _assert(_json(model / "hf_quant_config.json") == _json(Path(staging) / "hf_quant_config.json"), "HF config transform mismatch")
+        _assert(
+            _json(model / "config.json") == _json(Path(staging) / "config.json"),
+            "config transform mismatch",
+        )
+        _assert(
+            _json(model / "hf_quant_config.json") == _json(Path(staging) / "hf_quant_config.json"),
+            "HF config transform mismatch",
+        )
     selected_modules = [name for name in layers if tool.selected(name, variant)]
     _assert(len(selected_modules) == 0, "selected layers remain quantized")
 
@@ -131,13 +138,18 @@ def verify_model(
     mtp = [name for name in layers if name.startswith("mtp.")]
     _assert(len(visual) == 110 and len(mtp) == 8, "auxiliary quantized projection count mismatch")
     expected_restored = 0 if variant == "control" else 192
-    _assert(plan["summary"].get("restored_modules") == expected_restored, "restored module count mismatch")
+    _assert(
+        plan["summary"].get("restored_modules") == expected_restored,
+        "restored module count mismatch",
+    )
 
     provenance_name = "provenance.json"
     original_provenance = export / provenance_name
     model_provenance = model / provenance_name
     _assert(original_provenance.is_file() and model_provenance.is_file(), "provenance missing")
-    _assert(_sha(original_provenance) == EXPECTED_PROVENANCE_SHA256, "original provenance SHA mismatch")
+    _assert(
+        _sha(original_provenance) == EXPECTED_PROVENANCE_SHA256, "original provenance SHA mismatch"
+    )
     _assert(_sha(model_provenance) == _sha(original_provenance), "provenance bytes changed")
     provenance = _json(original_provenance)
     _assert(
@@ -149,24 +161,57 @@ def verify_model(
     )
 
     for name in _tokenizer_files(export) | _tokenizer_files(model):
-        _assert((export / name).is_file() and (model / name).is_file(), "tokenizer ancillary inventory mismatch")
+        _assert(
+            (export / name).is_file() and (model / name).is_file(),
+            "tokenizer ancillary inventory mismatch",
+        )
         _assert(_sha(export / name) == _sha(model / name), "tokenizer ancillary bytes changed")
 
     record = _json(model / "precision_ablation.json")
     summary = plan["summary"]
     _assert(record.get("variant") == variant, "ablation variant mismatch")
-    for key in ("restored_modules", "restored_tensors", "removed_scale_tensors", "preserved_tensors", "output_tensor_bytes"):
+    for key in (
+        "restored_modules",
+        "restored_tensors",
+        "removed_scale_tensors",
+        "preserved_tensors",
+        "output_tensor_bytes",
+    ):
         _assert(record.get(key) == summary.get(key), "ablation statistic mismatch")
     _assert(record.get("payloads_verified") is True, "ablation payload verification missing")
-    _assert(record.get("tensor_inventory_sha256") == _inventory(tool, actual), "output inventory mismatch")
-    _assert(record.get("input_tensor_inventory_sha256") == _inventory(tool, original), "input inventory mismatch")
-    _assert(record.get("input_metadata_sha256", {}).get("config.json") == _sha(export / "config.json"), "input config inventory mismatch")
-    _assert(record.get("input_metadata_sha256", {}).get("hf_quant_config.json") == _sha(export / "hf_quant_config.json"), "input HF config inventory mismatch")
-    _assert(record.get("input_metadata_sha256", {}).get("model.safetensors.index.json") == _sha(export / "model.safetensors.index.json"), "input index inventory mismatch")
-    expected_map = {name: filename for name, filename in plan["index"]["weight_map"].items() if name in expected}
+    _assert(
+        record.get("tensor_inventory_sha256") == _inventory(tool, actual),
+        "output inventory mismatch",
+    )
+    _assert(
+        record.get("input_tensor_inventory_sha256") == _inventory(tool, original),
+        "input inventory mismatch",
+    )
+    _assert(
+        record.get("input_metadata_sha256", {}).get("config.json") == _sha(export / "config.json"),
+        "input config inventory mismatch",
+    )
+    _assert(
+        record.get("input_metadata_sha256", {}).get("hf_quant_config.json")
+        == _sha(export / "hf_quant_config.json"),
+        "input HF config inventory mismatch",
+    )
+    _assert(
+        record.get("input_metadata_sha256", {}).get("model.safetensors.index.json")
+        == _sha(export / "model.safetensors.index.json"),
+        "input index inventory mismatch",
+    )
+    expected_map = {
+        name: filename for name, filename in plan["index"]["weight_map"].items() if name in expected
+    }
     _assert(actual_index.get("weight_map") == expected_map, "derived weight map mismatch")
-    _assert(record.get("quantized_layer_counts") == summary.get("quantized_layer_counts"), "quantized layer statistics mismatch")
-    _assert(record.get("requires_quantization") == "modelopt_mixed", "quantization requirement mismatch")
+    _assert(
+        record.get("quantized_layer_counts") == summary.get("quantized_layer_counts"),
+        "quantized layer statistics mismatch",
+    )
+    _assert(
+        record.get("requires_quantization") == "modelopt_mixed", "quantization requirement mismatch"
+    )
     return {
         "passed": True,
         "variant_mlp": variant == "mlp",
@@ -183,4 +228,3 @@ def verify_model(
         "payload_sha256_count": len(actual),
         "tokenizer_files": len(_tokenizer_files(model)),
     }
-
