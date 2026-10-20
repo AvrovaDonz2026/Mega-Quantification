@@ -130,6 +130,8 @@ store 移除 `.to(b.dtype.element_ty)`；原分配已为 FP32，这不是改变�
 SHA-256 为 `c7736d1e506fb2c3e5c0496a2ed8c23347c2507ebe73c08bc6745517495d0957`，
 候选 SHA-256 为 `7318818b58efcb17803b52f236319eda5cc47b813d64113d1c7b83dd2cac378d`。
 源码身份与 microprobe 是生成前门禁，R3 的流式观察证明这些门禁已通过。
+历史调用路径在 prefill/extend 使用该 producer，普通 decode 在另一个 kernel 中计算 beta。
+本轮干预可通过初始循环状态影响后续轨迹；终止行为改善仍须冷启动复测。
 
 R3 于 `2026-10-20T19:18:59.637587Z` 启动。`2026-10-20T19:23:00.606688Z` 的只读观察
 为 `request_streaming`，elapsed `218.747` 秒、events `32`、stream lines `32`；这些

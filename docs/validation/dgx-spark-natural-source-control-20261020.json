@@ -353,6 +353,7 @@
       "historical_source_sha256": "c7736d1e506fb2c3e5c0496a2ed8c23347c2507ebe73c08bc6745517495d0957",
       "candidate_source_sha256": "7318818b58efcb17803b52f236319eda5cc47b813d64113d1c7b83dd2cac378d",
       "change": "Remove .to(b.dtype.element_ty) from the beta store in fused_gdn_gating.py; the existing allocation is FP32.",
+      "direct_scope": "Prefill/extend beta producer; ordinary decode computes beta in a separate kernel. An initial recurrent-state change may affect the later trajectory.",
       "r1_radix_protocol_preserved": true
     },
     "pre_generation_gates": {

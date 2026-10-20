@@ -285,6 +285,14 @@ FIXTURES = {
         "    beta_val = tl.sigmoid(b_val).to(b.dtype.element_ty).to(tl.float32)\n"
         "    return beta_val\n"
     ),
+    "kernels/ops/attention/fla/fused_gdn_gating.py": (
+        "def fused_gdn_gating_kernel(beta_output, b, off, mask):\n"
+        "    blk_beta_output = tl.sigmoid(tl.load(b + off).to(tl.float32))\n"
+        "    tl.store(beta_output + off, blk_beta_output.to(b.dtype.element_ty), mask=mask)\n"
+        "\n"
+        "def fused_gdn_gating():\n"
+        "    beta_output = torch.empty((1,), dtype=torch.float32)\n"
+    ),
     "srt/layers/quantization/unquant.py": UNQUANT_SOURCE,
     FLASHINFER_PATH: FLASHINFER_SOURCE,
     LOGPROB_PATH: LOGPROB_SOURCE,
@@ -468,6 +476,79 @@ def test_old_v6_manifest_cannot_skip_logprob_row_fix(upstream_tree, check):
         patch.patch_tree(upstream_tree, "0.5.20", check=check)
     assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
     assert path.read_bytes() == before_manifest
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_old_v7_manifest_cannot_skip_gdn_prefill_beta_fix(upstream_tree, check):
+    patch.patch_tree(upstream_tree, "0.5.20")
+    path = upstream_tree / patch.MANIFEST
+    manifest = json.loads(path.read_text())
+    manifest["patch"] = "megaquant-spark-v7"
+    del manifest["files"]["kernels/ops/attention/fla/fused_gdn_gating.py"]
+    path.write_text(json.dumps(manifest))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    before_manifest = path.read_bytes()
+    with pytest.raises(patch.PatchError, match="manifest or installed files"):
+        patch.patch_tree(upstream_tree, "0.5.20", check=check)
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert path.read_bytes() == before_manifest
+
+
+def test_gdn_prefill_beta_transform_preserves_fp32_sigmoid_and_store():
+    original = FIXTURES["kernels/ops/attention/fla/fused_gdn_gating.py"]
+    transformed = patch.transform("kernels/ops/attention/fla/fused_gdn_gating.py", original)
+    body = transformed.removeprefix(patch.MARKER)
+    tree = ast.parse(body)
+    stores = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "store"
+    ]
+    beta_store = next(call for call in stores if "beta_output" in ast.unparse(call.args[0]))
+    assert isinstance(beta_store.args[1], ast.Name)
+    assert beta_store.args[1].id == "blk_beta_output"
+
+    beta_assign = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "blk_beta_output"
+            for target in node.targets
+        )
+    )
+    sigmoid = beta_assign.value
+    assert isinstance(sigmoid, ast.Call)
+    assert isinstance(sigmoid.func, ast.Attribute) and sigmoid.func.attr == "sigmoid"
+    sigmoid_input = sigmoid.args[0]
+    assert isinstance(sigmoid_input, ast.Call)
+    assert isinstance(sigmoid_input.func, ast.Attribute) and sigmoid_input.func.attr == "to"
+    assert ast.unparse(sigmoid_input.args[0]) == "tl.float32"
+
+    allocation = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "empty"
+        and any(keyword.arg == "dtype" for keyword in node.keywords)
+    )
+    dtype = next(keyword.value for keyword in allocation.keywords if keyword.arg == "dtype")
+    assert ast.unparse(dtype) == "torch.float32"
+
+
+def test_gdn_prefill_beta_hash_drift_fails_before_any_write(upstream_tree):
+    target_name = "kernels/ops/attention/fla/fused_gdn_gating.py"
+    target = upstream_tree / target_name
+    target.write_text(target.read_text().replace("dtype=torch.float32", "dtype=torch.bfloat16"))
+    before = {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    with pytest.raises(patch.PatchError, match="fused_gdn_gating.py: upstream SHA256 mismatch"):
+        patch.patch_tree(upstream_tree, "0.5.20")
+    assert before == {name: (upstream_tree / name).read_bytes() for name in FIXTURES}
+    assert not (upstream_tree / patch.MANIFEST).exists()
 
 
 def test_logprob_target_hash_drift_fails_before_any_write(upstream_tree):

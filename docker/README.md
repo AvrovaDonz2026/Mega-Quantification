@@ -177,8 +177,9 @@ CUDA graph 与 HiCache。CPU/GPU 共享物理内存，不能照搬独立显存�
 
 2026-09-30 的[视觉/MTP 服务实测](../docs/validation/dgx-spark-serving-20260930.md)
 记录了红蓝图对照、数字 OCR、实际草稿接受率和逐 token 基线比较。
-当前源码使用 `megaquant-spark-v6` 补丁，包含视觉 NVFP4 三维输入前向与
-GDN/MTP 兼容修复；使用当前源码时需重新构建镜像并核验 manifest。
+当前源码使用 `megaquant-spark-v8` 补丁，包含视觉 NVFP4 三维输入前向与
+GDN/MTP 兼容修复，并保留 GDN prefill beta 的 FP32 存储精度；使用当前源码时需重新构建镜像并核验 manifest。
+此精度修复对历史长输出循环的效果见[进行中的对照实验](../docs/validation/dgx-spark-natural-source-control-20261020.md)。
 Spark 配方的 SSM 状态使用 FP32：BF16 状态曾复现 W4A4 普通 decode 与
 MTP verify 输出分歧。这只增加循环状态缓存的内存，不改变 W4A4 权重/激活格式。
 可用 `scripts/check_sglang_multimodal.py` 分别运行 baseline 和 MTP；

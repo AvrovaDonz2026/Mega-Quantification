@@ -184,6 +184,11 @@ FP32 SSM state recipes. Baseline uses `eval-gpqa-diamond.spark.yaml`; MTP uses
 `eval-gpqa-diamond.spark-mtp.yaml` with embedded EAGLE, two speculative steps,
 top-k 1 and three draft tokens. No external draft checkpoint is supplied.
 
+The `megaquant-spark-v8` patch also preserves the existing FP32 beta output in
+GDN prefill by removing the intermediate BF16 store cast. This changes the
+prefill state; its effect on historical long-output repetition is still under
+test in the [beta precision experiment](validation/dgx-spark-natural-source-control-20261020.md).
+
 The patch keeps the packed GDN decode sigmoid gate in FP32, matching the
 speculative verification kernel. FP32 SSM cache alone does not remove the
 upstream decode gate's BF16 rounding. The GPU preflight compares 32 sequential
