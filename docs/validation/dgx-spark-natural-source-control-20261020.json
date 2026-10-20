@@ -312,14 +312,23 @@
         "2026-10-20T18:22:56Z",
         "2026-10-20T18:22:57Z"
       ],
-      "stable_seconds_observed": [121.191,121.566]
+      "stable_seconds_observed": [
+        121.191,
+        121.566
+      ]
     },
     "paired_process_restoration": "process_stable_observation_passed",
     "application_readiness": "unknown",
     "application_observer_framework": {
       "observed_at_utc": "2026-10-20T18:24:40Z",
-      "rank_1": {"framework": "tensorfold", "readiness": "unknown"},
-      "rank_0": {"framework": "tensorfold", "metadata_probe": "structured_response"},
+      "rank_1": {
+        "framework": "tensorfold",
+        "readiness": "unknown"
+      },
+      "rank_0": {
+        "framework": "tensorfold",
+        "metadata_probe": "structured_response"
+      },
       "end_to_end_inference": false
     },
     "historical_source_capture": {
@@ -386,7 +395,7 @@
       "legacy_vs_candidate_max_abs": 0.0005898475646972656,
       "legacy_vs_candidate_rms": 0.0002853343030437827,
       "g_delta_max_abs": 0.0,
-      "candidate_sigmoid_max_error": 5.960464477539063e-8,
+      "candidate_sigmoid_max_error": 5.960464477539063e-08,
       "literal_first_logits_measured": false
     },
     "protected_pair": {
@@ -416,7 +425,7 @@
     "experiment": "historical-beta-r4-confirm",
     "state": "running_observed_request_streaming",
     "experiment_started_at_utc": "2026-10-20T21:03:22.395171Z",
-    "observation_at_utc": "2026-10-20T21:10:54Z",
+    "observation_at_utc": "2026-10-20T21:44:13Z",
     "protocol": {
       "same_as": "historical-beta-r3",
       "submitted_requests": 1,
@@ -426,9 +435,9 @@
     },
     "progress": {
       "state": "request_streaming",
-      "elapsed_seconds": 451.618,
-      "events": 128,
-      "stream_lines": 128,
+      "elapsed_seconds": 2418.958,
+      "events": 944,
+      "stream_lines": 944,
       "events_are_sse_lines_not_tokens": true,
       "terminal_result_available": false,
       "repeat_stability_available": false,
@@ -450,6 +459,85 @@
       "r1_attribution": "not_established",
       "current_fork_or_gpu_execution": false
     },
-    "causal_limit": "R4 is still generating. No terminal output, cycle result, repeat stability, repair conclusion, or service restoration conclusion is established."
+    "hf_5_12_1_reference_semantics": {
+      "projection_beta_dtype": "projection/input dtype",
+      "bf16_eager_beta": "b.sigmoid()",
+      "fallback_recurrence_dtype": "float32",
+      "r3_patch_is_hf_faithful": false,
+      "r3_patch_scope": "SGLang target consistency and numerical improvement"
+    },
+    "causal_limit": "At this 2026-10-20T21:44:13Z observation, R4 was still generating; no terminal output, cycle result, repeat stability, repair conclusion, or service restoration conclusion was yet established."
+  },
+  "historical_replay_r4_completed": {
+    "experiment": "historical-beta-r4-confirm",
+    "state": "completed_repeat_stable_with_periodic_cycle",
+    "experiment_started_at_utc": "2026-10-20T21:03:22.395171Z",
+    "completion_observed_at_utc": "2026-10-20T22:12:33Z",
+    "elapsed_seconds_including_startup_and_postscan": 3944.766,
+    "historical_protocol": {
+      "same_as": "historical-beta-r3",
+      "submitted_requests": 1,
+      "cold_request": true
+    },
+    "result": {
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_ids_sha256": "57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa",
+      "same_output_as_r3": true,
+      "repeat_stable_across_r3_r4": true,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "first_token_divergence_index": 12,
+      "first_token_divergence_reference": "baseline",
+      "first_token_divergence_is_logits": false,
+      "candidate_cycle": {
+        "period": 1588,
+        "onset": 40236,
+        "matching_positions": 7328,
+        "coverage_tokens": 8916,
+        "full_repeats_after_initial_segment": 4,
+        "includes_initial_segment_and_residual": true,
+        "measurement": "R4_direct_post_request_scan",
+        "r3_inference": "same_output_hash_as_r4_not_direct_scan"
+      },
+      "historical_reference_cycle": {
+        "period": 2032,
+        "onset": 33131,
+        "matching_positions": 13989,
+        "coverage_tokens": 16021,
+        "full_repeats_excluding_initial_segment": 6,
+        "legacy_complete_periods_field": 7,
+        "legacy_field_uses_different_counting_convention": true
+      },
+      "period_2032_algorithmic_scan": {
+        "onset": 10959,
+        "matching_positions": 10,
+        "coverage_tokens": 2042,
+        "full_period_confirmed": false
+      }
+    },
+    "capacity": {
+      "max_total_num_tokens": 1739296,
+      "difference_from_r1_r2_is_portability_capacity_not_arithmetic": true
+    },
+    "protected_pair": {
+      "restoration": "process_stable",
+      "exact_identity": true,
+      "running": true,
+      "cleanup": "observed_absent",
+      "maintenance_armed": false,
+      "peer_stable_seconds": 121.151,
+      "replay_stable_seconds": 121.501
+    },
+    "application_observation": {
+      "observed_at_utc": "2026-10-20T22:13:30Z",
+      "both_processes_exact_and_running": true,
+      "rank_0_models_http": "structured_json",
+      "readiness": "unknown",
+      "end_to_end_inference": false
+    },
+    "application_readiness": "unknown",
+    "causal_limit": "R4 reproduced R3's exact token sequence and detected a period-1588 cycle. The repeated cycle is not a repair; the run ended at its token limit. No normal stop, answer correctness, MSE repair, or application readiness is established."
   }
 }

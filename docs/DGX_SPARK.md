@@ -185,13 +185,23 @@ FP32 SSM state recipes. Baseline uses `eval-gpqa-diamond.spark.yaml`; MTP uses
 top-k 1 and three draft tokens. No external draft checkpoint is supplied.
 
 The `megaquant-spark-v8` patch also preserves the existing FP32 beta output in
-GDN prefill by removing the intermediate BF16 store cast. This changes the
-prefill state; its effect on historical long-output repetition is still under
-test in the [beta precision experiment](validation/dgx-spark-natural-source-control-20261020.md).
+GDN prefill by removing the intermediate BF16 store cast. In the fixed R1/R2
+case, the R3 and R4 candidate requests share one output SHA; R4's direct scan
+still finds a period-1588 loop and ends at the length limit. The beta change is
+not a repair result; see the [beta precision experiment](validation/dgx-spark-natural-source-control-20261020.md).
 
-The patch keeps the packed GDN decode sigmoid gate in FP32, matching the
-speculative verification kernel. FP32 SSM cache alone does not remove the
-upstream decode gate's BF16 rounding. The GPU preflight compares 32 sequential
+In the official pinned SGLang 0.5.20 `fused_recurrent.py`, ordinary packed GDN
+decode rounds beta through BF16 before widening to FP32. The v8 patch removes
+that roundtrip to match the local speculative verification kernel's FP32 beta;
+this is an SGLang route-consistency and numerical choice, not a claim of
+Hugging Face eager dtype fidelity. The captured Transformers 5.12.1 eager path
+computes `beta = b.sigmoid()` in the projection dtype (BF16 for a BF16 model),
+then casts beta for FP32 recurrence.
+
+The exact historical R1 image is a separate source capture: its ordinary packed
+GDN decode computes beta in FP32, and ReplaySSM was disabled in the R1 metadata.
+The ReplaySSM decode kernel is another conditional path and has its own BF16
+roundtrip when enabled. The GPU preflight compares 32 sequential
 decode steps with a speculative verification chain, including every cached
 intermediate state, grouped heads and a strided state pool. An older patch
 manifest or changed pinned source is rejected; rebuild from the official base.

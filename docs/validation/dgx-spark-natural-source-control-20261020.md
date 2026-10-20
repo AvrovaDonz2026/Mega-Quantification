@@ -1,6 +1,6 @@
 # 原始 GDN 源码自然生成对照：2026-10-20
 
-**状态：R1/R2 历史固定案例已精确复现；R3 beta-store 单变量对照已完成，未建立修复结论。**
+**状态：R1/R2 历史固定案例已精确复现；R3/R4 均已完成，beta 改动未修复循环。**
 原始源码 control 的两次长测均已完成并重复稳定。前组 MLP 实验完成、恢复
 原 GLM 并通过身份校验后，队列于 08:04:07 UTC 接上新 supervisor。两次均输出
 39,846 tokens、返回 `stop` 并由 EOS、terminal token 与脱敏 matched-stop 一致确认；
@@ -22,8 +22,11 @@ exit code 为 1、非 OOM；10:21 UTC 对同一容器的恢复重试也未通过
 恢复臂两轮均在 25,000 tokens 后返回服务 `stop`，输出也一致。control 未复现
 历史循环，因此较早停止不足以证明恢复 MLP 精度修复了问题。
 
-源码审计确认原始 GDN 的 prefill 和 packed decode 路径都会把 beta 降到 BF16；
-all-beta 已修复这两处精度损失，并通过局部和短整模 parity。但原始 / all-beta
+源码审计确认历史 GDN prefill producer 曾把 beta store roundtrip 到 BF16；ordinary
+packed decode 在本案路径中以 FP32 计算 beta。只有独立的 ReplaySSM decode kernel
+包含 BF16 roundtrip，历史 metadata 显示该路径 disabled，因此不能把它归因于 R1。
+all-beta 的本地 SGLang 变体保留 FP32 beta 一致性，并通过局部和短整模 parity；这不是
+对 Hugging Face eager dtype 语义的 faithful reproduction。原始 / all-beta
 在固定 41,760-token 历史前缀后的 512-token 窗口均继续旧循环。该数值问题与历史
 自然长循环的因果关系仍未确立。
 
@@ -151,22 +154,40 @@ RMS `0.0002853343030437827`；g delta 为 0，candidate sigmoid maxerr
 双端进程恢复；有限应用元数据响应不等于 readiness，应用 readiness 仍为 `unknown`，未作
 端到端推理结论。
 
-## R4 冷重复确认：已启动，正在生成
+## R4 冷重复确认：已完成
 
 R4 (`historical-beta-r4-confirm`) 重复 R3 的模型、镜像、算术、binds 和 server 参数，新增
 post-request 内存 cycle scan（period 不超过 8192、至少 5 copies）及 first-token divergence
-统计；后者不是 logits 测量。协调器于 `2026-10-20T21:03:22.395171Z` 启动实验，
-`2026-10-20T21:10:54Z` 观察为 `request_streaming`，elapsed `451.618` 秒、events/stream
-lines 各 `128`；这些是 SSE 行数，不是 tokens。源码门禁与 R4 CPU 测试（10 passed）已通过。
+统计；后者不是 logits 测量。协调器于 `2026-10-20T21:03:22.395171Z` 启动实验。
+中途 `21:44:13Z` 观察为 streaming，
+elapsed `2418.958` 秒、events/stream lines `944`（SSE 行数，不是 tokens）。终态观察
+于 `2026-10-20T22:12:33Z` 记录含启动和 post-scan 的 elapsed `3944.766` 秒，不能据此推导精确生成终止时刻。输出
+`49,152` tokens、以 `length` 结束，SHA-256 与 R3 同为
+`57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa`，因此这两个冷请求
+输出重复稳定。post-request scan 检出 period `1,588`，onset `40,236`、coverage `8,916`、
+matching positions `7,328`、`full_repeats=4`：起始部分后有 4 次完整重复，再加初始份及
+残余；这是 R4 的直接 scan 结果，仍是持续循环，不能称 R3/R4 修复。R3 没有执行该
+post-request scan；其 period-1588 仅可因与 R4 相同的 output SHA 推断包含同一输出轨迹，
+不是 R3 的直接测量。reference period `2,032` 的 onset `33,131`、
+coverage `16,021`、matching positions `13,989`、`full_repeats=6`（不计初始段），与 R1/R2
+旧 `complete_periods=7` 口径不同。相对 baseline 的 first-token divergence 为 index `12`，不是 logits 比较。
+缓存 token、retractions 为 0，speculative verify 计数未观测；capacity `1,739,296` 是
+便携容量变化，不是算术变量。
 
-R4 尚无终态、重复稳定或修复结论。两端原 GLM 按授权暂停，实验后恢复仍为 pending。
+实验后两端原 GLM 均 exact/running，维护协调已关闭，清理对象 absent；连续进程稳定观察
+peer `121.151` 秒、replay `121.501` 秒。这里只确认双端进程恢复，应用 readiness 为 `unknown`。
+`2026-10-20T22:13:30Z` 的只读应用观察确认两端 exact/running；rank 0
+`/v1/models` 返回结构化 metadata，readiness 仍为 `unknown`，未进行推理。
 
 ## 历史 decode dtype 审计（只读）
 
-R1/R2 历史源码捕获显示 generic fused decode/verify kernel 以 FP32 计算 beta；ReplaySSM
-路径另有 BF16 roundtrip，但历史 metadata 显示 ReplaySSM disabled，不能据此归因 R1 的
-循环，也不改写 R3 的 prefill-only 算术范围。该审计未使用 current-fork 源码、GPU 或远程
-执行；R1/R2 的历史归档与 current-fork all-beta 描述仍分开解释。
+官方 pinned SGLang 0.5.20 的 ordinary packed decode 有 beta BF16 roundtrip；v8 移除该
+roundtrip 是为匹配 local target-verify 的 FP32 gate。精确 R1/R2 历史 image 则是独立源码
+捕获：ordinary packed decode 以 FP32 计算 beta；ReplaySSM kernel 是另一条件路径，有自身
+BF16 roundtrip，但 R1 metadata 显示其 disabled。该只读审计未用 current-fork 源码、GPU 或
+远程执行。HF 5.12.1 eager 是 projection dtype 上 `b.sigmoid()`，再把 beta 转为 FP32
+recurrence；SGLang FP32 选择不是 HF-faithful 语义。R1/R2 历史归档与 current-fork
+all-beta 描述仍分开解释。
 
 新协调器已通过五种真实 systemd 故障注入：worker 被杀且创建 helper 存活、worker
 被杀且 child 存活、成功 child 退出状态、45 秒租约过期、首次恢复失败后的重试。
