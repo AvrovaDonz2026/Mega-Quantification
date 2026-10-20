@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -313,3 +315,267 @@ def test_termination_stats_requires_explicit_match_to_equal_terminal() -> None:
         [77, 11, 10], {"finish_reason": {"type": "stop", "matched": 11}}, {10}, {77}, budget=8
     )
     assert stats["natural_termination"] is False
+
+
+def test_source_revision_and_paths_are_variant_specific(tmp_path: Path) -> None:
+    lock = tmp_path / "source-lock.json"
+    variants = {
+        name: {"commit": f"{index:040x}", "archive_sha256": "a" * 64}
+        for index, name in enumerate(("original", "decode-beta", "all-beta", "shared-decode"), 1)
+    }
+    lock.write_text(json.dumps({"variants": variants}))
+    assert CONTROLLER_MODULE.source_revision_for_variant("original", lock) == "1".zfill(40)
+    assert CONTROLLER_MODULE.source_revision_for_variant("all-beta", lock) == "3".zfill(40)
+    paths = CONTROLLER_MODULE.source_paths(tmp_path, "original")
+    assert paths == (
+        tmp_path / "source-package/sglang-original",
+        tmp_path / "source-package/sglang-original.tar.gz",
+        tmp_path / "source-package/sglang-original.manifest.json",
+    )
+
+
+def test_source_variant_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="unknown source variant"):
+        CONTROLLER_MODULE.source_revision_for_variant("decode-beta", Path("missing"))
+
+
+def test_single_arm_comparison_omits_cross_arm_fields() -> None:
+    outputs = {"control": [[1, 2], [1, 2]]}
+    comparison = CONTROLLER_MODULE.build_comparison(outputs, "control")
+    assert comparison == {"both_repeat_stable": True, "selected_arm_count": 1}
+
+
+def test_cli_rejects_unknown_variant_and_keeps_default_flags() -> None:
+    parser = CONTROLLER_MODULE.build_parser()
+    required = [
+        "--root",
+        "r",
+        "--remote-root",
+        "rr",
+        "--export",
+        "e",
+        "--bf16",
+        "b",
+        "--control",
+        "c",
+        "--mlp",
+        "m",
+        "--ablation-tool",
+        "a",
+        "--native-private",
+        "n",
+    ]
+    defaults = parser.parse_args(required)
+    assert defaults.source_variant == "all-beta"
+    assert defaults.arms == "both"
+    with pytest.raises(SystemExit):
+        parser.parse_args(required + ["--source-variant", "decode-beta"])
+
+
+@pytest.mark.parametrize("arms", ["both", "control"])
+@pytest.mark.parametrize("source_variant", ["original", "all-beta"])
+def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, arms: str, source_variant: str
+) -> None:
+    module = CONTROLLER_MODULE
+    image = module.IMAGE
+    prompt = list(range(288))
+    reference = list(range(49152))
+    module.NATIVE_SHA = "native-sha"
+    module.PROMPT_SHA = "prompt-sha"
+    remote = tmp_path / "remote"
+    (remote / "candidate-bundle-r1" / "parity-v7").mkdir(parents=True)
+    native_path = tmp_path / "native.json"
+    native_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case": 3,
+                        "request": {"input_ids": prompt},
+                        "response": {"output_ids": reference},
+                    }
+                ]
+            }
+        )
+    )
+    for name in ("export", "bf16", "control", "mlp", "ablation-tool"):
+        (tmp_path / name).mkdir()
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text("{}")
+    (model / "tokenizer.json").write_text(
+        json.dumps({"added_tokens": [{"id": 7, "content": "</think>"}]})
+    )
+    lock = tmp_path / "source-lock.json"
+    commits = {
+        "original": "1" * 40,
+        "decode-beta": "2" * 40,
+        "all-beta": "3" * 40,
+        "shared-decode": "4" * 40,
+    }
+    lock.write_text(json.dumps({"variants": {k: {"commit": v} for k, v in commits.items()}}))
+    source_dir = remote / "source-package" / f"sglang-{source_variant}"
+    source_dir.mkdir(parents=True)
+    source_archive = source_dir.with_suffix(".tar.gz")
+    source_archive.write_bytes(b"archive")
+    source_dir.with_suffix(".manifest.json").write_text("{}")
+
+    calls = {"gates": [], "owned": [], "runtime": [], "cleanup": [], "models": []}
+    fake = types.ModuleType("run_v7")
+    fake._LOCK_MODULE = types.SimpleNamespace(LOCK_PATH=lock)
+    fake.now = lambda: "now"
+    fake.sha256_file = lambda path: "native-sha" if Path(path) == native_path else "file-sha"
+    fake.digest = lambda value: "prompt-sha" if value == prompt else "digest"
+    fake.write_json = lambda path, value: Path(path).write_text(json.dumps(value))
+    fake.source_gate = lambda a: (
+        calls["gates"].append((a.source, a.source_revision)) or {"passed": True}
+    )
+    fake.server_command = lambda a, *args: ["server", "--context-length", "1", a.source_revision]
+    fake.run = lambda command: types.SimpleNamespace(
+        stdout=image if command[:2] == ["docker", "image"] else "container"
+    )
+    fake.gpu_idle = lambda: None
+    fake.wait_health = lambda *args: {
+        "host": "127.0.0.1",
+        "port": 32262,
+        "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-" + args[0].job_id.rsplit("-", 1)[-1].upper(),
+        "quantization": "modelopt_mixed",
+        "fp4_gemm_runner_backend": "flashinfer_cutlass",
+        "attention_backend": "flashinfer",
+        "sampling_backend": "pytorch",
+        "linear_attn_backend": "triton",
+        "mamba_backend": "triton",
+        "mamba_ssm_dtype": "float32",
+        "kv_cache_dtype": "fp8_e4m3",
+        "context_length": 65536,
+        "tp_size": 1,
+        "max_running_requests": 1,
+        "enable_multimodal": True,
+        "speculative_algorithm": None,
+        "disable_radix_cache": True,
+        "allow_auto_truncate": False,
+        "random_seed": module.RANDOM_SEED,
+        "cuda_graph_config": {
+            "prefill": {"backend": "disabled"},
+            "decode": {"backend": "disabled"},
+        },
+    }
+    fake.owned = lambda *args: calls["owned"].append(args)
+    fake.runtime_source_hashes = lambda a, server: (
+        calls["runtime"].append((a.source, a.source_revision)) or {"passed": True}
+    )
+    fake.cleanup = lambda *args: calls["cleanup"].append(args) or {"removed": True}
+    monkeypatch.setitem(sys.modules, "run_v7", fake)
+    monkeypatch.setitem(
+        sys.modules,
+        "model_gate",
+        types.SimpleNamespace(
+            verify_model=lambda *args: calls["models"].append(args) or {"passed": True}
+        ),
+    )
+    monkeypatch.setattr(module, "load_eos_metadata", lambda model: ({99}, {"sources": []}))
+    monkeypatch.setattr(module, "termination_stats", lambda *args: {"natural_termination": True})
+    monkeypatch.setattr(module, "known_period_stats", lambda *args: {"periodic_confirmed": False})
+    monkeypatch.setattr(module, "lcp", lambda left, right: 0)
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def connect_ex(self, *args):
+            return 1
+
+    monkeypatch.setattr(module.socket, "socket", FakeSocket)
+
+    model_info_calls = {"count": 0}
+
+    class Response:
+        status = 200
+
+        def __init__(self, payload=None):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            if self.payload is None:
+                return b"Cache flushed."
+            return json.dumps(self.payload).encode()
+
+        def __iter__(self):
+            return iter(())
+
+        def json(self):
+            return self.payload
+
+    def urlopen(request, timeout=0):
+        url = request if isinstance(request, str) else request.full_url
+        if "/model_info" in url:
+            arm = "CONTROL" if model_info_calls["count"] == 0 else "MLP"
+            model_info_calls["count"] += 1
+            return Response({"model_path": f"/models/Qwen3.8-27B-NVFP4-MSE-{arm}"})
+        if "/flush_cache" in url:
+            return Response()
+        return Response(
+            {
+                "output_ids": [1, 2],
+                "meta_info": {
+                    "completion_tokens": 2,
+                    "prompt_tokens": len(prompt),
+                    "cached_tokens": 0,
+                    "output_token_logprobs": [[-1.0], [-1.0]],
+                    "finish_reason": {"type": "stop"},
+                },
+                "prompt_token_ids": prompt,
+            }
+        )
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", urlopen)
+    argv = [
+        "controller.py",
+        "--root",
+        str(tmp_path / "out"),
+        "--remote-root",
+        str(remote),
+        "--export",
+        str(tmp_path / "export"),
+        "--bf16",
+        str(tmp_path / "bf16"),
+        "--control",
+        str(model),
+        "--mlp",
+        str(model),
+        "--ablation-tool",
+        str(tmp_path / "ablation-tool"),
+        "--native-private",
+        str(native_path),
+        "--source-variant",
+        source_variant,
+        "--arms",
+        arms,
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    module.main()
+    report = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert report["selected_arms"] == (["control"] if arms == "control" else ["control", "mlp"])
+    assert len(calls["gates"]) == len(report["selected_arms"])
+    assert all(
+        isinstance(path, Path) and revision == commits[source_variant]
+        for path, revision in calls["gates"]
+    )
+    assert all(revision == commits[source_variant] for _, revision in calls["runtime"])
+    assert all(args[-1] == commits[source_variant] for args in calls["owned"] + calls["cleanup"])
+    assert len(calls["models"]) == len(report["selected_arms"])
+    if arms == "control":
+        assert all(args[3] == "control" for args in calls["models"])
+        assert set(report["arms"]) == {"control"}
+    else:
+        assert {args[3] for args in calls["models"]} == {"control", "mlp"}

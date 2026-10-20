@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "state": "queued_waiting_for_previous_run",
+  "observed_at_utc": "2026-10-20T07:26:44.062972+00:00",
+  "scope": "Original-source control-only natural-start diagnostic. Queued, no new generation yet; no loop-repair, GPQA, vision/MTP or release claim.",
+  "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
+  "source_variant": "original",
+  "source_revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
+  "comparison_source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+  "selected_arms": [
+    "control"
+  ],
+  "phases": [
+    "long"
+  ],
+  "repetitions_per_arm": 2,
+  "max_new_tokens": 49152,
+  "protocol": {
+    "prompt_tokens": 288,
+    "native_prefix_tokens": 0,
+    "context_length": 65536,
+    "temperature": 0,
+    "seed": 20261020,
+    "tp_size": 1,
+    "mtp": false,
+    "kv_cache_dtype": "fp8_e4m3",
+    "mamba_ssm_dtype": "float32",
+    "quantization_loader": "modelopt_mixed",
+    "radix_cache": false,
+    "cuda_graphs": false,
+    "allow_auto_truncate": false
+  },
+  "unchanged_runner_sha256": "338fce065587d36a05560b202c896eb2d78c6bf6f4133c297513a6318a5779cb",
+  "four_variant_source_lock_sha256": "8c62b39d1ff30cbdc4cb709f1b1a6bad842a175523dbd98e81ee8399e923491e",
+  "tools_sha256": {
+    "controller.py": "c075b830ec4a0c3c8930775d73cd435c164a3c0235a19f424ffeda646f60329e",
+    "model_gate.py": "b8689ed6f243d2e5835d9cb54a26e2f970c0e9701bc302acf8807ead8cb1fb16",
+    "supervisor.py": "5c5bda03ee3d77add48eee058b58d8ec8c7c42a6deefad54f2b306fa0a85c2b9",
+    "fallback_restore.py": "e153a38b8047707a6fc93731b4801476ded54e7e5d944aa37f088c4ddb1503c0"
+  },
+  "deployment_lock_sha256": "deed12328e97f2af92964b67513d3f25c0c3b24d7f2c5aad7319f0c88a5df673",
+  "deployment_files_verified": 13,
+  "launch_evidence_sha256": "ae822594576034bd7bafbbeaeb9a1d74a73d2ff0ca87b53b65717c07aa314b4c",
+  "queue": {
+    "state": "waiting_for_previous_run",
+    "systemd_active": true,
+    "previous_systemd_active": true,
+    "supervisor_started": false,
+    "evidence_started": false,
+    "runtime_max_seconds": 172800,
+    "timeout_stop_seconds": 600,
+    "exec_stop_post_configured": true
+  },
+  "scheduling_gates": [
+    "machine-wide lease held across exec",
+    "frozen deployment hashes",
+    "exact original/control/long scope",
+    "previous unit inactive and successful",
+    "previous reports repeat-stable and cleaned",
+    "same GLM restored and exact identity verified before temporary stop",
+    "Python finally plus ExecStopPost restores same GLM container"
+  ],
+  "termination_diagnostic": "New controller unions effective EOS metadata and retains sanitized matched-stop fields. Frozen r3 config-only EOS booleans remain incomplete and are not relabeled.",
+  "local_validation": {
+    "targeted_tests_passed": 38,
+    "full_tests_passed": 532,
+    "full_tests_skipped": 34,
+    "ruff": "passed",
+    "queue_gate_scenarios_passed": 4,
+    "cpu_test_limit": "Local environment lacks torch, Pillow and pyarrow; optional tests were not executed locally; CI results are recorded separately."
+  },
+  "causal_limit": "Historical 262144-context/radix-enabled/seed-213087260 protocol differs. This run changes only source arithmetic relative to r3 control. If both sources stop, restore other historical factors one at a time.",
+  "observation_evidence_sha256": "651b6453b20613ab181244e819a9f058be71a39aa5e30413aa5e5adc1b3a9073",
+  "deployment_files_unchanged": true
+}

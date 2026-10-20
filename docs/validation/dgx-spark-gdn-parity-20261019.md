@@ -126,11 +126,14 @@ control 耗时 289.24 / 288.87 秒，MLP 耗时 699.05 / 696.29 秒；MLP 本次
 LCP 为 7 / 12。两臂都未检出确认的 2,032-token 周期，但该短预算无法覆盖历史循环
 起点，因此不构成停止恢复或循环修复。短阶段两个容器均已清理。
 
-监督进程于 04:05:30 UTC 接上 long 阶段。最新 progress-10（05:41:55 UTC）显示
+监督进程于 04:05:30 UTC 接上 long 阶段。最新 progress-17（07:27:32 UTC）显示
 control 两次均在 34,189 tokens 后返回 `stop`，耗时 2,503.58 / 2,505.88 秒，
 各出现一次 thinking-end（index 33,901），两次输出 SHA 一致、repeat stable=true，
-未检出确认的 2,032-token 周期。MLP long trial 1 于 05:40:43 UTC 开始，尚无完成
-结果。control 的历史循环尚未复现，不能预设这次对照会循环。
+未检出确认的 2,032-token 周期。MLP long trial 1 在 25,000 tokens 后返回服务
+`stop`，耗时 4,300.50 秒，一次 thinking-end（index 24,735），未检出确认周期；
+trial 2 于 06:52:25 UTC 开始，尚未完成。control 的历史循环尚未复现，不能把
+MLP 第一轮较早停止解释为修复。后续 [原始源码对照](dgx-spark-natural-source-control-20261020.md)
+已独立排队，等待 r3 完成并恢复 GLM 后执行。
 
 两条 control 记录的 `contains_eos=false`、`terminal_eos=false`、`natural_termination=false`
 仅使用了运行中诊断器从 config 读取的 EOS 集合。只读元数据核对发现，control、MLP

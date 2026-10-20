@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -24,6 +25,12 @@ JOBS = frozenset(("mlp-pilot-control", "mlp-pilot-mlp"))
 SOURCE = "49d3acfd4d54b0cf1afffcfeb369c63af4f56499"
 IMAGE = "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf"
 PHASES = (("early", 4096, 5 * 60 * 60), ("long", 49152, 18 * 60 * 60))
+SOURCE_VARIANT_REVISIONS = {
+    "original": "4a667614d810f7b5570be23eb75956c603a85c3a",
+    "all-beta": SOURCE,
+}
+ARM_NAMES = {"control": "control", "mlp": "mlp"}
+PHASE_BY_NAME = {phase: (budget, timeout) for phase, budget, timeout in PHASES}
 _CHUNK = 8 * 1024 * 1024
 
 
@@ -167,7 +174,7 @@ def matching_owned_rows() -> list[tuple[str, dict[str, Any]]]:
 
 def preflight_no_residuals() -> None:
     for _cid, row in matching_owned_rows():
-        if labels(row).get("io.megaquant.parity-v7.job") in JOBS:
+        if labels(row).get("io.megaquant.parity-v7.job") in _cleanup_jobs():
             raise SupervisorError("pre-existing experiment container")
 
 
@@ -177,8 +184,8 @@ def cleanup_experiment_containers(started_at: float) -> int:
         tag = labels(row)
         created = parse_created(row)
         if (
-            tag.get("io.megaquant.parity-v7.job") in JOBS
-            and tag.get("io.megaquant.parity-v7.source") == SOURCE
+            tag.get("io.megaquant.parity-v7.job") in _cleanup_jobs()
+            and tag.get("io.megaquant.parity-v7.source") in _cleanup_revisions()
             and row.get("Image") == IMAGE
             and created is not None
             and created >= started_at
@@ -188,6 +195,41 @@ def cleanup_experiment_containers(started_at: float) -> int:
                 raise SupervisorError("experiment container cleanup failed")
             removed += 1
     return removed
+
+
+_ACTIVE_SOURCE_REVISIONS: frozenset[str] | None = None
+_ACTIVE_JOBS: frozenset[str] | None = None
+
+
+def _cleanup_revisions() -> frozenset[str]:
+    return _ACTIVE_SOURCE_REVISIONS or frozenset({SOURCE})
+
+
+def _cleanup_jobs() -> frozenset[str]:
+    return _ACTIVE_JOBS or JOBS
+
+
+def parse_run_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Validate run selectors and return the immutable values used everywhere."""
+    variant = config.get("source_variant", "all-beta")
+    if variant not in SOURCE_VARIANT_REVISIONS:
+        raise SupervisorError("unknown source variant")
+    arms = config.get("arms", "both")
+    selected_arms = ["control", "mlp"] if arms == "both" else [arms]
+    if arms not in ("both", "control"):
+        raise SupervisorError("invalid arms selector")
+    phases = config.get("phases", ["early", "long"])
+    if not isinstance(phases, list) or not phases or len(set(phases)) != len(phases):
+        raise SupervisorError("phases must be a non-empty list without duplicates")
+    if any(phase not in PHASE_BY_NAME for phase in phases):
+        raise SupervisorError("unknown phase")
+    return {
+        "source_variant": variant,
+        "source_revision": SOURCE_VARIANT_REVISIONS[variant],
+        "selected_arms": selected_arms,
+        "jobs": frozenset(f"mlp-pilot-{name}" for name in selected_arms),
+        "phases": [(phase, *PHASE_BY_NAME[phase]) for phase in phases],
+    }
 
 
 def gpu_idle_gate() -> None:
@@ -268,17 +310,28 @@ def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, A
     return expected_id, row, glm_snapshot(row)
 
 
-def fresh_evidence_roots(root: Path, prefix: str) -> dict[str, Path]:
-    paths = {phase: root / f"{prefix}-{phase}" for phase, _, _ in PHASES}
+def fresh_evidence_roots(
+    root: Path, prefix: str, phases: list[tuple[str, int, int]]
+) -> dict[str, Path]:
+    paths = {phase: root / f"{prefix}-{phase}" for phase, _, _ in phases}
     for path in paths.values():
         if path.exists():
             raise SupervisorError("evidence root is not fresh")
     return paths
 
 
-def build_phase_argv(base: list[Any], evidence: Path, phase: str, budget: int) -> list[str]:
+def build_phase_argv(
+    base: list[Any],
+    evidence: Path,
+    phase: str,
+    budget: int,
+    *,
+    source_variant: str | None = None,
+    arms: str | None = None,
+) -> list[str]:
     argv = [str(x) for x in base]
-    if "--phase" in argv or "--budget" in argv:
+    forbidden = {"--phase", "--budget", "--source-variant", "--arms", "--source-revision"}
+    if any(flag in argv for flag in forbidden):
         raise SupervisorError("base command must not contain phase or budget")
     try:
         root_index = argv.index("--root")
@@ -288,10 +341,14 @@ def build_phase_argv(base: list[Any], evidence: Path, phase: str, budget: int) -
         raise SupervisorError("invalid --root argument")
     argv[root_index + 1] = str(evidence)
     argv.extend(["--phase", phase, "--budget", str(budget)])
+    if source_variant is not None:
+        argv.extend(["--source-variant", source_variant])
+    if arms is not None:
+        argv.extend(["--arms", arms])
     return argv
 
 
-def valid_report(path: Path) -> bool:
+def valid_report(path: Path, expected: dict[str, Any] | None = None) -> bool:
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -300,11 +357,24 @@ def valid_report(path: Path) -> bool:
         return False
     comparison = report.get("comparison")
     arms = report.get("arms")
-    if not isinstance(comparison, dict) or comparison.get("both_repeat_stable") is not True:
+    if not isinstance(comparison, dict):
         return False
-    if not isinstance(arms, dict) or set(arms) != set(JOBS_NAME_TO_ARM):
+    expected_arms = (expected or {}).get("selected_arms", list(JOBS_NAME_TO_ARM))
+    if not isinstance(arms, dict) or set(arms) != set(expected_arms):
         return False
-    for arm_name in ("control", "mlp"):
+    if expected is None:
+        if comparison.get("both_repeat_stable") is not True:
+            return False
+    else:
+        for key in ("source_variant", "source_revision"):
+            if report.get(key) != expected[key]:
+                return False
+        if report.get("selected_arms") != expected_arms:
+            return False
+        for key in ("phase", "max_new_tokens", "controller_sha256", "model_gate_sha256"):
+            if key in expected and report.get(key) != expected[key]:
+                return False
+    for arm_name in expected_arms:
         arm = arms.get(arm_name)
         if (
             not isinstance(arm, dict)
@@ -312,8 +382,89 @@ def valid_report(path: Path) -> bool:
             or len(arm["trials"]) != 2
         ):
             return False
+        if arm.get("repeat_stable") is not True:
+            return False
+        hashes = [
+            trial.get("output_ids_sha256") for trial in arm["trials"] if isinstance(trial, dict)
+        ]
+        if (
+            len(hashes) != 2
+            or hashes[0] != hashes[1]
+            or any(
+                not isinstance(x, str) or re.fullmatch(r"[0-9a-f]{64}", x) is None for x in hashes
+            )
+        ):
+            return False
+        if expected is not None:
+            if [trial.get("trial") for trial in arm["trials"]] != [1, 2]:
+                return False
+            for trial in arm["trials"]:
+                if (
+                    type(trial.get("output_tokens")) is not int
+                    or not 0 < trial["output_tokens"] <= expected["max_new_tokens"]
+                    or trial.get("cached_tokens") != 0
+                    or trial.get("prompt_echo_exact") is not True
+                    or trial.get("logprobs_finite") is not True
+                ):
+                    return False
+            if arm["trials"][0]["output_tokens"] != arm["trials"][1]["output_tokens"]:
+                return False
         cleanup = arm.get("cleanup")
         if not isinstance(cleanup, dict) or cleanup.get("removed") is not True:
+            return False
+        removed_id = cleanup.get("container_id", cleanup.get("id"))
+        if (
+            not isinstance(removed_id, str)
+            or len(removed_id) != 64
+            or any(char not in "0123456789abcdef" for char in removed_id.lower())
+        ):
+            return False
+        if expected is not None and not all(
+            isinstance(arm.get(key), dict)
+            for key in ("model_proof", "source_proof", "termination_metadata")
+        ):
+            return False
+        if expected is not None:
+            source_proof = arm["source_proof"]
+            if (
+                source_proof.get("commit") != expected["source_revision"]
+                or source_proof.get("exact_archive_tree") is not True
+                or arm["model_proof"].get("passed") is not True
+                or arm["termination_metadata"].get("any_present") is not True
+            ):
+                return False
+            runtime_hash = arm.get("runtime_source_sha256")
+            if (
+                not isinstance(runtime_hash, str)
+                or re.fullmatch(r"[0-9a-f]{64}", runtime_hash) is None
+            ):
+                return False
+            identity = arm.get("server_identity")
+            if not isinstance(identity, dict) or identity.get("passed") is not True:
+                return False
+            for key in ("server_info_sha256", "model_info_sha256"):
+                if re.fullmatch(r"[0-9a-f]{64}", str(identity.get(key))) is None:
+                    return False
+    if expected is not None:
+        if comparison.get("both_repeat_stable") is not all(
+            arms[name].get("repeat_stable") is True for name in expected_arms
+        ):
+            return False
+    if expected is not None and set(expected_arms) == {"control"}:
+        if "control_vs_mlp_lcp" in comparison or "output_exact" in comparison:
+            return False
+    if expected is not None:
+        protocol = report.get("protocol")
+        required_protocol = {
+            "context_length": 65536,
+            "temperature": 0,
+            "tp_size": 1,
+            "mtp": False,
+            "disable_radix_cache": True,
+        }
+        if not isinstance(protocol, dict) or any(
+            protocol.get(key) != value for key, value in required_protocol.items()
+        ):
             return False
     return True
 
@@ -345,12 +496,20 @@ def run_phase(
     supervisor_started_at: float,
     status: dict[str, Any],
     status_path: Path,
+    run_options: dict[str, Any],
 ) -> None:
     log_path = root / f"{evidence.name}.supervisor.log"
     if log_path.exists():
         raise SupervisorError("phase log is not fresh")
     with log_path.open("x", encoding="utf-8") as log:
-        argv = build_phase_argv(config["base_command"], evidence, phase, budget)
+        argv = build_phase_argv(
+            config["base_command"],
+            evidence,
+            phase,
+            budget,
+            source_variant=run_options["source_variant"],
+            arms="both" if len(run_options["selected_arms"]) == 2 else "control",
+        )
         status.update({"state": "phase_running", "phase": phase, "pid": None, "at_utc": utc_now()})
         atomic_json(status_path, status)
         proc: subprocess.Popen[Any] | None = None
@@ -383,7 +542,16 @@ def run_phase(
             finally:
                 # The controller can be interrupted before its own finally block.
                 cleanup_experiment_containers(supervisor_started_at)
-    if not valid_report(evidence / "report.json"):
+    expected_report = dict(run_options)
+    expected_report.update(
+        {
+            "phase": phase,
+            "max_new_tokens": budget,
+            "controller_sha256": config.get("controller_sha256"),
+            "model_gate_sha256": config.get("model_gate_sha256"),
+        }
+    )
+    if not valid_report(evidence / "report.json", expected_report):
         raise SupervisorError("phase report gate failed")
 
 
@@ -406,6 +574,11 @@ def main() -> int:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         if not isinstance(config, dict):
             raise SupervisorError("config must be an object")
+        run_options = parse_run_config(config)
+        global _ACTIVE_SOURCE_REVISIONS
+        global _ACTIVE_JOBS
+        _ACTIVE_SOURCE_REVISIONS = frozenset({run_options["source_revision"]})
+        _ACTIVE_JOBS = run_options["jobs"]
         root = Path(config["root_path"]).expanduser()
         prefix = config.get("experiment_prefix", "mlp-pilot-r3")
         if not isinstance(prefix, str) or not prefix or "/" in prefix or "\\" in prefix:
@@ -430,7 +603,7 @@ def main() -> int:
             }
         )
         atomic_json(status_path, status)
-        evidence = fresh_evidence_roots(root, prefix)
+        evidence = fresh_evidence_roots(root, prefix, run_options["phases"])
 
         controller = Path(config["controller_path"]).expanduser()
         model_gate = Path(config["model_gate_path"]).expanduser()
@@ -456,7 +629,15 @@ def main() -> int:
         ]:
             raise SupervisorError("base command controller differs from controller_path")
         # Validate the command before touching the serving container.
-        build_phase_argv(base, evidence["early"], "early", 4096)
+        first_phase, first_budget, _ = run_options["phases"][0]
+        build_phase_argv(
+            base,
+            evidence[first_phase],
+            first_phase,
+            first_budget,
+            source_variant=run_options["source_variant"],
+            arms="both" if len(run_options["selected_arms"]) == 2 else "control",
+        )
         preflight_no_residuals()
         glm_id, before_row, before = verify_glm(config)
         status["glm_before"] = before
@@ -471,7 +652,7 @@ def main() -> int:
         status.update({"state": "glm_stopped", "at_utc": utc_now()})
         atomic_json(status_path, status)
         gpu_idle_gate()
-        for phase, budget, timeout_seconds in PHASES:
+        for phase, budget, timeout_seconds in run_options["phases"]:
             run_phase(
                 config,
                 root,
@@ -482,6 +663,7 @@ def main() -> int:
                 supervisor_started_at,
                 status,
                 status_path,
+                run_options,
             )
             status.update({"state": "phase_completed", "phase": phase, "at_utc": utc_now()})
             atomic_json(status_path, status)
@@ -494,10 +676,11 @@ def main() -> int:
             except Exception:
                 pass
     finally:
-        try:
-            cleanup_experiment_containers(supervisor_started_at)
-        except Exception:
-            status.update({"cleanup_failed": True, "state": "failed", "at_utc": utc_now()})
+        if glm_was_stopped:
+            try:
+                cleanup_experiment_containers(supervisor_started_at)
+            except Exception:
+                status.update({"cleanup_failed": True, "state": "failed", "at_utc": utc_now()})
         if glm_was_stopped and glm_id is not None:
             restored = False
             for _attempt in range(3):

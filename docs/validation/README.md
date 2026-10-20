@@ -17,10 +17,13 @@ negative result：同一份真正 MSE 历史权重 view 使用 original / all-be
 最终会停止，也不改变历史 GPQA 记录。
 
 MLP-only BF16 recovery pilot 已在 2026-10-20 完成短阶段：control / MLP 各两次
-4,096-token 输出均臂内逐 token 一致、全部达到预算。05:41 UTC 最新观察时，长阶段
-control 两次均在 34,189 tokens 后返回 `stop` 且输出稳定，MLP long trial 1 正在推理。
-首条未检出已知周期，但运行中诊断器的 EOS 集合漏读 generation/tokenizer 元数据，
-不能按其 `natural_termination=false` 认定未正常停止，亦无修复结论。
+4,096-token 输出均臂内逐 token 一致、全部达到预算。07:27 UTC 观察时，长阶段
+control 两次均在 34,189 tokens 后返回 `stop` 且输出稳定；MLP 第一轮在 25,000 tokens
+后返回服务 `stop`，第二轮正在推理。三条长响应均未检出确认的 2,032-token 周期。
+运行中诊断器漏读部分 EOS 元数据，不能用其 `natural_termination=false` 认定没有
+EOS 停止。历史循环未在 control 复现，当前无修复结论。
+[原始 GDN 源码对照](dgx-spark-natural-source-control-20261020.md)已于 07:17 UTC 独立排队，
+等待前组完成并恢复服务后运行两次同条件长请求；新对照尚未开始生成。
 r2 队列过期未启动的记录保留；r3 的临时 GLM 暂停与实验后恢复由
 远端监督进程托管。[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 

@@ -10,6 +10,9 @@ import supervisor as s
 
 def main():
     config = json.loads(Path(__file__).with_name("config.json").read_text())
+    run_options = s.parse_run_config(config)
+    s._ACTIVE_SOURCE_REVISIONS = frozenset({run_options["source_revision"]})
+    s._ACTIVE_JOBS = run_options["jobs"]
     status_path = Path(config["root_path"]) / "supervisor-status.json"
     if not status_path.exists():
         return 0

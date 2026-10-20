@@ -14,11 +14,59 @@ from pathlib import Path
 from types import SimpleNamespace
 
 IMAGE = "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf"
-REVISION = "49d3acfd4d54b0cf1afffcfeb369c63af4f56499"
+LOCKED_VARIANTS = ("original", "decode-beta", "all-beta", "shared-decode")
 NATIVE_SHA = "8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218"
 PROMPT_SHA = "20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436"
 KNOWN_PERIOD = 2032
 RANDOM_SEED = 20261020
+
+
+def source_revision_for_variant(variant, lock_path=None):
+    """Return the revision from the four-variant source lock."""
+    if variant not in ("original", "all-beta"):
+        raise ValueError(f"unknown source variant: {variant}")
+    path = (
+        Path(lock_path)
+        if lock_path is not None
+        else Path(__file__).resolve().parents[1] / "source-lock.json"
+    )
+    try:
+        lock = json.loads(path.read_text())
+        variants = lock["variants"]
+        if set(variants) != set(LOCKED_VARIANTS):
+            raise ValueError("source lock must contain exactly the four pinned variants")
+        revision = variants[variant]["commit"]
+        if not isinstance(revision, str) or len(revision) != 40:
+            raise ValueError("source lock revision is malformed")
+        return revision
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"invalid source lock: {path}") from exc
+
+
+def source_paths(remote_root, variant):
+    if variant not in ("original", "all-beta"):
+        raise ValueError(f"unknown source variant: {variant}")
+    base = Path(remote_root) / "source-package"
+    stem = f"sglang-{variant}"
+    return base / stem, base / f"{stem}.tar.gz", base / f"{stem}.manifest.json"
+
+
+def selected_arms(arms):
+    if arms not in ("both", "control"):
+        raise ValueError(f"unknown arm selection: {arms}")
+    return ("control", "mlp") if arms == "both" else ("control",)
+
+
+def build_comparison(outputs, arms):
+    chosen = selected_arms(arms)
+    result = {
+        "both_repeat_stable": all(outputs[name][0] == outputs[name][1] for name in chosen),
+        "selected_arm_count": len(chosen),
+    }
+    if len(chosen) == 2:
+        left, right = outputs[chosen[0]][0], outputs[chosen[1]][0]
+        result.update({"control_vs_mlp_lcp": lcp(left, right), "output_exact": left == right})
+    return result
 
 
 def _strict_ids(value, source):
@@ -209,7 +257,7 @@ def termination_stats(out, meta, eos, think_end, budget):
     }
 
 
-def main():
+def build_parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--remote-root", type=Path, required=True)
@@ -221,6 +269,13 @@ def main():
     p.add_argument("--native-private", type=Path, required=True)
     p.add_argument("--phase", choices=("early", "long"), default="early")
     p.add_argument("--budget", type=int, default=None)
+    p.add_argument("--source-variant", choices=("original", "all-beta"), default="all-beta")
+    p.add_argument("--arms", choices=("both", "control"), default="both")
+    return p
+
+
+def main():
+    p = build_parser()
     o = p.parse_args()
     if o.phase == "early":
         o.budget = 4096 if o.budget is None else o.budget
@@ -257,6 +312,8 @@ def main():
             raise RuntimeError("native prompt/output identity differs")
         if any(type(x) is not int or x < 0 for x in ids + reference):
             raise RuntimeError("native token type invalid")
+        source_revision = source_revision_for_variant(o.source_variant, v._LOCK_MODULE.LOCK_PATH)
+        arm_names = selected_arms(o.arms)
         report = {
             "schema_version": 1,
             "started_at_utc": v.now(),
@@ -279,8 +336,11 @@ def main():
             "historical_reference_window_sha256": v.digest(reference[: o.budget]),
             "max_new_tokens": o.budget,
             "repetitions_per_arm": 2,
+            "source_variant": o.source_variant,
+            "selected_arms": list(arm_names),
+            "selected_arm_count": len(arm_names),
             "image_id": IMAGE,
-            "source_revision": REVISION,
+            "source_revision": source_revision,
             "ablation_tool_sha256": v.sha256_file(o.ablation_tool),
             "model_gate_sha256": v.sha256_file(Path(__file__).with_name("model_gate.py")),
             "protocol": {
@@ -301,7 +361,9 @@ def main():
             "arms": {},
         }
         outputs = {}
-        for variant, model in [("control", o.control), ("mlp", o.mlp)]:
+        source_dir, source_archive, source_manifest = source_paths(o.remote_root, o.source_variant)
+        for variant in arm_names:
+            model = o.control if variant == "control" else o.mlp
             arm_root = o.root / variant
             arm_root.mkdir()
             progress("model_gate", arm=variant)
@@ -312,11 +374,11 @@ def main():
                 root=arm_root,
                 job_id="mlp-pilot-" + variant,
                 model_scheme=scheme_label,
-                source_variant="all-beta",
-                source_revision=REVISION,
-                source=o.remote_root / "source-package/sglang-all-beta",
-                source_archive=o.remote_root / "source-package/sglang-all-beta.tar.gz",
-                source_manifest=o.remote_root / "source-package/sglang-all-beta.manifest.json",
+                source_variant=o.source_variant,
+                source_revision=source_revision,
+                source=source_dir,
+                source_archive=source_archive,
+                source_manifest=source_manifest,
                 model=model,
                 image=IMAGE,
                 image_id=IMAGE,
@@ -324,8 +386,8 @@ def main():
                 force_shared_decode="0",
                 health_timeout=1200,
             )
-            source = v.source_gate(a)
-            source.pop("source_file_hashes", None)
+            source_proof = v.source_gate(a)
+            source_proof.pop("source_file_hashes", None)
             eos, eos_proof = load_eos_metadata(model)
             tok = json.loads((model / "tokenizer.json").read_text())
             think_end = [
@@ -349,7 +411,7 @@ def main():
             server = None
             arm = {
                 "model_proof": proof,
-                "source_proof": source,
+                "source_proof": source_proof,
                 "termination_metadata": eos_proof,
                 "trials": [],
             }
@@ -358,7 +420,7 @@ def main():
             try:
                 progress("starting", arm=variant)
                 server = v.run(command).stdout.strip()
-                v.owned(server, a.job_id, "baseline", IMAGE, REVISION)
+                v.owned(server, a.job_id, "baseline", IMAGE, source_revision)
                 info = v.wait_health(a, server, "baseline", port)
                 model_info = get(port, "/model_info")
                 expected = {
@@ -489,14 +551,9 @@ def main():
                 arm["repeat_stable"] = outputs[variant][0] == outputs[variant][1]
                 arm["completed_at_utc"] = v.now()
             finally:
-                arm["cleanup"] = v.cleanup(server, a.job_id, "baseline", IMAGE, REVISION)
+                arm["cleanup"] = v.cleanup(server, a.job_id, "baseline", IMAGE, source_revision)
                 v.write_json(arm_root / "checkpoint.json", arm)
-        left, right = outputs["control"][0], outputs["mlp"][0]
-        report["comparison"] = {
-            "control_vs_mlp_lcp": lcp(left, right),
-            "output_exact": left == right,
-            "both_repeat_stable": all(x["repeat_stable"] for x in report["arms"].values()),
-        }
+        report["comparison"] = build_comparison(outputs, o.arms)
         report["stopping_outcome"] = {
             variant: {
                 "natural_termination_trials": sum(

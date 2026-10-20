@@ -307,7 +307,7 @@
       "error_type": "GateError",
       "serving_containers_started": false
     },
-    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions, all ending at the budget. Long control completed two stable 34189-token stop trials; long MLP trial 1 is running. No completed long MLP result or repair claim. The running controller checks only config EOS metadata, which omits other EOS sources; its natural_termination field is incomplete.",
+    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control completed two stable 34189-token service stop trials. Long MLP trial 1 completed at 25000 tokens with service stop and thinking-end, no confirmed lag-2032 cycle; trial 2 is running. Historical natural looping is not reproduced by control, so no loop-repair or answer-accuracy claim. The frozen config-only EOS diagnostic is incomplete.",
     "queue_snapshot_20261019": {
       "state": "waiting_for_gpu",
       "snapshot_at_utc": "2026-10-19T09:42:52.411635+00:00",
@@ -323,18 +323,18 @@
       "pilot_evidence_root_exists": false
     },
     "latest_observation": {
-      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
+      "observed_at_utc": "2026-10-20T07:27:32.843395+00:00",
       "phase": "long",
       "arm": "mlp",
-      "at_utc": "2026-10-20T05:40:43.387603+00:00",
+      "at_utc": "2026-10-20T06:52:25.164390+00:00",
       "state": "request",
-      "trial": 1,
+      "trial": 2,
       "completed_early_control_trials": 2,
       "completed_early_mlp_trials": 2,
-      "completed_long_trials": 2,
+      "completed_long_trials": 3,
       "glm_running": false,
       "active_compute_processes": 2,
-      "evidence_sha256": "648a08c840ef671fc56066f5915e6e3965b6cc1c4a6666d4e102bfe5ca284608"
+      "evidence_sha256": "f9454d5caddf8a488737cd1cccc8a64e17eb5c91dab16ee7bded56a1ed8b95c1"
     },
     "long_phase_prepared": {
       "budget": 49152,
@@ -357,7 +357,7 @@
     "r3": {
       "state": "running_inference",
       "supervisor_state": "phase_running",
-      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
+      "observed_at_utc": "2026-10-20T07:27:32.843395+00:00",
       "early": {
         "at_utc": "2026-10-20T04:05:30.384675+00:00",
         "state": "completed"
@@ -508,12 +508,12 @@
           }
         ]
       },
-      "interpretation": "Each arm repeats exactly at 4096 tokens but differs after seven initial tokens. Both long control trials returned the same 34189-token stop output with thinking-end and no confirmed lag-2032 repetition. Long MLP trial 1 is running. Only config EOS IDs were checked, so natural_termination is an incomplete diagnostic; no repair or accuracy conclusion.",
+      "interpretation": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control completed two stable 34189-token service stop trials. Long MLP trial 1 completed at 25000 tokens with service stop and thinking-end, no confirmed lag-2032 cycle; trial 2 is running. Historical natural looping is not reproduced by control, so no loop-repair or answer-accuracy claim. The frozen config-only EOS diagnostic is incomplete.",
       "long": {
         "arm": "mlp",
-        "at_utc": "2026-10-20T05:40:43.387603+00:00",
+        "at_utc": "2026-10-20T06:52:25.164390+00:00",
         "state": "request",
-        "trial": 1
+        "trial": 2
       },
       "early_phase_completed_at_utc": "2026-10-20T04:05:30.384247+00:00",
       "early_comparison": {
@@ -823,9 +823,72 @@
         },
         "running_controller_unchanged": true,
         "scope": "EOS-source metadata counts and hashes only. No observed final token or matched stop metadata retained; cannot relabel existing trial."
+      },
+      "long_mlp": {
+        "model_proof": {
+          "config_sha256": "ee2922ff99e06fc5cfc97a5acc0e6aae6433de683eab2fd3c593fab3e9ebb4a2",
+          "hf_quant_config_sha256": "83b799d1fd35dd9108b94db03a83a74bf56ca73341d769e27c085f9e89a114a7",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "74591b904b9724b25556af2925bd3c28b8efa9cd0c6270e2824a5513c73420d1",
+          "passed": true,
+          "payload_sha256_count": 2180,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 192,
+          "tensor_count": 2180,
+          "tokenizer_files": 2,
+          "variant_mlp": true,
+          "visual_quantized_layers": 110
+        },
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 4300.496990198968,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 24735,
+            "historical_natural_lcp": 12,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19249346541361992,
+            "natural_termination": false,
+            "output_ids_sha256": "07f17a874a362e2847e617306324eb11cf0461af22fc5216a675c94c70fe2fed",
+            "output_tokens": 25000,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 6,
+            "periodic_extent": 2038,
+            "periodic_lag": 2032,
+            "periodic_onset": 1813,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 1
+          }
+        ],
+        "server_identity": {
+          "model_info_sha256": "924411eabc4e7fa9bd16e0c9de29ec54cc5fb05a1421205e642866c942da1db5",
+          "passed": true,
+          "server_info_sha256": "cf35fd7807b8207c47efcea0a229efbc42da190ae9c31be547024f5f7897c3e4"
+        }
       }
     },
-    "gpu_serving_scope": "Early phase gates and two short requests passed for each arm. Both long control trials returned stable stop outputs; long MLP trial 1 is running.",
+    "gpu_serving_scope": "Early phase passed for both arms. Long control repeated stably twice; MLP long trial 1 returned service stop and trial 2 is generating. No independent long-loop repair evidence.",
     "diagnostic_tool_update": {
       "deployed_to_running_r3": false,
       "metadata_validation": {
