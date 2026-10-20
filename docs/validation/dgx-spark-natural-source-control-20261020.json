@@ -224,23 +224,12 @@
     "new_run_policy": "Require canonical exact integer zero and persist the scalar; missing speculation count is unobserved.",
     "limit": "Completed trial rows remain frozen; do not relabel them as direct zero-retraction observations."
   },
-  "historical_replay_live_observation": {
+  "historical_replay_completed": {
     "experiment": "historical-replay-r1",
-    "state": "request_streaming",
+    "state": "completed_exact_historical_replay",
     "experiment_started_at_utc": "2026-10-20T15:57:27+00:00",
-    "progress_observed_at_utc": "2026-10-20T16:32:18.306709+00:00",
-    "progress": {
-      "elapsed_seconds": 2076.454,
-      "stream_lines": 800,
-      "output_tokens_observed": null,
-      "stream_line_count_is_not_token_count": true
-    },
-    "throughput_observed_at_utc": "2026-10-20T16:34:14.356570+00:00",
-    "last_gen_throughput_tokens_per_second": 12.9640206986353,
-    "experiment_container_running": true,
-    "experiment_container_oom_killed": false,
-    "paired_maintenance_heartbeats_observed_at_utc": "2026-10-20T16:37:56.781043+00:00",
-    "paired_maintenance_heartbeats_alive": true,
+    "completion_observed_minute_utc": "2026-10-20T17:03Z",
+    "elapsed_seconds_including_startup": 3936.556,
     "historical_protocol": {
       "context_length": 262144,
       "disable_radix_cache": false,
@@ -253,21 +242,60 @@
       "submitted_requests": 1,
       "max_new_tokens": 49152
     },
-    "terminal_outcome_observed": false,
-    "historical_cycle_reproduced": null,
-    "original_pair_restoration": "pending_experiment_completion",
-    "application_readiness_established": false,
-    "source_hashes": {
-      "maintenance.py": "98e5d7e952932af965d778f15bdf137adfdcbe83623621c16bb7232cac31aaeb",
-      "controller.py": "3578178c5d608976ededb45107780d5250a414ae2badef7f363ce3c486d6b566",
-      "runtime_client.py": "a3650b607425f7beddfec65e2d1121a100714766aa451a47809da89da4fbe3a9"
+    "result": {
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "exact_historical_output_match": true,
+      "periodic_lag": 2032,
+      "periodic_onset": 33131,
+      "periodic_count": 13989,
+      "periodic_extent": 16021,
+      "periodic_complete_periods": 7,
+      "cached_tokens": 0,
+      "num_retractions": 0
     },
+    "paired_process_restoration": {
+      "state": "exact_running_and_continuous_120s_verified_closed",
+      "verified_closed_at_utc": "2026-10-20T17:05:14+00:00"
+    },
+    "application_readiness": "unknown",
+    "application_observer_framework": null,
+    "next_single_variable_stage": "radix_off_r2_request_streaming",
     "systemd_dummy_recovery_probe": {
       "cases_passed": 5,
       "continuous_stability_seconds_each": 120,
       "docker_gpu_or_glm_actions": false,
       "probe_sha256": "b5df0d0b18a4001e883b48b1ec8765da1f5435590721e2b57ef4ff124c99628d"
     },
-    "causal_limit": "Running diagnostic only. No terminal result, historical-cycle reproduction, MSE repair or actual GLM restoration is established."
+    "causal_limit": "Exact reproducibility is established only for this fixed case. This does not establish MSE repair or application readiness; the radix-off comparison is in progress and has no terminal result yet."
+  },
+  "historical_replay_r2_live_observation": {
+    "experiment": "historical-radix-r2",
+    "state": "request_streaming",
+    "experiment_started_at_utc": "2026-10-20T17:15:42.908862+00:00",
+    "server_argv_semantic_change": [
+      "--disable-radix-cache"
+    ],
+    "metadata_mamba_strategy": "extra_buffer_lazy",
+    "historical_protocol_preserved": true,
+    "observation": {
+      "observed_at_utc": "2026-10-20T17:28:26.921263+00:00",
+      "elapsed_seconds": 732.692,
+      "output_tokens_observed": 8129,
+      "output_events_observed": 128,
+      "child_active": true,
+      "failure_observed": false
+    },
+    "protected_pair": {
+      "state": "exact_paused",
+      "restoration_required": true
+    },
+    "terminal_outcome_observed": false,
+    "output_sha256": null,
+    "finish_type": null,
+    "paired_process_restoration": "pending",
+    "application_readiness": "unknown",
+    "causal_limit": "R2 is an in-progress single-variable radix-off comparison. Streaming progress is observed, but terminal outcome, output hash, cycle statistics, paired restoration, and readiness are not yet established."
   }
 }
