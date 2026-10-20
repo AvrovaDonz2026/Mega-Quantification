@@ -169,6 +169,20 @@ early 5 小时、long 18 小时是 watchdog
 复现脚本与配置见
 [`mlp-pilot`](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/)。
 
+## R3 beta-store 单变量对照：已完成
+
+R3 保留 R1 的 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；原分配
+已为 FP32。单个冷请求输出 `49,152` tokens，以 `length` 结束，输出 SHA-256
+`57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa`，与 R1/R2 不同。
+lag `2,032` 的最大匹配计数为 `10`，起点 `10,959`、覆盖 `2,042` tokens；匹配不足
+完整周期确认门槛，只能说未检出原已确认的长期 lag-2032 循环，不能排除其他 period，
+也不能声称正常停止、答案正确或 MSE 修复。speculative verify 计数未观测，缓存 token
+和 retractions 均为 0；容量摘要 `1,728,271` 只保留容量差异边界。microprobe 的
+legacy-to-candidate maxabs/RMS 为 `0.0005898475646972656` / `0.0002853343030437827`，
+g delta 为 0，candidate sigmoid maxerr 为 `5.960464477539063e-08`；literal
+first-logits 未测量。实验后双端原 GLM exact/running，连续稳定约 120 秒；有限应用
+元数据响应不等于 readiness，readiness 仍为 `unknown`，未作端到端推理结论。
+
 当前不建立 MLP 修复、自然停止恢复、GPQA 或视觉/MTP 功能通过的结论。停止也不代表
 回答正确；只有在同协议 control 复现相关退化后，才有对应的修复对照意义。
 完整脱敏状态、工具 SHA 和控制臂摘要见相邻 JSON。

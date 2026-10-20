@@ -331,11 +331,11 @@
     },
     "causal_limit": "R2 and R1 are exact output matches for this fixed case, so radix cache showed no observed token effect and is not required for this loop. This does not prove all internal state paths are noncausal, does not establish MSE repair, and does not establish application readiness."
   },
-  "historical_replay_r3_in_progress": {
+  "historical_replay_r3_completed": {
     "experiment": "historical-beta-r3",
-    "state": "running_observed_request_streaming",
+    "state": "completed_length_no_confirmed_long_cycle",
     "experiment_started_at_utc": "2026-10-20T19:18:59.637587Z",
-    "observation_at_utc": "2026-10-20T19:23:00.606688Z",
+    "observation_at_utc": "2026-10-20T20:25:34Z",
     "historical_protocol": {
       "radix_cache": true,
       "submitted_requests": 1,
@@ -362,18 +362,54 @@
       "streaming_observation_proves_gates": true
     },
     "progress": {
-      "state": "request_streaming",
-      "elapsed_seconds": 218.747,
-      "events": 32,
-      "stream_lines": 32,
-      "events_are_sse_lines_not_tokens": true,
-      "gpu_numeric_statistics_available": false,
-      "terminal_result_available": false
+      "state": "completed",
+      "elapsed_seconds_including_startup": 3916.324,
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_ids_sha256": "57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa",
+      "different_from_r1_r2_output": true,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "terminal_stop_match_observed": false,
+      "periodic_lag": 2032,
+      "periodic_onset": 10959,
+      "periodic_count": 10,
+      "periodic_extent": 2042,
+      "periodic_complete_periods": 1,
+      "periodic_confirmation": "not_confirmed_match_count_below_full_period_threshold",
+      "r1_baseline_periodic_count": 13989,
+      "r1_baseline_periodic_onset": 33131,
+      "r1_baseline_periodic_extent": 16021
+    },
+    "microprobe": {
+      "legacy_vs_candidate_max_abs": 0.0005898475646972656,
+      "legacy_vs_candidate_rms": 0.0002853343030437827,
+      "g_delta_max_abs": 0.0,
+      "candidate_sigmoid_max_error": 5.960464477539063e-8,
+      "literal_first_logits_measured": false
     },
     "protected_pair": {
       "authorized_paused": true,
-      "post_experiment_restore": "pending"
+      "post_experiment_restore": "process_stable",
+      "replay_stable_seconds": 121.5060659,
+      "peer_stable_seconds": 121.1523031,
+      "exact_identity": true,
+      "running": true
     },
-    "causal_limit": "R3 is still generating. No completion, GPU numeric result, token count, repair conclusion, or service restoration conclusion is established."
+    "application_observation": {
+      "observed_at_utc": "2026-10-20T20:28:03.868541Z",
+      "both_processes_exact_and_running": true,
+      "rank_0_metadata_response": "structured_json",
+      "rank_1_application_http": false,
+      "readiness": "unknown",
+      "end_to_end_inference": false
+    },
+    "server_capacity": {
+      "max_total_num_tokens": 1728271,
+      "historical_capacity_reference": 1738591,
+      "capacity_difference_is_not_output_evidence": true
+    },
+    "causal_limit": "R3 did not reproduce the previously confirmed long lag-2032 cycle under this fixed case, but the short match is below the full-period confirmation threshold. Other periods were not tested; this does not establish normal stopping, answer correctness, MSE repair, or application readiness."
   }
 }
