@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "created_at_utc": "2026-10-19",
+  "updated_at_utc": "2026-10-20T08:04:11.436618Z",
   "status": "passed",
   "evidence_sha256": "8d39c7fcdf322a5e986bb4753618e4c432369b55d781329ed9c7d9009d1bdfc2",
   "candidate_upload_sha256": "4932d9dfa07030f41adc0689ff33d63b5ec677a07954f7d158bbe9eb1c7ab96b",
@@ -63,7 +64,6 @@
   ],
   "full_model_r2": [
     {
-      "job_id": "parity-w4a4-python-code-decode-beta-force0",
       "revision": "a3b5d8376f4206ce78d11d31f4a7f4a8d1ffb568",
       "report_sha256": "541f0345e75c6daf7941e903f4a2bf6d9f5cc561c0bc3466554ab03b671a3d61",
       "status": "parity_failed",
@@ -78,7 +78,6 @@
       "ast_gate": true
     },
     {
-      "job_id": "parity-w4a4-python-code-all-beta-force0",
       "revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
       "report_sha256": "64aa1a3e9be450506b8e60be6e55e8af66f0bd085a89de90492cfd246fcf5440",
       "status": "passed",
@@ -93,7 +92,6 @@
       "ast_gate": true
     },
     {
-      "job_id": "parity-w4a4-python-code-shared-decode-force0",
       "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
       "report_sha256": "f518f81e0e486c48b9c0694afed006b75ddd2079c2cf6fc99fe014859bb140e8",
       "status": "passed",
@@ -108,7 +106,6 @@
       "ast_gate": true
     },
     {
-      "job_id": "parity-w4a4-python-code-shared-decode-force1",
       "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
       "report_sha256": "9886f8a9724476255f204b09a0f3752517620324e2da9b3447dd1224f7de3bc3",
       "status": "passed",
@@ -266,8 +263,10 @@
     "interpretation": "Beta patch did not break this fixed-prefix 512-token native window; this does not establish natural-generation repair or long-budget stopping behavior."
   },
   "mlp_recovery_pilot": {
-    "status": "running_inference",
-    "evidence_sha256": "cd15e8add08cb4011e2c328c1448c871766cc02e55dd97ccec7ef5d801ddafb0",
+    "status": "completed",
+    "evidence_sha256": "764078bfff3a1c34fa41eb80ec62e63a19115758d112383d26b733654b42c9ca",
+    "observed_at_utc": "2026-10-20T08:04:11.436618Z",
+    "completed_at_utc": "2026-10-20T08:04:06.242908Z",
     "preflight_file_sha256": "5c7cc443a527cbe9961b86070affb48526e0e4071cbfb5cb120ef8a9dc421de9",
     "tool_sha256": "a1a0bcc2219e6996f365425fc0f942a0e220b118fbf95d27c181be83d8f69f3e",
     "gate_sha256": "0f29a592021202b6c49aa4e5e5f50aca5a3d12a0ea915ff1385c38ac71941322",
@@ -307,7 +306,7 @@
       "error_type": "GateError",
       "serving_containers_started": false
     },
-    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control completed two stable 34189-token service stop trials. Long MLP trial 1 completed at 25000 tokens with service stop and thinking-end, no confirmed lag-2032 cycle; trial 2 is running. Historical natural looping is not reproduced by control, so no loop-repair or answer-accuracy claim. The frozen config-only EOS diagnostic is incomplete.",
+    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control and MLP each completed two repeat-stable service-stop trials (34189 and 25000 output tokens respectively), with thinking-end and no confirmed lag-2032 cycle. Historical natural looping is not reproduced by control, so this does not provide a repair comparison or an answer-accuracy claim. The config-only EOS diagnostic remains incomplete and cannot relabel natural_termination=false.",
     "queue_snapshot_20261019": {
       "state": "waiting_for_gpu",
       "snapshot_at_utc": "2026-10-19T09:42:52.411635+00:00",
@@ -323,18 +322,19 @@
       "pilot_evidence_root_exists": false
     },
     "latest_observation": {
-      "observed_at_utc": "2026-10-20T07:27:32.843395+00:00",
+      "observed_at_utc": "2026-10-20T08:04:11.436618+00:00",
       "phase": "long",
       "arm": "mlp",
-      "at_utc": "2026-10-20T06:52:25.164390+00:00",
-      "state": "request",
+      "at_utc": "2026-10-20T08:04:06.242908+00:00",
+      "state": "completed",
       "trial": 2,
       "completed_early_control_trials": 2,
       "completed_early_mlp_trials": 2,
-      "completed_long_trials": 3,
-      "glm_running": false,
-      "active_compute_processes": 2,
-      "evidence_sha256": "f9454d5caddf8a488737cd1cccc8a64e17eb5c91dab16ee7bded56a1ed8b95c1"
+      "completed_long_trials": 4,
+      "glm_running": true,
+      "active_compute_processes": 1,
+      "evidence_sha256": "764078bfff3a1c34fa41eb80ec62e63a19115758d112383d26b733654b42c9ca",
+      "gpu_process_observation_limit": "Process count is a handoff-time observation and does not identify a residual experiment container; experiment cleanup is recorded separately."
     },
     "long_phase_prepared": {
       "budget": 49152,
@@ -355,9 +355,9 @@
     },
     "offline_tests_passed": 27,
     "r3": {
-      "state": "running_inference",
-      "supervisor_state": "phase_running",
-      "observed_at_utc": "2026-10-20T07:27:32.843395+00:00",
+      "state": "completed",
+      "supervisor_state": "completed",
+      "observed_at_utc": "2026-10-20T08:04:11.436618+00:00",
       "early": {
         "at_utc": "2026-10-20T04:05:30.384675+00:00",
         "state": "completed"
@@ -375,8 +375,8 @@
         "long": 64800
       },
       "systemd": {
-        "unit": "megaquant-mlp-r3-20261020",
-        "active": true,
+        "active": false,
+        "result": "success",
         "exec_stop_post_configured": true,
         "timeout_stop_seconds": 600,
         "runtime_max_seconds": 90000
@@ -384,17 +384,16 @@
       "glm_restoration": {
         "temporary_stop_authorized": true,
         "running_before": true,
-        "running_at_observation": false,
-        "restore_required": true,
-        "strategy": "Python finally and systemd ExecStopPost; start same container ID; no removal",
-        "restore_completed": false
+        "running_at_observation": true,
+        "restore_required": false,
+        "strategy": "Python finally and systemd ExecStopPost",
+        "restore_completed": true
       },
       "control_serving_verified": true,
       "mlp_serving_identity_verified": true,
       "mlp_inference_completed": true,
       "early_control": {
         "cleanup": {
-          "container_id": "c3ecc4d172304cb86fd9ae5a2587f1e65d26edd722b7ae015bf6269d96b22f1a",
           "removed": true,
           "role": "baseline"
         },
@@ -425,14 +424,11 @@
             "disable_radix_cache": true,
             "enable_multimodal": true,
             "fp4_gemm_runner_backend": "flashinfer_cutlass",
-            "host": "127.0.0.1",
             "kv_cache_dtype": "fp8_e4m3",
             "linear_attn_backend": "triton",
             "mamba_backend": "triton",
             "mamba_ssm_dtype": "float32",
             "max_running_requests": 1,
-            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
-            "port": 32262,
             "quantization": "modelopt_mixed",
             "random_seed": 20261020,
             "sampling_backend": "pytorch",
@@ -508,11 +504,11 @@
           }
         ]
       },
-      "interpretation": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control completed two stable 34189-token service stop trials. Long MLP trial 1 completed at 25000 tokens with service stop and thinking-end, no confirmed lag-2032 cycle; trial 2 is running. Historical natural looping is not reproduced by control, so no loop-repair or answer-accuracy claim. The frozen config-only EOS diagnostic is incomplete.",
+      "interpretation": "Early control and MLP each completed two token-exact 4096-token repetitions. Long control and MLP each completed two repeat-stable service-stop trials, with no confirmed lag-2032 cycle. Historical natural looping is not reproduced by control, so no loop-repair or answer-accuracy claim follows. The config-only EOS diagnostic is incomplete.",
       "long": {
         "arm": "mlp",
-        "at_utc": "2026-10-20T06:52:25.164390+00:00",
-        "state": "request",
+        "at_utc": "2026-10-20T08:04:06.242908+00:00",
+        "state": "completed",
         "trial": 2
       },
       "early_phase_completed_at_utc": "2026-10-20T04:05:30.384247+00:00",
@@ -543,7 +539,6 @@
       },
       "early_mlp": {
         "cleanup": {
-          "container_id": "132da719fecde6493df17d64d00c9f54cf611afb5990c7653512fcdee05df85d",
           "removed": true,
           "role": "baseline"
         },
@@ -574,14 +569,11 @@
             "disable_radix_cache": true,
             "enable_multimodal": true,
             "fp4_gemm_runner_backend": "flashinfer_cutlass",
-            "host": "127.0.0.1",
             "kv_cache_dtype": "fp8_e4m3",
             "linear_attn_backend": "triton",
             "mamba_backend": "triton",
             "mamba_ssm_dtype": "float32",
             "max_running_requests": 1,
-            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-MLP",
-            "port": 32262,
             "quantization": "modelopt_mixed",
             "random_seed": 20261020,
             "sampling_backend": "pytorch",
@@ -665,7 +657,6 @@
       "early_mlp_over_control_latency_ratio": 2.4136391651892057,
       "long_control": {
         "cleanup": {
-          "container_id": "bde9c41c174f77d9db09b2f0bc0f780154a508ecdb1af46ca5a7d73e356799e5",
           "removed": true,
           "role": "baseline"
         },
@@ -696,14 +687,11 @@
             "disable_radix_cache": true,
             "enable_multimodal": true,
             "fp4_gemm_runner_backend": "flashinfer_cutlass",
-            "host": "127.0.0.1",
             "kv_cache_dtype": "fp8_e4m3",
             "linear_attn_backend": "triton",
             "mamba_backend": "triton",
             "mamba_ssm_dtype": "float32",
             "max_running_requests": 1,
-            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
-            "port": 32262,
             "quantization": "modelopt_mixed",
             "random_seed": 20261020,
             "sampling_backend": "pytorch",
@@ -780,7 +768,7 @@
         ]
       },
       "long_control_completed_trials": 2,
-      "long_stopping_interpretation": "Both control trials returned the same service stop after 34189 tokens with thinking-end and no confirmed lag-2032 cycle. The running controller records no terminal EOS under its config-only EOS set and natural_termination=false. Config metadata omits generation/tokenizer EOS IDs, so this does not establish absence of an EOS stop. The matched stop reason and token sequence were not retained; no retrospective corrected termination label is asserted.",
+      "long_stopping_interpretation": "Both control trials returned the same service stop after 34189 tokens with thinking-end and no confirmed lag-2032 cycle. The config-only EOS diagnostic records natural_termination=false, but omitted generation/tokenizer EOS IDs mean this does not establish absence of an EOS stop. The matched stop reason and token sequence were not retained; no retrospective corrected termination label is asserted.",
       "termination_metadata_audit": {
         "evidence_sha256": "c19f436ae278051f35ba0917396c89b34fda358a215bd14e953b3b9006be910a",
         "models": {
@@ -825,6 +813,11 @@
         "scope": "EOS-source metadata counts and hashes only. No observed final token or matched stop metadata retained; cannot relabel existing trial."
       },
       "long_mlp": {
+        "cleanup": {
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T08:04:04.661575+00:00",
         "model_proof": {
           "config_sha256": "ee2922ff99e06fc5cfc97a5acc0e6aae6433de683eab2fd3c593fab3e9ebb4a2",
           "hf_quant_config_sha256": "83b799d1fd35dd9108b94db03a83a74bf56ca73341d769e27c085f9e89a114a7",
@@ -842,6 +835,7 @@
           "visual_quantized_layers": 110
         },
         "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "repeat_stable": true,
         "source_proof": {
           "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
           "bundle_lock": {
@@ -879,6 +873,31 @@
             "terminal_eos": false,
             "thinking_end_count": 1,
             "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 4299.409772746032,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 24735,
+            "historical_natural_lcp": 12,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19249346541361992,
+            "natural_termination": false,
+            "output_ids_sha256": "07f17a874a362e2847e617306324eb11cf0461af22fc5216a675c94c70fe2fed",
+            "output_tokens": 25000,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 6,
+            "periodic_extent": 2038,
+            "periodic_lag": 2032,
+            "periodic_onset": 1813,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 2
           }
         ],
         "server_identity": {
@@ -886,9 +905,40 @@
           "passed": true,
           "server_info_sha256": "cf35fd7807b8207c47efcea0a229efbc42da190ae9c31be547024f5f7897c3e4"
         }
+      },
+      "long_report": {
+        "status": "completed",
+        "completed_at_utc": "2026-10-20T08:04:06.242908Z",
+        "repetitions_per_arm": 2,
+        "comparison": {
+          "both_repeat_stable": true,
+          "control_vs_mlp_lcp": 7,
+          "output_exact": false
+        },
+        "known_cycle_outcome": {
+          "control": {
+            "confirmed_periodic_trials": 0,
+            "any_confirmed_periodic": false
+          },
+          "mlp": {
+            "confirmed_periodic_trials": 0,
+            "any_confirmed_periodic": false
+          }
+        },
+        "stopping_outcome": {
+          "control": {
+            "natural_termination_trials": 0,
+            "all_trials_naturally_terminated": false
+          },
+          "mlp": {
+            "natural_termination_trials": 0,
+            "all_trials_naturally_terminated": false
+          }
+        },
+        "scope": "Service-stop long trajectories from the original prompt. Absence of a confirmed lag-2032 cycle does not establish repair; config-only EOS labels remain incomplete."
       }
     },
-    "gpu_serving_scope": "Early phase passed for both arms. Long control repeated stably twice; MLP long trial 1 returned service stop and trial 2 is generating. No independent long-loop repair evidence.",
+    "gpu_serving_scope": "Early phase passed for both arms. Long control and MLP each repeated stably twice and returned service stop; no confirmed lag-2032 cycle. No independent long-loop repair evidence.",
     "diagnostic_tool_update": {
       "deployed_to_running_r3": false,
       "metadata_validation": {
