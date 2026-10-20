@@ -15,11 +15,74 @@ IMAGE = 'sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf
 REVISION = '49d3acfd4d54b0cf1afffcfeb369c63af4f56499'
 NATIVE_SHA = '8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218'
 PROMPT_SHA = '20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436'
+KNOWN_PERIOD = 2032
+RANDOM_SEED = 20261020
 
 
 def lcp(left, right):
     return next((i for i, (x, y) in enumerate(zip(left, right)) if x != y),
                 min(len(left), len(right)))
+
+
+def known_period_stats(tokens, lag=KNOWN_PERIOD):
+    """Return scalar statistics for the longest contiguous lag-equality run.
+
+    ``count`` is the number of consecutive comparisons satisfying
+    ``tokens[i] == tokens[i - lag]``.  The corresponding extent includes the
+    first lag-sized period, so ``extent = count + lag`` when a run exists.
+    This detects only the supplied lag; it does not search for other periods.
+    """
+    if lag <= 0:
+        raise ValueError('period lag must be positive')
+    best_count = 0
+    best_onset = None
+    current_count = 0
+    current_onset = None
+    for index in range(lag, len(tokens)):
+        if tokens[index] == tokens[index - lag]:
+            if current_count == 0:
+                current_onset = index - lag
+            current_count += 1
+            if current_count > best_count:
+                best_count = current_count
+                best_onset = current_onset
+        else:
+            current_count = 0
+            current_onset = None
+    extent = best_count + lag if best_count else 0
+    complete_periods = extent // lag if extent else 0
+    return {
+        'periodic_lag': lag,
+        'periodic_onset': best_onset,
+        'periodic_count': best_count,
+        'periodic_extent': extent,
+        'periodic_complete_periods': complete_periods,
+        'periodic_confirmed': complete_periods >= 2,
+    }
+
+
+def termination_stats(out, meta, eos, think_end, budget):
+    reason = meta.get('finish_reason')
+    if not isinstance(reason, dict) or reason.get('type') not in {'stop', 'length'}:
+        raise RuntimeError('invalid finish reason')
+    if reason['type'] == 'length' and (
+        len(out) != budget or ('length' in reason and reason['length'] != budget)
+    ):
+        raise RuntimeError('length finish does not match output budget')
+    terminal_eos = bool(out and out[-1] in eos)
+    first_end = next((index for index, token in enumerate(out) if token in think_end), None)
+    return {
+        'finish_reason_type': reason['type'],
+        'contains_eos': any(token in eos for token in out),
+        'contains_thinking_end': first_end is not None,
+        'thinking_end_count': sum(token in think_end for token in out),
+        'terminal_eos': terminal_eos,
+        'first_thinking_end_index': first_end,
+        'natural_termination': (
+            reason['type'] == 'stop' and terminal_eos
+            and first_end is not None and first_end < len(out) - 1
+        ),
+    }
 
 
 def main():
@@ -32,10 +95,18 @@ def main():
     p.add_argument('--mlp', type=Path, required=True)
     p.add_argument('--ablation-tool', type=Path, required=True)
     p.add_argument('--native-private', type=Path, required=True)
-    p.add_argument('--budget', type=int, default=4096)
+    p.add_argument('--phase', choices=('early', 'long'), default='early')
+    p.add_argument('--budget', type=int, default=None)
     o = p.parse_args()
-    if not 512 <= o.budget <= 8192:
-        p.error('pilot budget must be between 512 and 8192')
+    if o.phase == 'early':
+        o.budget = 4096 if o.budget is None else o.budget
+        if not 512 <= o.budget <= 8192:
+            p.error('early pilot budget must be between 512 and 8192')
+    else:
+        o.budget = 49152 if o.budget is None else o.budget
+        if o.budget != 49152:
+            p.error('long phase requires --budget 49152')
+    generate_timeout = 3600 if o.phase == 'early' else 14400
     o.root.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(o.remote_root / 'candidate-bundle-r1/parity-v7'))
     import run_v7 as v
@@ -64,7 +135,17 @@ def main():
             raise RuntimeError('native token type invalid')
         report = {
             'schema_version': 1, 'started_at_utc': v.now(), 'case': 'anonymous-case3',
-            'scope': 'Natural-start early-trajectory pilot. Finite budget does not establish long-loop repair, GPQA accuracy, or stopping recovery.',
+            'phase': o.phase,
+            'controller_sha256': v.sha256_file(Path(__file__)),
+            'scope': (
+                'Natural-start early-trajectory pilot. Finite budget does not establish '
+                'long-loop repair, GPQA accuracy, or stopping recovery.'
+                if o.phase == 'early' else
+                'Natural-start long-budget trajectory from the original prompt. '
+                'Known-period scalars detect only lag-2032 repetition; stopping does '
+                'not establish answer correctness, and neither a detected loop nor '
+                'the absence of one within this budget establishes repair.'
+            ),
             'native_private_sha256': NATIVE_SHA, 'prompt_ids_sha256': PROMPT_SHA,
             'prompt_tokens': len(ids), 'native_prefix_tokens': 0,
             'historical_reference_window_sha256': v.digest(reference[:o.budget]),
@@ -77,6 +158,7 @@ def main():
                 'quantization_loader': 'modelopt_mixed', 'kv_cache_dtype': 'fp8_e4m3',
                 'mamba_ssm_dtype': 'float32', 'disable_radix_cache': True,
                 'allow_auto_truncate': False, 'cuda_graphs': False,
+                'random_seed': RANDOM_SEED,
                 'FLA_USE_FAST_OPS': '0', 'force_shared_decode': '0',
             }, 'arms': {},
         }
@@ -115,7 +197,7 @@ def main():
             v.gpu_idle()
             command = v.server_command(a, a.job_id, 'baseline', port)
             command[command.index('--context-length') + 1] = '65536'
-            command += ['--disable-radix-cache']
+            command += ['--disable-radix-cache', '--random-seed', str(RANDOM_SEED)]
             server = None
             arm = {'model_proof': proof, 'source_proof': source, 'trials': []}
             report['arms'][variant] = arm
@@ -136,6 +218,7 @@ def main():
                     'context_length': 65536, 'tp_size': 1, 'max_running_requests': 1,
                     'enable_multimodal': True, 'speculative_algorithm': None,
                     'disable_radix_cache': True, 'allow_auto_truncate': False,
+                    'random_seed': RANDOM_SEED,
                 }
                 if any(info.get(k) != value for k, value in expected.items()):
                     raise RuntimeError('server identity mismatch: ' + ','.join(k for k, val in expected.items() if info.get(k) != val))
@@ -167,7 +250,7 @@ def main():
                     req = urllib.request.Request(f'http://127.0.0.1:{port}/generate',
                                                  data=json.dumps(payload).encode(), method='POST',
                                                  headers={'Content-Type': 'application/json'})
-                    with urllib.request.urlopen(req, timeout=3600) as r:
+                    with urllib.request.urlopen(req, timeout=generate_timeout) as r:
                         response = json.load(r)
                     out = response['output_ids']
                     meta = response['meta_info']
@@ -175,23 +258,23 @@ def main():
                         raise RuntimeError('response token counts invalid')
                     if response.get('prompt_token_ids') != ids or meta.get('prompt_tokens') != len(ids) or meta.get('cached_tokens') != 0:
                         raise RuntimeError('prompt/cold-cache gate failed')
-                    if meta.get('spec_verify_ct', 0) not in (0, None) or meta.get('retraction_count', 0) not in (0, None):
+                    if any(meta.get(key, 0) not in (0, None) for key in (
+                        'spec_verify_ct', 'num_retractions', 'retraction_count',
+                    )):
                         raise RuntimeError('unexpected MTP or retraction')
                     lp = [x[0] for x in meta.get('output_token_logprobs', [])]
                     if len(lp) != len(out) or any(type(x) not in (int, float) or not math.isfinite(x) for x in lp):
                         raise RuntimeError('output logprobs missing/nonfinite')
                     row = {
                         'trial': trial, 'output_tokens': len(out), 'output_ids_sha256': v.digest(out),
-                        'finish_reason_type': meta.get('finish_reason', {}).get('type'),
                         'prompt_echo_exact': True, 'cached_tokens': 0,
                         'historical_natural_lcp': lcp(out, reference[:o.budget]),
                         'historical_natural_window_exact': out == reference[:o.budget],
-                        'contains_eos': any(x in eos for x in out),
-                        'contains_thinking_end': any(x in think_end for x in out),
-                        'thinking_end_count': sum(x in think_end for x in out),
                         'logprobs_finite': True, 'mean_output_logprob': sum(lp) / len(lp),
                         'e2e_latency': meta.get('e2e_latency'),
                     }
+                    row.update(termination_stats(out, meta, eos, think_end, o.budget))
+                    row.update(known_period_stats(out))
                     outputs[variant].append(out)
                     arm['trials'].append(row)
                     v.write_json(arm_root / 'checkpoint.json', arm)
@@ -205,6 +288,20 @@ def main():
         report['comparison'] = {'control_vs_mlp_lcp': lcp(left, right),
                                 'output_exact': left == right,
                                 'both_repeat_stable': all(x['repeat_stable'] for x in report['arms'].values())}
+        report['stopping_outcome'] = {
+            variant: {
+                'natural_termination_trials': sum(trial['natural_termination'] for trial in arm['trials']),
+                'all_trials_naturally_terminated': all(trial['natural_termination'] for trial in arm['trials']),
+            }
+            for variant, arm in report['arms'].items()
+        }
+        report['known_cycle_outcome'] = {
+            variant: {
+                'confirmed_periodic_trials': sum(trial['periodic_confirmed'] for trial in arm['trials']),
+                'any_confirmed_periodic': any(trial['periodic_confirmed'] for trial in arm['trials']),
+            }
+            for variant, arm in report['arms'].items()
+        }
         report['status'] = 'completed' if report['comparison']['both_repeat_stable'] else 'unstable'
         report['completed_at_utc'] = v.now()
         v.write_json(o.root / 'report.json', report)

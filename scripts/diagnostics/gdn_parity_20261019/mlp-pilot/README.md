@@ -2,8 +2,10 @@
 
 This is a remote reproduction procedure for the MSE/MLP BF16 diagnostic pilot.
 Run these commands in a repository checkout on the GPU machine with Python
-3.10 or later; replace the example checkout and model paths below. The experiment is a finite early-trajectory diagnostic; this document
-does not contain or promise experiment results.
+3.10 or later; replace the example checkout and model paths below. The default
+experiment is a finite early-trajectory diagnostic; an explicit `long` phase
+is provided for a separate full-budget trajectory. This document does not
+contain or promise experiment results.
 
 ## 1. Build an independent MLP/control model pair
 
@@ -103,20 +105,62 @@ python3 "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/controller.py" \
   --budget 4096
 ```
 
-The default pilot is two cold-cache trials per arm with a 4096-token budget.
-Its fixed protocol is context length 65536, temperature 0, TP1, no MTP or
-speculative decoding, FP8 E4M3 KV cache, FP32 Mamba SSM, radix cache disabled,
-CUDA graphs disabled, no auto-truncation, and the pinned serving image. Every
-payload, tensor inventory, metadata transform, provenance byte, source archive,
-runtime source hash, prompt echo, token count, and finite logprob is checked.
-Repeat stability is reported separately; `completed` means both repeats agree,
-not that natural stopping or answer correctness was established. Reports contain sanitized
-hashes and scalar statistics only.
+The default `early` pilot is two cold-cache trials per arm with a 4096-token
+budget. Its budget may be set explicitly from 512 through 8192. The fixed
+protocol is context length 65536, temperature 0, TP1, no MTP or speculative
+decoding, FP8 E4M3 KV cache, FP32 Mamba SSM, radix cache disabled, CUDA graphs
+disabled, no auto-truncation, and the pinned serving image. Every payload,
+tensor inventory, metadata transform, provenance byte, source archive, runtime
+source hash, prompt echo, token count, and finite logprob is checked. Repeat
+stability is reported separately; `completed` means both repeats agree, not
+that natural stopping or answer correctness was established. Reports contain
+the controller SHA, sanitized hashes, and scalar statistics only.
+Both arms use the same startup random seed (`20261020`), checked against the
+server identity. This does not make different precision paths deterministic;
+the two cold-cache repetitions still check observed stability. Responses must
+finish with `stop` or `length`; a length finish must reach the requested budget.
+
+The optional `long` phase starts from the same 288-token original prompt and
+uses exactly `49152` new tokens (`288 + 49152 < 65536`). It does not append a
+previous output or use a historical prefix. Long requests use a 14400-second
+HTTP timeout; early requests retain 3600 seconds. A short budget is rejected
+when `--phase long` is selected.
+
+Run the long phase in a new evidence root after the early run:
+
+```bash
+LONG_EVIDENCE_ROOT=/fresh/mlp-pilot-long-evidence
+python3 "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/controller.py" \
+  --phase long \
+  --root "$LONG_EVIDENCE_ROOT" \
+  --remote-root "$REMOTE_ROOT" \
+  --export /path/to/scored-mse-export \
+  --bf16 /path/to/original-bf16-checkpoint \
+  --control /path/to/new/mlp-pilot-control \
+  --mlp /path/to/new/mlp-pilot-mlp \
+  --ablation-tool "$MEGAQUANT_REPO/scripts/prepare_precision_ablation.py" \
+  --native-private /private/path/native-case3.json
+```
+
+The earlier `r2` evidence remains an early run and is not automatically
+extended into a long run. For each trial, the report records only scalar
+stopping fields (`terminal_eos`, first thinking-end index, and a conservative
+natural-termination boolean). It also checks the known lag-2032 period by
+finding the longest contiguous run where `output[i] == output[i-2032]` and
+reports its onset, comparison count, extent (`count + 2032`), complete-period
+count, and confirmation flag. Confirmation requires at least two complete
+periods. This detector checks only that known period and does not prove that
+other repetition is absent. `stopping_outcome` and `known_cycle_outcome` are
+independent summaries; a length-limited output is not treated as a failed
+experiment, and a run without a detected cycle does not establish a repair.
 
 ## Scope
 
 The derived weights and activation behavior are restored through the existing
-loader path; this pilot does not claim a new quantization recipe. The limited
-budget observes only the early natural trajectory and cannot establish long
-loop repair, stopping recovery, GPQA accuracy, throughput, or a production
-quality improvement. It also does not promise iterative or cyclic repair.
+loader path; this pilot does not claim a new quantization recipe. The early
+budget observes only the early natural trajectory. The long budget observes a
+single natural-start trajectory window and cannot establish loop repair,
+stopping recovery, GPQA accuracy, throughput, or a production quality
+improvement. A stop does not mean the answer is correct, and reaching the
+length limit without a loop does not prove the repair worked. Neither phase
+promises iterative or cyclic repair.
