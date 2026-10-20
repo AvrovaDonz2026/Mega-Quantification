@@ -9,10 +9,12 @@ from pathlib import Path
 import pytest
 
 from megaquant.sglang_export import (
+    auxiliary_quantized_layers_from_weight_map,
     inspect_sglang_quant_config,
     is_sglang_mixed_scheme,
     quantized_layers_from_weight_map,
     rewrite_sglang_mixed_export,
+    rewrite_sglang_nvfp4_export,
     sglang_quant_snapshot,
 )
 
@@ -63,6 +65,101 @@ def test_quantized_layers_map_matches_nvidia_card() -> None:
     assert "conv1d" not in joined
     assert "in_proj_a" not in joined
     assert "mtp" not in joined
+
+
+def test_uniform_nvfp4_auxiliary_map_only_marks_serialized_layers() -> None:
+    vision = "model.visual.blocks.0.attn.proj"
+    mtp = "mtp.fc"
+    weight_map = {
+        f"{vision}.weight": "a.safetensors",
+        f"{vision}.weight_scale": "a.safetensors",
+        f"{vision}.weight_scale_2": "a.safetensors",
+        f"{mtp}.weight": "b.safetensors",
+        f"{mtp}.weight_scale": "b.safetensors",
+        f"{mtp}.weight_scale_2": "b.safetensors",
+        "model.visual.merger.linear_fc1.weight": "c.safetensors",
+    }
+    metadata = {
+        f"{vision}.weight": {"dtype": "U8", "shape": [8, 8]},
+        f"{vision}.weight_scale": {"dtype": "F8_E4M3", "shape": [8, 1]},
+        f"{vision}.weight_scale_2": {"dtype": "F32", "shape": []},
+        f"{mtp}.weight": {"dtype": "U8", "shape": [8, 8]},
+        f"{mtp}.weight_scale": {"dtype": "F8_E4M3", "shape": [8, 1]},
+        f"{mtp}.weight_scale_2": {"dtype": "F32", "shape": []},
+        "model.visual.merger.linear_fc1.weight": {"dtype": "BF16", "shape": [8, 8]},
+    }
+    assert auxiliary_quantized_layers_from_weight_map(weight_map, tensor_metadata=metadata) == {
+        vision: {"quant_algo": "NVFP4", "group_size": 16},
+        mtp: {"quant_algo": "NVFP4", "group_size": 16},
+    }
+
+
+def test_rewrite_uniform_nvfp4_preserves_algorithm_and_adds_auxiliary_metadata(
+    tmp_path: Path,
+) -> None:
+    vision = "model.visual.blocks.0.attn.proj"
+    specs = {
+        f"{vision}.weight": ("U8", [8, 8]),
+        f"{vision}.weight_scale": ("F8_E4M3", [8, 1]),
+        f"{vision}.weight_scale_2": ("F32", []),
+    }
+    _write_export_tensors(tmp_path, specs)
+    _write_hf_quant(tmp_path, {"quant_algo": "NVFP4", "group_size": 16})
+    (tmp_path / "config.json").write_text(
+        json.dumps({"quantization_config": {"quant_algo": "NVFP4"}})
+    )
+
+    layers = rewrite_sglang_nvfp4_export(tmp_path)
+    hf = json.loads((tmp_path / "hf_quant_config.json").read_text())
+    cfg = json.loads((tmp_path / "config.json").read_text())
+    assert layers == {vision: {"quant_algo": "NVFP4", "group_size": 16}}
+    assert hf["quantization"]["quant_algo"] == "NVFP4"
+    assert hf["quantization"]["quantized_layers"] == layers
+    assert cfg["quantization_config"]["quant_algo"] == "NVFP4"
+    assert cfg["quantization_config"]["quantized_layers"] == layers
+
+
+def test_rewrite_uniform_nvfp4_preserves_existing_language_metadata(tmp_path: Path) -> None:
+    vision = "model.visual.blocks.0.attn.proj"
+    language = "model.layers.0.mlp.down_proj"
+    specs = {
+        f"{vision}.weight": ("U8", [8, 8]),
+        f"{vision}.weight_scale": ("F8_E4M3", [8, 1]),
+        f"{vision}.weight_scale_2": ("F32", []),
+    }
+    _write_export_tensors(tmp_path, specs)
+    _write_hf_quant(
+        tmp_path,
+        {
+            "quant_algo": "NVFP4",
+            "group_size": 16,
+            "quantized_layers": {language: {"quant_algo": "NVFP4", "group_size": 16}},
+        },
+    )
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "quantization_config": {
+                    "quantized_layers": {
+                        "model.layers.1.mlp.up_proj": {
+                            "quant_algo": "NVFP4",
+                            "group_size": 16,
+                        },
+                        "model.visual.stale": {
+                            "quant_algo": "NVFP4",
+                            "group_size": 16,
+                        },
+                    }
+                }
+            }
+        )
+    )
+
+    layers = rewrite_sglang_nvfp4_export(tmp_path)
+    assert layers[language] == {"quant_algo": "NVFP4", "group_size": 16}
+    assert layers["model.layers.1.mlp.up_proj"] == {"quant_algo": "NVFP4", "group_size": 16}
+    assert "model.visual.stale" not in layers
+    assert layers[vision] == {"quant_algo": "NVFP4", "group_size": 16}
 
 
 def test_rewrite_writes_mixed_precision(tmp_path: Path) -> None:

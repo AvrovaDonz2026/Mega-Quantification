@@ -1,0 +1,9 @@
+{
+  "schema": "gdn-parity-source-lock-v1",
+  "variants": {
+    "all-beta": {
+      "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+      "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033"
+    }
+  }
+}

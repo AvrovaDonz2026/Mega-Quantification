@@ -1,0 +1,32 @@
+{
+  "root_path": "/home/zhiman/megaquant-aitop-validation-20261019",
+  "experiment_prefix": "mlp-pilot-r3",
+  "controller_path": "/home/zhiman/megaquant-aitop-validation-20261019/mlp-tools-r3/mlp-pilot/controller.py",
+  "model_gate_path": "/home/zhiman/megaquant-aitop-validation-20261019/mlp-tools-r3/mlp-pilot/model_gate.py",
+  "controller_sha256": "58abf92c21790043b5861c3be1cfb5399d0bc79a4831bfea993265317f3364cd",
+  "model_gate_sha256": "b8689ed6f243d2e5835d9cb54a26e2f970c0e9701bc302acf8807ead8cb1fb16",
+  "expected_glm_id_full": "4bffb875095b7a4d07aa4268dc5b4018f1dd8f334e46ce006fa432214ba5b462",
+  "expected_glm_image": "sha256:bc34d7d63f978cf601f42863b284bc95a567c50c10e9adb0866a635be568bf5f",
+  "expected_glm_name": "/glm53-flash-tf",
+  "expected_config_hostconfig_sha256": "f0641df4837d84c018131da3840d8263a9f81a1b18e5fdd06f332c672271bab1",
+  "base_command": [
+    "/usr/bin/python3",
+    "/home/zhiman/megaquant-aitop-validation-20261019/mlp-tools-r3/mlp-pilot/controller.py",
+    "--root",
+    "/home/zhiman/megaquant-aitop-validation-20261019/placeholder-r3",
+    "--remote-root",
+    "/home/zhiman/megaquant-aitop-validation-20261019",
+    "--export",
+    "/home/zhiman/megaquant-w4a4-quality-20261008/outputs/Qwen3.8-27B-NVFP4-W4A4-spark-mse",
+    "--bf16",
+    "/home/zhiman/models/Qwen3.8-27B",
+    "--control",
+    "/home/zhiman/megaquant-w4a4-quality-20261008/repetition-ablation-20261012/models/control",
+    "--mlp",
+    "/home/zhiman/megaquant-aitop-validation-20261019/mlp-model-r1",
+    "--ablation-tool",
+    "/home/zhiman/megaquant-aitop-validation-20261019/mlp-ablation-tool.py",
+    "--native-private",
+    "/home/zhiman/megaquant-w4a4-quality-20261008/initial-entry-resume2-20261012/case3-mse/natural-private.json"
+  ]
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import json
 import sys
 import weakref
 from contextlib import nullcontext
@@ -132,6 +133,26 @@ def test_preserved_placement_can_export_successfully_first_time(
     monkeypatch.setattr(modelopt, "_prepare_export_memory", lambda *_: "preserve-offload")
     assert modelopt.ModelOptBackend().export(object(), _recipe(tmp_path)) == tmp_path
     assert len(export_calls) == 1
+
+
+def test_uniform_w4a4_backend_meta_keeps_nvfp4_loader_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export_stub: Any
+) -> None:
+    def fake_export(_model: Any, *, export_dir: str) -> None:
+        Path(export_dir).mkdir(parents=True, exist_ok=True)
+
+    export_stub(fake_export)
+    monkeypatch.setattr(modelopt, "_prepare_export_memory", lambda *_: "preserve-offload")
+    monkeypatch.setattr(
+        modelopt,
+        "_rewrite_sglang_export",
+        lambda *_: {"model.visual.blocks.0.attn.proj": {"quant_algo": "NVFP4"}},
+    )
+
+    modelopt.ModelOptBackend().export(object(), _recipe(tmp_path))
+    meta = json.loads((tmp_path / "backend_meta.json").read_text())
+    assert meta["sglang_quant_algo"] == "NVFP4"
+    assert meta["sglang_quantized_layers"] == 1
 
 
 @pytest.mark.parametrize(

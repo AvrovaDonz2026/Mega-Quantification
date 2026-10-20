@@ -170,7 +170,7 @@ python scripts/audit_spark_export.py \
 
 ### GPU preflight
 
-Verify the serving image's manifest, seven-file patch guard, ARM64/SM121 GPU,
+Verify the serving image's manifest, guard for all pinned SGLang patch files, ARM64/SM121 GPU,
 CUDA matrix multiplication, GDN decode/verify state parity and FP8/BF16
 projection and attention decode/verify parity before loading the full checkpoint:
 

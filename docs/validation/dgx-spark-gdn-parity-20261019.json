@@ -1,0 +1,951 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-10-19",
+  "status": "passed",
+  "evidence_sha256": "8d39c7fcdf322a5e986bb4753618e4c432369b55d781329ed9c7d9009d1bdfc2",
+  "candidate_upload_sha256": "4932d9dfa07030f41adc0689ff33d63b5ec677a07954f7d158bbe9eb1c7ab96b",
+  "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
+  "hardware": {
+    "device": "NVIDIA GB10",
+    "compute_capability": [
+      12,
+      1
+    ]
+  },
+  "software": {
+    "torch": "2.13.0+cu130",
+    "triton": "3.7.1",
+    "fla_use_fast_ops": "0"
+  },
+  "fixture_sha256": "31fbf33194ea1f7429472bf02a9951bb08c9ba37edceb628e8a15f01b63ae3e0",
+  "local_beta": [
+    {
+      "variant": "original",
+      "revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
+      "report_sha256": "a86f9a7d5d3af51429f6e9d36e81e56541076527c5c4b8253a743014d11186b0",
+      "status": "passed",
+      "decode": "mismatch",
+      "prefill": "mismatch",
+      "random_decode": "mismatch",
+      "guards": true
+    },
+    {
+      "variant": "decode-beta",
+      "revision": "a3b5d8376f4206ce78d11d31f4a7f4a8d1ffb568",
+      "status": "passed",
+      "decode": "match",
+      "prefill": "mismatch",
+      "random_decode": "match",
+      "guards": true,
+      "report_sha256": "85fea05fe1305fb1f4eb0c0108e4f4b1cdc4a77ed1638b69ed6de04151b6eb0a"
+    },
+    {
+      "variant": "all-beta",
+      "revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+      "report_sha256": "b7c9bd09c235e848f7edcff84624b115303366a684d7e48506322a7142754361",
+      "status": "passed",
+      "decode": "match",
+      "prefill": "match",
+      "guards": true,
+      "random_decode": "match"
+    },
+    {
+      "variant": "shared-decode",
+      "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
+      "report_sha256": "75535f376c2a03c9154641b1fc80e68002c8e14c53eeaa97d89e8f3f8507d49d",
+      "status": "passed",
+      "decode": "match",
+      "prefill": "match",
+      "guards": true,
+      "note": "archive includes all-beta changes",
+      "random_decode": "match"
+    }
+  ],
+  "full_model_r2": [
+    {
+      "job_id": "parity-w4a4-python-code-decode-beta-force0",
+      "revision": "a3b5d8376f4206ce78d11d31f4a7f4a8d1ffb568",
+      "report_sha256": "541f0345e75c6daf7941e903f4a2bf6d9f5cc561c0bc3466554ab03b671a3d61",
+      "status": "parity_failed",
+      "model_scheme": "w4a4",
+      "max_new_tokens": 768,
+      "baseline_len": 271,
+      "mtp_len": 272,
+      "first_divergence": 264,
+      "baseline_stop": "stop",
+      "mtp_stop": "stop",
+      "equal_outputs": false,
+      "ast_gate": true
+    },
+    {
+      "job_id": "parity-w4a4-python-code-all-beta-force0",
+      "revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+      "report_sha256": "64aa1a3e9be450506b8e60be6e55e8af66f0bd085a89de90492cfd246fcf5440",
+      "status": "passed",
+      "model_scheme": "w4a4",
+      "max_new_tokens": 768,
+      "baseline_len": 277,
+      "mtp_len": 277,
+      "first_divergence": null,
+      "baseline_stop": "stop",
+      "mtp_stop": "stop",
+      "equal_outputs": true,
+      "ast_gate": true
+    },
+    {
+      "job_id": "parity-w4a4-python-code-shared-decode-force0",
+      "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
+      "report_sha256": "f518f81e0e486c48b9c0694afed006b75ddd2079c2cf6fc99fe014859bb140e8",
+      "status": "passed",
+      "model_scheme": "w4a4",
+      "max_new_tokens": 768,
+      "baseline_len": 277,
+      "mtp_len": 277,
+      "first_divergence": null,
+      "baseline_stop": "stop",
+      "mtp_stop": "stop",
+      "equal_outputs": true,
+      "ast_gate": true
+    },
+    {
+      "job_id": "parity-w4a4-python-code-shared-decode-force1",
+      "revision": "c7c3f48f4a8aa9e3cf28a87da26c5eb8c1017116",
+      "report_sha256": "9886f8a9724476255f204b09a0f3752517620324e2da9b3447dd1224f7de3bc3",
+      "status": "passed",
+      "model_scheme": "w4a4",
+      "max_new_tokens": 768,
+      "baseline_len": 277,
+      "mtp_len": 277,
+      "first_divergence": null,
+      "baseline_stop": "stop",
+      "mtp_stop": "stop",
+      "equal_outputs": true,
+      "ast_gate": true,
+      "force_shared_decode": "1"
+    }
+  ],
+  "shape_probe": {
+    "report_sha256": "5144b1d6f054df5274b3770ff1346a8613be3a24cfdb8f1984a7e204c100d9ff",
+    "status": "ok",
+    "backend": "cutlass",
+    "dispatch": "flashinfer.mm_fp4",
+    "custom_runtime_gate": false,
+    "shape_count": 3,
+    "m_values": [
+      1,
+      2,
+      3,
+      4,
+      8
+    ],
+    "output_comparisons": 15,
+    "all_first_rows_exact": true,
+    "all_outputs_finite": true,
+    "synthetic": true
+  },
+  "candidate_matrix": {
+    "status": "passed",
+    "schemes": {
+      "w4a4": {
+        "report_sha256": "3f19021fb2ea036f1521b5ffa59f9b94a001ca438d87c0356ce2602975fab819",
+        "python_code": {
+          "baseline_len": 277,
+          "mtp_len": 277,
+          "stop": true,
+          "exact": true,
+          "stable": true,
+          "mtp_verify_ct": 96,
+          "mtp_correct": 181,
+          "mtp_proposed": 192,
+          "mtp_accept_rate": 0.9427083333333334,
+          "mtp_accept_length": 2.8854166666666665
+        }
+      },
+      "w4a8": {
+        "report_sha256": "b7da01bb9ecb13922d88c2fa166e15777f5434c0dea6a749555df605ea24b10c",
+        "python_code": {
+          "baseline_len": 276,
+          "mtp_len": 276,
+          "stop": true,
+          "exact": true,
+          "stable": true,
+          "mtp_verify_ct": 96,
+          "mtp_correct": 180,
+          "mtp_proposed": 192,
+          "mtp_accept_rate": 0.9375,
+          "mtp_accept_length": 2.875
+        }
+      }
+    },
+    "cases": [
+      "arithmetic",
+      "python_code",
+      "red_square",
+      "blue_square",
+      "ocr_3729"
+    ],
+    "requests": 40,
+    "all_cases_stop_exact_stable": true,
+    "checkpoint_sha256": [
+      "16b760742a4d9aec1a9c54d8ad873d532b3c9ae7cd3cbe160fadcfdd7551e697",
+      "c3e05c86ce3c739d66e653a49079b16f87c5a5438534270c588053b71af18892",
+      "ddafb953f50f048df45427aaf150d380f5880854a2e07074564954c5639de951",
+      "48b0e220046132fe21b252f76698f69d9e36ea864121d36376401839c8f0e4ba"
+    ],
+    "cleanup_sha256": [
+      "78021b1baf95b724982fbdb44b7ffbd09d933aa1a2e95bd361d95440c663a617",
+      "dcfb67a78fad1870030a76a85bde6f051f2fa0d316523118a1c1e0bb3918549d",
+      "8b77e38bbec4171dc72ac74ca9c003a92b1b343a612a23f02755ae0e6305ca54",
+      "5907e47afe4e99705bd09f2929b9fe85f930eb481f349032cbfc75afff30cef6"
+    ],
+    "containers_remaining": 0,
+    "source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+    "source_archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+    "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498"
+  },
+  "orchestration_note": "Top-level parity_failed is intentional because the decode-beta ablation is retained as a failing control; all-beta and both shared-decode jobs passed.",
+  "all_beta_mtp": {
+    "verify_count": 96,
+    "correct_draft_tokens": 181,
+    "proposed_draft_tokens": 192,
+    "acceptance_rate": 0.9427083333333334,
+    "acceptance_rate_percent": 94.27,
+    "mean_accept_length": 2.8854166666666665
+  },
+  "shared_decode_note": "Diagnostic force_shared_decode runs require both ReplaySSM-related flags disabled because its ring buffer is not written; all-beta force=0 does not use this diagnostic switch.",
+  "pending": [
+    "GPQA long-context review",
+    "quantized-apply numerical error review",
+    "release decision"
+  ],
+  "mse_prefix_sensitivity": {
+    "status": "negative_result",
+    "report_sha256": "97c322e4f57feeed6365e72f28373e5acb18f2317cc531f19df6a9e3b70df5fc",
+    "evidence_sha256": "75678d44f3e4b92d87501d6af337b712e820ce67dab7dd1764c84e3b929ff7de",
+    "arms": [
+      "original",
+      "all-beta"
+    ],
+    "quantization_view": "MSE historical metadata view",
+    "quantization_revision": "14d5ad6f9d4ac30fc91a55b2ff4697f2ab90a76d",
+    "prefix_tokens": 41472,
+    "prompt_tokens": 288,
+    "input_tokens": 41760,
+    "context_length": 65536,
+    "output_window": 512,
+    "protocol": {
+      "tp": 1,
+      "temperature": 0,
+      "mtp": false,
+      "radix_cache": false,
+      "kv_cache_dtype": "fp8_e4m3",
+      "ssm_dtype": "float32"
+    },
+    "repetitions_per_arm": 2,
+    "all_trials": {
+      "native_reference_exact": true,
+      "native_reference_lcp": 512,
+      "native_reference_match_count": 512,
+      "finish": "length",
+      "contains_eos": false,
+      "contains_thinking_end": false,
+      "cached_tokens": 0,
+      "prompt_echo_exact": true,
+      "repeat_stable": true
+    },
+    "original_source_revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
+    "all_beta_source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+    "original_archive_sha256": "9e907775dfe30d6dccbab58438a09948e6b1c07ba124b3d5d7f73e797a43e216",
+    "all_beta_archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+    "runtime_source_sha256": {
+      "original": "79ee33b08692ae9bd05db58e23e0f057e3db3220b369daa2ea4bbac236f6fe62",
+      "all_beta": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498"
+    },
+    "cleanup_removed": true,
+    "remaining_containers": 0,
+    "interpretation": "Beta patch did not break this fixed-prefix 512-token native window; this does not establish natural-generation repair or long-budget stopping behavior."
+  },
+  "mlp_recovery_pilot": {
+    "status": "running_inference",
+    "evidence_sha256": "cd15e8add08cb4011e2c328c1448c871766cc02e55dd97ccec7ef5d801ddafb0",
+    "preflight_file_sha256": "5c7cc443a527cbe9961b86070affb48526e0e4071cbfb5cb120ef8a9dc421de9",
+    "tool_sha256": "a1a0bcc2219e6996f365425fc0f942a0e220b118fbf95d27c181be83d8f69f3e",
+    "gate_sha256": "0f29a592021202b6c49aa4e5e5f50aca5a3d12a0ea915ff1385c38ac71941322",
+    "variant": "mlp",
+    "gpu_serving_verified": true,
+    "restored_mlp_modules": 192,
+    "restored_tensors": 192,
+    "tensor_count": 2180,
+    "removed_scale_tensors": 576,
+    "preserved_tensors": 1988,
+    "quantized_layers": {
+      "NVFP4": 327,
+      "visual": 110,
+      "mtp": 8
+    },
+    "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+    "output_inventory_sha256": "74591b904b9724b25556af2925bd3c28b8efa9cd0c6270e2824a5513c73420d1",
+    "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+    "payloads_verified": true,
+    "protocol": {
+      "budget": 4096,
+      "repetitions_per_arm": 2,
+      "context_length": 65536,
+      "tp": 1,
+      "temperature": 0,
+      "mtp": false,
+      "radix_cache": false,
+      "quantization_loader": "modelopt_mixed",
+      "kv_cache_dtype": "fp8_e4m3",
+      "ssm_dtype": "float32",
+      "random_seed": 20261020
+    },
+    "source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+    "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
+    "r1": {
+      "state": "failed",
+      "error_type": "GateError",
+      "serving_containers_started": false
+    },
+    "scope": "Early control and MLP each completed two token-exact 4096-token repetitions, all ending at the budget. Long control completed two stable 34189-token stop trials; long MLP trial 1 is running. No completed long MLP result or repair claim. The running controller checks only config EOS metadata, which omits other EOS sources; its natural_termination field is incomplete.",
+    "queue_snapshot_20261019": {
+      "state": "waiting_for_gpu",
+      "snapshot_at_utc": "2026-10-19T09:42:52.411635+00:00",
+      "active_compute_processes": 1,
+      "max_wait_seconds": 7200,
+      "queue_file_sha256": "51b27cec56b3625541dd1ff660b5aec5d70a0bda52f0579786c6ad07524055df",
+      "queue_script_sha256": "0abf1665962e4686694023790d92747b421596320fca077db578981ad7c32d9c"
+    },
+    "queue": {
+      "state": "expired_without_launch",
+      "snapshot_at_utc": "2026-10-19T11:40:03.000623+00:00",
+      "queue_file_sha256": "997f97801a518bd9a667483a87ab639e2c12749a60ea6d42f85dde5aebcd4997",
+      "pilot_evidence_root_exists": false
+    },
+    "latest_observation": {
+      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
+      "phase": "long",
+      "arm": "mlp",
+      "at_utc": "2026-10-20T05:40:43.387603+00:00",
+      "state": "request",
+      "trial": 1,
+      "completed_early_control_trials": 2,
+      "completed_early_mlp_trials": 2,
+      "completed_long_trials": 2,
+      "glm_running": false,
+      "active_compute_processes": 2,
+      "evidence_sha256": "648a08c840ef671fc56066f5915e6e3965b6cc1c4a6666d4e102bfe5ca284608"
+    },
+    "long_phase_prepared": {
+      "budget": 49152,
+      "context_length": 65536,
+      "prompt_tokens": 288,
+      "native_prefix_tokens": 0,
+      "gpu_serving_verified": false,
+      "known_period_tokens": 2032,
+      "historical_periodic_suffix_onset_0based": 33131,
+      "historical_two_period_observation_minimum_tokens": 37195,
+      "random_seed": 20261020,
+      "tests_passed": 24
+    },
+    "prelaunch_observation_20261020": {
+      "observed_at_utc": "2026-10-20T02:23:47.301750+00:00",
+      "active_compute_processes": 1,
+      "evidence_sha256": "10bec84edeea287c995d23fe3e5243f8d7376c6f0dfe389b18dd5b0c855df130"
+    },
+    "offline_tests_passed": 27,
+    "r3": {
+      "state": "running_inference",
+      "supervisor_state": "phase_running",
+      "observed_at_utc": "2026-10-20T05:41:55.757903+00:00",
+      "early": {
+        "at_utc": "2026-10-20T04:05:30.384675+00:00",
+        "state": "completed"
+      },
+      "long_started": true,
+      "controller_sha256": "679297e5eeef5e464dbf979e77b73af2c2f4aa2297583836220447c6ccc14673",
+      "supervisor_sha256": "140587fa915938527dc71bfdd3a6ce164f5ba84fb3db773adf39dc200a449e43",
+      "fallback_restore_sha256": "759e2dbe8506b9936fc75290d63f70ab6d558373355161376ba60399bc3256cf",
+      "configuration_sha256": "da6714ae5e7b5294913dadfa212311eb6b978603ced2cfcc3e2d827ccef5cfad",
+      "early_budget": 4096,
+      "long_budget": 49152,
+      "repetitions_per_arm": 2,
+      "watchdog_seconds": {
+        "early": 18000,
+        "long": 64800
+      },
+      "systemd": {
+        "unit": "megaquant-mlp-r3-20261020",
+        "active": true,
+        "exec_stop_post_configured": true,
+        "timeout_stop_seconds": 600,
+        "runtime_max_seconds": 90000
+      },
+      "glm_restoration": {
+        "temporary_stop_authorized": true,
+        "running_before": true,
+        "running_at_observation": false,
+        "restore_required": true,
+        "strategy": "Python finally and systemd ExecStopPost; start same container ID; no removal",
+        "restore_completed": false
+      },
+      "control_serving_verified": true,
+      "mlp_serving_identity_verified": true,
+      "mlp_inference_completed": true,
+      "early_control": {
+        "cleanup": {
+          "container_id": "c3ecc4d172304cb86fd9ae5a2587f1e65d26edd722b7ae015bf6269d96b22f1a",
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T03:34:16.394023+00:00",
+        "model_proof": {
+          "config_sha256": "b1dd2e1baee445c501cf3f72b95d20fca66024a76e1603953dc25eac6122bcbd",
+          "hf_quant_config_sha256": "b566faf30260068a2a58de0b890aa544148fb0f6c6eeaa8f311db42e2702fc28",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "passed": true,
+          "payload_sha256_count": 2756,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 0,
+          "tensor_count": 2756,
+          "tokenizer_files": 2,
+          "variant_mlp": false,
+          "visual_quantized_layers": 110
+        },
+        "repeat_stable": true,
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "server_identity": {
+          "expected": {
+            "allow_auto_truncate": false,
+            "attention_backend": "flashinfer",
+            "context_length": 65536,
+            "disable_radix_cache": true,
+            "enable_multimodal": true,
+            "fp4_gemm_runner_backend": "flashinfer_cutlass",
+            "host": "127.0.0.1",
+            "kv_cache_dtype": "fp8_e4m3",
+            "linear_attn_backend": "triton",
+            "mamba_backend": "triton",
+            "mamba_ssm_dtype": "float32",
+            "max_running_requests": 1,
+            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
+            "port": 32262,
+            "quantization": "modelopt_mixed",
+            "random_seed": 20261020,
+            "sampling_backend": "pytorch",
+            "speculative_algorithm": null,
+            "tp_size": 1
+          },
+          "model_info_sha256": "c4b77f6451f19c41c3d75c4427f6e8a74811264e8a61aff6e64fc1e51e0b585b",
+          "passed": true,
+          "server_info_sha256": "eaa3a3ce6c4f126230bdb7c382c72cbe492169e3653f672619d872750f649900"
+        },
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 289.24004286609124,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.24756590369706827,
+            "natural_termination": false,
+            "output_ids_sha256": "63da06f34a6af81dd5d0b3f36322b9f743e55eac8650d9143b17ca16b4334e02",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 3,
+            "periodic_extent": 2035,
+            "periodic_lag": 2032,
+            "periodic_onset": 536,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 288.86523777002003,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.24756590369706827,
+            "natural_termination": false,
+            "output_ids_sha256": "63da06f34a6af81dd5d0b3f36322b9f743e55eac8650d9143b17ca16b4334e02",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 3,
+            "periodic_extent": 2035,
+            "periodic_lag": 2032,
+            "periodic_onset": 536,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 2
+          }
+        ]
+      },
+      "interpretation": "Each arm repeats exactly at 4096 tokens but differs after seven initial tokens. Both long control trials returned the same 34189-token stop output with thinking-end and no confirmed lag-2032 repetition. Long MLP trial 1 is running. Only config EOS IDs were checked, so natural_termination is an incomplete diagnostic; no repair or accuracy conclusion.",
+      "long": {
+        "arm": "mlp",
+        "at_utc": "2026-10-20T05:40:43.387603+00:00",
+        "state": "request",
+        "trial": 1
+      },
+      "early_phase_completed_at_utc": "2026-10-20T04:05:30.384247+00:00",
+      "early_comparison": {
+        "both_repeat_stable": true,
+        "control_vs_mlp_lcp": 7,
+        "output_exact": false
+      },
+      "early_stopping_outcome": {
+        "control": {
+          "all_trials_naturally_terminated": false,
+          "natural_termination_trials": 0
+        },
+        "mlp": {
+          "all_trials_naturally_terminated": false,
+          "natural_termination_trials": 0
+        }
+      },
+      "early_known_cycle_outcome": {
+        "control": {
+          "any_confirmed_periodic": false,
+          "confirmed_periodic_trials": 0
+        },
+        "mlp": {
+          "any_confirmed_periodic": false,
+          "confirmed_periodic_trials": 0
+        }
+      },
+      "early_mlp": {
+        "cleanup": {
+          "container_id": "132da719fecde6493df17d64d00c9f54cf611afb5990c7653512fcdee05df85d",
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T04:05:28.674930+00:00",
+        "model_proof": {
+          "config_sha256": "ee2922ff99e06fc5cfc97a5acc0e6aae6433de683eab2fd3c593fab3e9ebb4a2",
+          "hf_quant_config_sha256": "83b799d1fd35dd9108b94db03a83a74bf56ca73341d769e27c085f9e89a114a7",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "74591b904b9724b25556af2925bd3c28b8efa9cd0c6270e2824a5513c73420d1",
+          "passed": true,
+          "payload_sha256_count": 2180,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 192,
+          "tensor_count": 2180,
+          "tokenizer_files": 2,
+          "variant_mlp": true,
+          "visual_quantized_layers": 110
+        },
+        "repeat_stable": true,
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "server_identity": {
+          "expected": {
+            "allow_auto_truncate": false,
+            "attention_backend": "flashinfer",
+            "context_length": 65536,
+            "disable_radix_cache": true,
+            "enable_multimodal": true,
+            "fp4_gemm_runner_backend": "flashinfer_cutlass",
+            "host": "127.0.0.1",
+            "kv_cache_dtype": "fp8_e4m3",
+            "linear_attn_backend": "triton",
+            "mamba_backend": "triton",
+            "mamba_ssm_dtype": "float32",
+            "max_running_requests": 1,
+            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-MLP",
+            "port": 32262,
+            "quantization": "modelopt_mixed",
+            "random_seed": 20261020,
+            "sampling_backend": "pytorch",
+            "speculative_algorithm": null,
+            "tp_size": 1
+          },
+          "model_info_sha256": "924411eabc4e7fa9bd16e0c9de29ec54cc5fb05a1421205e642866c942da1db5",
+          "passed": true,
+          "server_info_sha256": "ba676f270d5077d8b4a2010f28a32ede3d86208e79fd2c75659b4013f6c2de3d"
+        },
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 699.0483955290401,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 12,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.25211073199737943,
+            "natural_termination": false,
+            "output_ids_sha256": "f6bd7e105ba7dc1fe180fc488e8a8c67a4bb7eb85f07412d0214137725135251",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 6,
+            "periodic_extent": 2038,
+            "periodic_lag": 2032,
+            "periodic_onset": 1813,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 696.2891514169751,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 12,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.25211073199737943,
+            "natural_termination": false,
+            "output_ids_sha256": "f6bd7e105ba7dc1fe180fc488e8a8c67a4bb7eb85f07412d0214137725135251",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 6,
+            "periodic_extent": 2038,
+            "periodic_lag": 2032,
+            "periodic_onset": 1813,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 2
+          }
+        ]
+      },
+      "long_serving_identity_verified": true,
+      "early_latency_mean_seconds": {
+        "control": 289.05264031805564,
+        "mlp": 697.6687734730076
+      },
+      "early_mlp_over_control_latency_ratio": 2.4136391651892057,
+      "long_control": {
+        "cleanup": {
+          "container_id": "bde9c41c174f77d9db09b2f0bc0f780154a508ecdb1af46ca5a7d73e356799e5",
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T05:33:21.471308+00:00",
+        "model_proof": {
+          "config_sha256": "b1dd2e1baee445c501cf3f72b95d20fca66024a76e1603953dc25eac6122bcbd",
+          "hf_quant_config_sha256": "b566faf30260068a2a58de0b890aa544148fb0f6c6eeaa8f311db42e2702fc28",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "passed": true,
+          "payload_sha256_count": 2756,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 0,
+          "tensor_count": 2756,
+          "tokenizer_files": 2,
+          "variant_mlp": false,
+          "visual_quantized_layers": 110
+        },
+        "repeat_stable": true,
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "server_identity": {
+          "expected": {
+            "allow_auto_truncate": false,
+            "attention_backend": "flashinfer",
+            "context_length": 65536,
+            "disable_radix_cache": true,
+            "enable_multimodal": true,
+            "fp4_gemm_runner_backend": "flashinfer_cutlass",
+            "host": "127.0.0.1",
+            "kv_cache_dtype": "fp8_e4m3",
+            "linear_attn_backend": "triton",
+            "mamba_backend": "triton",
+            "mamba_ssm_dtype": "float32",
+            "max_running_requests": 1,
+            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
+            "port": 32262,
+            "quantization": "modelopt_mixed",
+            "random_seed": 20261020,
+            "sampling_backend": "pytorch",
+            "speculative_algorithm": null,
+            "tp_size": 1
+          },
+          "model_info_sha256": "c4b77f6451f19c41c3d75c4427f6e8a74811264e8a61aff6e64fc1e51e0b585b",
+          "passed": true,
+          "server_info_sha256": "d38910161022b7144a5ffdba2d1aa4243bb2f0c860df5bbe7db04421fd874dc3"
+        },
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 2503.575954520027,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 33901,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19160305073680295,
+            "natural_termination": false,
+            "output_ids_sha256": "54cecc7dc6b839e97e79027ecd37d2f97eea81442762acb435ba8d09cef16a6d",
+            "output_tokens": 34189,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 8,
+            "periodic_extent": 2040,
+            "periodic_lag": 2032,
+            "periodic_onset": 27850,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": true,
+            "e2e_latency": 2505.8751641819254,
+            "finish_reason_type": "stop",
+            "first_thinking_end_index": 33901,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.19160305073680295,
+            "natural_termination": false,
+            "output_ids_sha256": "54cecc7dc6b839e97e79027ecd37d2f97eea81442762acb435ba8d09cef16a6d",
+            "output_tokens": 34189,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 8,
+            "periodic_extent": 2040,
+            "periodic_lag": 2032,
+            "periodic_onset": 27850,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 1,
+            "trial": 2
+          }
+        ]
+      },
+      "long_control_completed_trials": 2,
+      "long_stopping_interpretation": "Both control trials returned the same service stop after 34189 tokens with thinking-end and no confirmed lag-2032 cycle. The running controller records no terminal EOS under its config-only EOS set and natural_termination=false. Config metadata omits generation/tokenizer EOS IDs, so this does not establish absence of an EOS stop. The matched stop reason and token sequence were not retained; no retrospective corrected termination label is asserted.",
+      "termination_metadata_audit": {
+        "evidence_sha256": "c19f436ae278051f35ba0917396c89b34fda358a215bd14e953b3b9006be910a",
+        "models": {
+          "control": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          },
+          "mlp": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          },
+          "bf16": {
+            "config_eos_count": 1,
+            "generation_config_present": true,
+            "generation_eos_count": 2,
+            "tokenizer_eos_count": 1,
+            "config_equals_generation": false,
+            "config_covers_generation": false,
+            "config_covers_tokenizer": false,
+            "config_eos_digest": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+            "generation_eos_digest": "481645ac655522a4180d00cb527e398ecf11c06e7d89199e39a806210abc1690",
+            "tokenizer_eos_digest": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5"
+          }
+        },
+        "running_controller_unchanged": true,
+        "scope": "EOS-source metadata counts and hashes only. No observed final token or matched stop metadata retained; cannot relabel existing trial."
+      }
+    },
+    "gpu_serving_scope": "Early phase gates and two short requests passed for each arm. Both long control trials returned stable stop outputs; long MLP trial 1 is running.",
+    "diagnostic_tool_update": {
+      "deployed_to_running_r3": false,
+      "metadata_validation": {
+        "observed_at_utc": "2026-10-20T05:54:17.819638+00:00",
+        "controller_sha256": "58abf92c21790043b5861c3be1cfb5399d0bc79a4831bfea993265317f3364cd",
+        "execution": "stdin_metadata_only_no_model_load",
+        "models": {
+          "control": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          },
+          "mlp": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          },
+          "bf16": {
+            "metadata": {
+              "sources": [
+                {
+                  "source": "generation_config",
+                  "count": 2,
+                  "sha256": "c78338f8d0611cef97410c8a2c1424a0d605770849e1171432bf0a1f7f7e04a2",
+                  "present": true
+                },
+                {
+                  "source": "config",
+                  "count": 1,
+                  "sha256": "8b54f985343b17a70a2a1d7f307de628e4904a5c20651f1663493f963574defe",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer",
+                  "count": 1,
+                  "sha256": "f66a8a966619a7aae703ba69f26c7d0b93f5a86b91d51608f9e8b51bb4acc4c5",
+                  "present": true
+                },
+                {
+                  "source": "tokenizer_additional_stop",
+                  "count": 0,
+                  "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                  "present": false
+                }
+              ],
+              "any_present": true
+            },
+            "effective_stop_union_count": 2,
+            "effective_stop_union_sha256": "a3a407bcbdb848fb5d4c1bc4653a33d6be40f30a6c2abd651d3e06607c662ca9",
+            "root_config_eos_key_present": false,
+            "root_config_eos_count": 0,
+            "text_config_eos_count": 1
+          }
+        }
+      },
+      "evidence_sha256": "c14c6a0a6143b6f1be108f81b45a8c9efd377e64be7caeb13ffaac5ebbd4abcd",
+      "regression_tests_passed": 22,
+      "scope": "Corrected EOS helper executed from stdin against model metadata only. No model load, generation, or remote file update. Existing r3 termination labels are not retrospectively changed."
+    }
+  }
+}

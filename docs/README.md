@@ -27,6 +27,11 @@ Mega-Quantification 的当前版本为
 4. 启动量化后的本地 checkpoint，分别检查文本、视觉/OCR 与 MTP。
 5. 使用独立输出目录运行完整 GPQA，并通过结果检查器后记录成绩。
 
+W4A4 的 Spark 导出还要检查 `hf_quant_config.json` 和 `config.json` 的
+`quantized_layers`。它们必须覆盖实际保存为 NVFP4 的视觉和 MTP 线性层；
+BF16 恢复层不能出现在这份 map 中。`megaquant quantize` 会根据 safetensors
+header 自动生成这份 metadata，启动 SGLang 前应把它作为导出审计的一部分。
+
 Spark 的 32768 上下文配方用于固定视觉/MTP 功能检查；完整 GPQA 使用
 `eval-gpqa-diamond.spark-gpqa.yaml`，上下文为 262144、并发为 16、MTP 关闭。
 两种用途的 journal 和验证范围分别保留。

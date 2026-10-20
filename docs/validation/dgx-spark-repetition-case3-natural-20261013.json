@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "status": "all_nine_natural_runs_validated_case3_three_weight_group_complete",
+  "snapshot_at_utc": "2026-10-13T02:08:02.781567Z",
+  "snapshot_time_meaning": "Read-only capture of completed generation and startup evidence. Later CPU audits have separately recorded creation times.",
+  "scope": {
+    "anonymous_case": 3,
+    "expected_runs": 9,
+    "validated_runs": 9,
+    "incomplete_runs": 0,
+    "invalid_runs": 0,
+    "full_nine_natural_experiment_complete": true,
+    "case3_three_weight_group_complete": true,
+    "formal_journals_or_scores_modified": false,
+    "new_gpqa_score_established": false
+  },
+  "protocol": {
+    "hardware": "single DGX Spark GB10",
+    "tp_size": 1,
+    "context_length": 262144,
+    "case3_output_budget": 49152,
+    "other_case_output_budgets": [
+      16384,
+      24576
+    ],
+    "native_prompt_tokens": 288,
+    "prompt_ids_sha256": "20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436",
+    "tokenizer_sha256": "d40b12f2eef705e5017a5f4fc6c0c25b174a594485c1d7515624daf208212950",
+    "client_concurrency": 1,
+    "server_max_running_requests": 16,
+    "temperature": 0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0,
+    "repetition_penalty": 1,
+    "frequency_penalty": 0,
+    "presence_penalty": 0,
+    "ignore_eos": false,
+    "allow_auto_truncate": false,
+    "mtp_enabled": false,
+    "kv_cache_dtype": "fp8_e4m3",
+    "ssm_dtype": "float32",
+    "attention_backend": "flashinfer",
+    "disable_cuda_graph": true,
+    "radix_cache_enabled": true,
+    "current_three_model_native_inputs_equal": true,
+    "historical_formal_actual_native_input_ids_available": false
+  },
+  "runtime": {
+    "base_image_digest": "sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
+    "readonly_processor_override_sha256": "22ae6a64ab021d93f826ee6a8edc0befad14dfb5fd04213e31de762bfd5e4dd2",
+    "sglang_version": "0.5.20",
+    "weights_control_scope": "Source BF16 weights with common FP8 KV and FP32 SSM; not an all-BF16 execution route.",
+    "models": [
+      {
+        "model_label": "mse",
+        "quantization": "modelopt",
+        "random_seed": 213087260,
+        "max_total_num_tokens": 1738591
+      },
+      {
+        "model_label": "max",
+        "quantization": "modelopt",
+        "random_seed": 781300540,
+        "max_total_num_tokens": 1737732
+      },
+      {
+        "model_label": "bf16",
+        "quantization": null,
+        "random_seed": 234258400,
+        "max_total_num_tokens": 620136
+      }
+    ],
+    "enable_deterministic_inference": false,
+    "same_startup_seed_and_capacity_used": false,
+    "strict_single_factor_causal_comparison_established": false,
+    "temperature_zero_proves_seed_caused_difference": false,
+    "specific_low_level_kernel_route_independently_verified": false,
+    "new_clean_image_gpu_validation_established": false,
+    "vision_or_mtp_revalidated": false
+  },
+  "case3_results": [
+    {
+      "model_label": "mse",
+      "state": "validated",
+      "completion_tokens": 49152,
+      "native_reasoning_tokens": 49152,
+      "finish_type": "length",
+      "budget_outcome": "budget_exhausted_with_exact_cycle",
+      "first_thinking_end_token_0based": null,
+      "first_eos_token_0based": null,
+      "confirmed_native_cycle_count": 1,
+      "native_output_ids_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "thinking_end_occurrences": 0,
+      "eos_occurrences": 0,
+      "final_answer_parseable": null,
+      "final_answer_correct": null,
+      "final_answer_audit_state": "no_terminal_final_in_this_length_limited_trajectory",
+      "native_cycle_final_stable_suffix": {
+        "stable_suffix_onset_0based": 33131,
+        "period": 2032,
+        "period_sha256": "74fb170341c9501ecacbc72a4dd2d8fb165ad64730ca9069601f5c420b3769ff",
+        "phase_invariant_period_sha256": "6a4d9a60f004cac6fd3d5ec54689c474955b3087a54cb061ff0e5e3cb82f7824",
+        "periodic_extent": 16021,
+        "full_cycles": 7
+      }
+    },
+    {
+      "model_label": "max",
+      "state": "validated",
+      "completion_tokens": 22569,
+      "native_reasoning_tokens": 22129,
+      "finish_type": "stop",
+      "budget_outcome": "audited_eos_stop_after_thinking_end",
+      "first_thinking_end_token_0based": 22129,
+      "first_eos_token_0based": 22568,
+      "confirmed_native_cycle_count": 0,
+      "native_output_ids_sha256": "e738ed3af45281128374beeb537b00192d18a365f28c859402fe7edf65f821a4",
+      "thinking_end_occurrences": 1,
+      "eos_occurrences": 1,
+      "strictly_between_terminal_markers_tokens": 438,
+      "final_answer_parseable": true,
+      "final_answer_correct": false,
+      "final_answer_audit_state": "later_cpu_formal_parser_audit"
+    },
+    {
+      "model_label": "bf16",
+      "state": "validated",
+      "completion_tokens": 16685,
+      "native_reasoning_tokens": 16375,
+      "finish_type": "stop",
+      "budget_outcome": "audited_eos_stop_after_thinking_end",
+      "first_thinking_end_token_0based": 16375,
+      "first_eos_token_0based": 16684,
+      "confirmed_native_cycle_count": 0,
+      "native_output_ids_sha256": "e0e46c080217d8b1a6dd6d699ca50893f5282555eddc8c6ff1c70d25051004c1",
+      "thinking_end_occurrences": 1,
+      "eos_occurrences": 1,
+      "strictly_between_terminal_markers_tokens": 308,
+      "final_answer_parseable": true,
+      "final_answer_correct": true,
+      "final_answer_audit_state": "later_cpu_formal_parser_audit"
+    }
+  ],
+  "case3_native_pairwise_prefixes": [
+    {
+      "left": "mse",
+      "right": "max",
+      "common_prefix_tokens": 7,
+      "common_prefix_decoded_reasoning_chars": 25
+    },
+    {
+      "left": "mse",
+      "right": "bf16",
+      "common_prefix_tokens": 12,
+      "common_prefix_decoded_reasoning_chars": 46
+    },
+    {
+      "left": "max",
+      "right": "bf16",
+      "common_prefix_tokens": 7,
+      "common_prefix_decoded_reasoning_chars": 25
+    }
+  ],
+  "native_prefix_interpretation": {
+    "historical_retokenized_reference_ids_used_for_new_pairwise_comparison": false,
+    "first_incorrect_decision_or_loop_cause_located": false
+  },
+  "bf16_startup_gate": {
+    "passed": true,
+    "auditor_sha256": "c084ea9362d3f775eda457c3dccf05ec3d7d71e640f2896560a18cb0380de24e",
+    "counts": {
+      "post_ready_generate_requests": 1,
+      "post_ready_flush_requests": 1,
+      "post_ready_health_generation_requests": 0,
+      "post_ready_prefill_batches": 1,
+      "post_ready_prefill_new_token_counter_sum": 288,
+      "post_ready_prefill_cached_token_counter_sum": 0,
+      "maximum_observed_prefill_pending_tokens": 0,
+      "final_observed_prefill_pending_tokens": 0,
+      "post_ready_decode_samples": 417,
+      "maximum_observed_decode_running_requests": 1,
+      "maximum_observed_queue_requests": 0,
+      "native_cached_tokens": 0,
+      "native_prompt_tokens": 288,
+      "native_completion_tokens": 16685
+    },
+    "checks": {
+      "readiness_snapshot_hash_matches": true,
+      "snapshot_is_final_log_prefix_after_universal_newlines": true,
+      "snapshot_is_raw_final_log_prefix": false,
+      "final_ready_marker_before_flush_and_natural_request": true,
+      "metadata_time_order_consistent": true,
+      "observed_single_post_ready_generate_request": true,
+      "observed_serial_post_ready_scheduler_samples": true,
+      "recorded_zero_extra_health_requests": true,
+      "observed_zero_post_ready_health_requests": true,
+      "native_final_metadata_cached_tokens_zero": true,
+      "strict_unchunked_prefill_verified": true,
+      "chunked_prefill_arithmetic_independently_verified": false,
+      "strict_single_request_prefill_sequence_verified": true,
+      "prefill_new_tokens_equal_native_prompt": true,
+      "prefill_pending_tokens_match_remaining_prompt": true,
+      "prefill_cached_token_counters_zero": true,
+      "all_prefills_precede_decode": true
+    },
+    "full_host_or_gpu_isolation_proven": false,
+    "runtime_binary_attestation_established": false
+  },
+  "bf16_server_info_binding": {
+    "saved_server_info_raw_sha256": "5e0b6dcafde048d219a34dfda0a257c3b4e5478eeef310cb3bc3336f9932e160",
+    "recorded_actual_server_info_canonical_sha256": "1274e3706ed3f3ca3e65b7c8bfa016c5ab316e14ce6811e0241a9166a4c94f32",
+    "recomputed_canonical_sha256": "1274e3706ed3f3ca3e65b7c8bfa016c5ab316e14ce6811e0241a9166a4c94f32",
+    "canonical_binding_matches": true,
+    "saved_raw_binding_matches": true,
+    "selected_settings_exactly_equal": true,
+    "random_seed": 234258400,
+    "canonicalization": "json.dumps(object, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode(); ensure_ascii=True by default",
+    "runtime_limit": "Binds the saved object to the client recorded digest; does not independently attest GPU state throughout generation."
+  },
+  "bf16_original_analysis_final_answer_parseable": null,
+  "bf16_original_analysis_final_answer_correct": null,
+  "bf16_initial_cpu_audit": {
+    "created_at_utc": "2026-10-13T02:21:33.404130Z",
+    "formal_parser": {
+      "parser_source_sha256": "9de9ac1ef756a40547fe31f18b9436dcebd78f9283d89c158c4cd090391e0104",
+      "frozen_parser_source_sha256": "9de9ac1ef756a40547fe31f18b9436dcebd78f9283d89c158c4cd090391e0104",
+      "parser_source_byte_identical": true,
+      "parseable": true,
+      "matches_bound_reference": true,
+      "formal_scoring_correct": true,
+      "parser_branch": "last standalone-choice fallback after thinking-end delimiter",
+      "memory_only_eos_text_removal_same_prediction": true
+    },
+    "reference_binding_annotation_sha256": "b47bbc3e7d9cf268483dbe7a66b26785b56ccb8e8fa2b54ca7ec225257f8c9ff",
+    "reference_dataset_sha256": "41d1213cd7a4998605a26c2798500652572007161b3a92817ba46b35befcd305",
+    "frozen_generation_analysis_null_fields_preserved": true,
+    "formal_journals_or_scores_modified": false,
+    "whole_reasoning_correctness_established": false
+  },
+  "exact_cycle_method": {
+    "maximum_period_tokens": 16384,
+    "checkpoint_interval_tokens": 256,
+    "includes_final_reasoning_checkpoint": true,
+    "minimum_full_cycles": 4,
+    "minimum_consecutive_tokens": 512,
+    "bf16_qualifying_exact_cycles": 0,
+    "short_subthreshold_approximate_semantic_or_between_checkpoint_repetition_excluded": false,
+    "initial_analyzer_checkpoint_count": 63,
+    "independent_regular_checkpoint_count": 63,
+    "independent_final_endpoint_extra_checks": 1,
+    "independent_total_checkpoint_count": 64
+  },
+  "later_bf16_semantic_and_independent_native_audit": {
+    "status": "independent_native_stop_cycle_request_and_server_object_checks_completed",
+    "created_at_utc": "2026-10-13T02:44:29.722725Z",
+    "audit_sha256": "46162765f44bdf6d07c978c46d2f595f7fa06c693f6c031114e13d46ad0ef728",
+    "independent_cycle_implementation": "KMP prefix-function border table on reversed native prefixes; no imported analyzer",
+    "regular_checkpoints": 63,
+    "final_endpoint_extra_checks": 1,
+    "total_checkpoints": 64,
+    "qualifying_checkpoint_hits": 0,
+    "terminal_raw_event_matches_recorded_response": true,
+    "no_native_continuation_after_eos": true,
+    "three_current_native_request_prompt_arrays_and_sampling_parameters_equal": true,
+    "three_complete_canonical_server_objects_match_recorded_client_digests": true,
+    "raw_source_bytes_unchanged": true,
+    "tokenizer_detokenization_independently_rerun": false,
+    "independent_native_audit_did_parser_or_semantic_grading": false,
+    "bf16_bounded_reasoning_semantic_review_included": false,
+    "all_reasoning_statements_correct_established": false
+  },
+  "common_prefix_and_semantic_probes": {
+    "status": "not_included_in_this_natural_trajectory_report",
+    "scope": "Independent cold-prefill probes require their own audited evidence; they do not restore natural incremental KV/SSM state."
+  },
+  "supported_inference": {
+    "this_case3_mse_trajectory_had_an_exact_native_cycle": true,
+    "this_case3_max_trajectory_stopped_and_its_final_answer_was_wrong": true,
+    "this_case3_bf16_trajectory_stopped_and_its_final_answer_was_correct": true,
+    "general_repetition_recovery_established": false,
+    "algorithm_quality_ranking_established": false,
+    "quantization_or_kv_root_cause_established": false,
+    "this_mse_cycle_observed_after_validated_ready_flush_and_zero_cache_start": true
+  },
+  "limitations": [
+    "This is a diagnostic three-trajectory comparison, not a complete GPQA score.",
+    "Context window 262144 differs from per-case diagnostic output caps; length finishes do not mean the window was exhausted.",
+    "Different startup seeds, capacity, runtime history and weight/activation numerical routes prevent objective-only attribution.",
+    "Source BF16 weights still use FP8 KV and FP32 SSM; this does not test an all-BF16 execution route.",
+    "Single observed requests and scheduler samples do not prove full host/GPU isolation.",
+    "Canonical configuration object binding does not attest every field throughout generation or independently attest remote GPU execution.",
+    "No supported exact cycle does not exclude shorter, approximate, semantic or between-checkpoint repetition.",
+    "A correct final choice does not verify every reasoning statement.",
+    "Formal c16 benchmark traces and c1 diagnostics have different scheduling.",
+    "This text-only MTP-off experiment does not revalidate vision or MTP.",
+    "Metadata reconstruction of current frozen inputs does not replace unavailable historical actual native input IDs or establish token-exact replay of the original formal run."
+  ],
+  "evidence_sha256": {
+    "after09_capture_manifest": "00f87af1fa3e2608b2b9f6b9a4072e39885361b46f5ee3e18879121f5b1a6099",
+    "after09_comparison": "6849adb34c3418c934d365fb14e91e3c69d817e36887d6114188bb60c639180c",
+    "after09_comparison_manifest": "672f96d798a80f5e9a1f540ccb25d4c3e24c84b938924f989c84d30b822fda46",
+    "after09_startup_gate": "4d99017b68b9d4fcd7442db758acbc7a8187f232d2028d5448e8a13b607fd2b9",
+    "bf16_natural_response": "a5f30f0bfd22883f75e10285f50ed4a4a12216e61a415e8ebcdc5c82e7cb6cf1",
+    "bf16_decoded_response": "627a06b6dfe26ae94fa8f84d55011c326e663bd235432124113081242c8350bf",
+    "bf16_native_cycle_analysis": "5e45f38eebd9be160487bcd876edc25ffc55145041c4c83d664377a9617ef49c",
+    "bf16_terminal_stop_audit": "7ca6a967225dde7d4966da8b4f3ba0178c06005dea627859fbfac2422a509485",
+    "bf16_initial_cpu_stop_parser_cycle_audit": "e24a685016d0f95c4e7800b87d8149e1bb72e2ae3bf5f4a050f3b24399eddd9a",
+    "max_later_cpu_parser_semantic_audit": "7d48885b9783cf84b8ea0ad16b1a512978e7dca1154cad2df08bda8e76bb4d3e",
+    "max_stop_count_erratum": "fd5061c60226432a0e053fcf1b1242cc7d414483d4a1c687f7bc22e0a6db9328",
+    "bf16_independent_native_stop_cycle_request_settings_audit": "46162765f44bdf6d07c978c46d2f595f7fa06c693f6c031114e13d46ad0ef728"
+  },
+  "privacy": {
+    "raw_questions_answers_generated_text_or_token_ids_published": false,
+    "host_paths_or_credentials_published": false
+  },
+  "bf16_generation_completed_at_utc": "2026-10-12T14:09:01.237534Z"
+}

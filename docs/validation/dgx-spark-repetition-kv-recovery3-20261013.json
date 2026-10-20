@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "publication_date": "2026-10-13",
+  "status": "completed_kv_path_comparison_independently_cpu_verified",
+  "scope": {
+    "models": ["mse_w4a4", "mse_w4a4_same_checkpoint_bfloat16_kv"],
+    "histories": 2,
+    "kv_arms": 2,
+    "validated_requests": 10,
+    "native_generated_positions_verified": 1032,
+    "requested_candidate_position_scores_verified": 5160,
+    "returned_top_position_scores_verified": 20640,
+    "capture_files": 78,
+    "text_only": true,
+    "mtp_enabled": false,
+    "formal_journals_or_scores_modified": false,
+    "new_gpqa_score_established": false
+  },
+  "protocol": {
+    "kv_arms": ["fp8_e4m3", "bfloat16"],
+    "next_tokens_per_history_and_arm": 2,
+    "continuation_budget_tokens_per_arm": 512,
+    "same_checkpoint_seed_capacity_and_request_protocol": true,
+    "sequential_flush_count_per_arm": 5,
+    "sequential_generate_count_per_arm": 5,
+    "sequential_flush_count_aggregate": 10,
+    "sequential_generate_count_aggregate": 10,
+    "all_cached_tokens_zero": true,
+    "all_retractions_zero": true
+  },
+  "within_kv_repeat_gate": {
+    "both_arms_all_history_repeats_stable": true,
+    "selected_token_and_top20_repeats_exact": true,
+    "all_returned_candidate_scores_repeat_exact": true,
+    "continuation_first_score_matches_both_next1_in_both_arms": true
+  },
+  "cross_kv_next1": {
+    "selected_choice_same_on_both_histories": true,
+    "shared_top20_count_each_history": 19,
+    "maximum_candidate_absolute_delta_by_history": [1.1078968048, 1.0738697052],
+    "maximum_shared_top_absolute_delta_by_history": [2.1078953743, 0.7698802948],
+    "kv_attribution_allowed_by_repeat_gate": true,
+    "kv_dtype_also_changes_attention_runtime_route": true
+  },
+  "continuation": {
+    "history_count": 1,
+    "native_lcp_tokens_between_arms": 9,
+    "both_arms_completion_tokens": 512,
+    "both_arms_finish_type": "length",
+    "thinking_end_occurrences_by_arm": [0, 0],
+    "eos_occurrences_by_arm": [0, 0],
+    "exact_cycle_detected_by_arm": [false, false],
+    "budget_exhausted_unknown": true,
+    "one_continuation_per_arm_unreplicated": true,
+    "natural_stopping_recovery_established": false
+  },
+  "supported_inference": {
+    "original_incremental_kv_ssm_state_reconstructed": false,
+    "old_long_repetition_cause_established": false,
+    "quantization_causal_branch_established": false,
+    "vision_or_mtp_behavior_established": false,
+    "quality_ranking_established": false,
+    "root_cause": "unknown"
+  },
+  "evidence_sha256": {
+    "capture_manifest": "e91e0fe219aa166fac301889eca637e4546fc296257a0184ac6404edabe20b3f",
+    "comparison": "d33d24ae2e500e73835865531ca811ff83464fe1cdcd15377b9f488d92240bc7",
+    "watcher": "38428516b525f0030b5e82cd382f3be479dc1f1c925e5fd4daefebfbc8dc47e0",
+    "independent_cpu_audit": "e9c5fac5ed92340a0eccda7acf7acb2969f4b82902a020d5152d10d799482e55",
+    "independent_native_score_audit": "11cf1e82b9608c9dd7e77c09ac01db5b82092983acc4ee8d499d980e4ffa79a0",
+    "environment_delta_audit": "83e20223e97cab9ba5a71e9bfe1d884b72bbf3cda531df8756f29d01443c01fd"
+  },
+  "limitations": [
+    "Cold imposed histories do not reconstruct natural incremental KV or SSM state.",
+    "KV dtype changes storage and attention runtime routes, so numerical rounding is not isolated.",
+    "The 512-token continuation has one rollout per arm and is length-censored.",
+    "After the native prefix diverges, later positions are not the same history.",
+    "Returned processed logprobs do not provide a full logits or entropy comparison.",
+    "The matrix does not establish stopping recovery, the cause of older long loops, or behavior for vision and MTP."
+  ],
+  "privacy": {
+    "raw_questions_answers_generated_text_or_token_id_sequences_published": false,
+    "raw_scores_published": false,
+    "item_ids_host_paths_or_credentials_published": false
+  }
+}

@@ -1121,6 +1121,15 @@ def _rewrite_sglang_export(
     output_dir: Path, canonical: str
 ) -> dict[str, dict[str, Any]] | None:
     """Patch ModelOpt HF metadata so SGLang ``modelopt_mixed`` can load it."""
+    if canonical == "nvfp4_w4a4":
+        from megaquant.sglang_export import rewrite_sglang_nvfp4_export
+
+        try:
+            return rewrite_sglang_nvfp4_export(output_dir)
+        except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as exc:
+            raise BackendError(
+                f"SGLang NVFP4 auxiliary metadata rewrite failed under {output_dir}: {exc}"
+            ) from exc
     if canonical not in _SGLANG_MIXED_EXPORT:
         return None
     try:
@@ -1289,7 +1298,12 @@ class ModelOptBackend:
             "model_source": _attr(_attr(recipe, "model", None), "source", None),
         }
         if sglang_layers is not None:
-            meta["sglang_quant_algo"] = "MIXED_PRECISION"
+            # Uniform W4A4 remains NVFP4 even when auxiliary visual/MTP
+            # entries are added to opt SGLang into those modules.  Mixed
+            # exports use the separate MIXED_PRECISION loader contract.
+            meta["sglang_quant_algo"] = (
+                "NVFP4" if canonical == "nvfp4_w4a4" else "MIXED_PRECISION"
+            )
             meta["sglang_quantized_layers"] = len(sglang_layers)
         if vision_note is not None:
             meta["vision_tensors"] = vision_note["vision_tensors"]

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "status": "independent_cpu_hash_encoding_erratum_verified",
+  "publication_date": "2026-10-13",
+  "private_cpu_audit_created_at_utc": "2026-10-12T14:45:23.641451Z",
+  "audit_time_meaning": "Later local CPU analysis, distinct from the original generation timestamps.",
+  "scope": {
+    "anonymous_complete_server_info_objects_checked": 3,
+    "natural_and_decoded_record_files_checked": 6,
+    "entire_saved_objects_checked_not_only_selected_settings": true,
+    "local_cpu_only": true,
+    "new_gpu_or_remote_requests": false,
+    "previous_dated_public_and_private_evidence_modified": false,
+    "stopping_parser_scoring_cycle_or_semantic_findings_rerun_or_changed": false
+  },
+  "hash_rules": {
+    "saved_server_info_sha256": "SHA-256 of the saved file raw bytes.",
+    "actual_server_info_sha256": "SHA-256 of the complete fresh server-info object serialized by the frozen client before its generate request.",
+    "client_serialization": {
+      "function": "json.dumps",
+      "sort_keys": true,
+      "separators": [
+        ",",
+        ":"
+      ],
+      "allow_nan": false,
+      "ensure_ascii": true,
+      "ensure_ascii_is_python_default": true,
+      "string_encoding": "UTF-8",
+      "encoding_is_str_encode_default": true
+    },
+    "different_encoding_hash_inequality_proves_objects_differ": false
+  },
+  "counts": {
+    "anonymous_records_checked": 3,
+    "natural_and_decoded_record_files_checked": 6,
+    "saved_raw_hash_checks_passed": 6,
+    "actual_canonical_hash_checks_passed": 6,
+    "complete_saved_object_identity_bindings_passed": 3
+  },
+  "results": [
+    {
+      "anonymous_arm": "case3-mse",
+      "saved_raw_bytes_sha256": "ae4741436bddd78973b1da72da43502abadd9c46113e9fb667ee580a1d5600be",
+      "saved_complete_object_client_canonical_sha256": "83c51f9b6b2e3dacc14f6c154f6d91bdf5c42d7b2e9f8be641a1edebef4d9962",
+      "matches_recorded_fresh_pre_generation_actual_object_digest": true,
+      "saved_raw_bytes_match_capture_manifest": true,
+      "capture_manifest_sha256": "6d2bc2e1e7f1bb63c29f3e8e796ddbfa4bbab836988518d28de2ae9da83fc752",
+      "natural_and_decoded_records_checked": 2,
+      "record_file_sha256": {
+        "natural": "8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218",
+        "decoded": "31c022b8789a931790024df4c65f53b680c1d166936acf4f96d10baa7fde3efc"
+      },
+      "all_recorded_saved_raw_hashes_recreated": true,
+      "all_recorded_actual_canonical_hashes_recreated": true,
+      "all_record_bytes_match_capture_manifest": true
+    },
+    {
+      "anonymous_arm": "case3-max",
+      "saved_raw_bytes_sha256": "a6472e80b1e7ecca7ae3f955d68859157c8246f8e5202e29d9779355932a23a1",
+      "saved_complete_object_client_canonical_sha256": "62f33b8143cfe5139527c122dc21707316c7885b503f45d6cfca9246766a2669",
+      "matches_recorded_fresh_pre_generation_actual_object_digest": true,
+      "saved_raw_bytes_match_capture_manifest": true,
+      "capture_manifest_sha256": "fdaf1457699a339f271398613236f893bfa1302bc0f77eefe3bc3481117e9ffb",
+      "natural_and_decoded_records_checked": 2,
+      "record_file_sha256": {
+        "natural": "07c5c51a77b3333051da79948cceb9694fc9664f9ba69c8bd7fe05672c338ae9",
+        "decoded": "e5f1c7d41879dc35f211cd2556f854cf44977ff565b7e30d843d48eec46147cb"
+      },
+      "all_recorded_saved_raw_hashes_recreated": true,
+      "all_recorded_actual_canonical_hashes_recreated": true,
+      "all_record_bytes_match_capture_manifest": true
+    },
+    {
+      "anonymous_arm": "case5-bf16",
+      "saved_raw_bytes_sha256": "74b6df65da3fef4386a6ec5458de37e5e36b73fcda836b7360f07683c81fa679",
+      "saved_complete_object_client_canonical_sha256": "92a531f032b38d77a601d3851db89da369c32dc5eb099482a6c8f65b8e112a75",
+      "matches_recorded_fresh_pre_generation_actual_object_digest": true,
+      "saved_raw_bytes_match_capture_manifest": true,
+      "capture_manifest_sha256": "40c356033666ab28f20b23d498d85122beec71ee3f69da8f1abef90fb7c17704",
+      "natural_and_decoded_records_checked": 2,
+      "record_file_sha256": {
+        "natural": "3b2a69dd777f703ec85d5ca6d2906ff4601dc62cf38b2d6794a6407c21da6cf0",
+        "decoded": "16ec41735e7e41468505320ecf2651f7efa7a6096a97a2f9b714e61395959e7f"
+      },
+      "all_recorded_saved_raw_hashes_recreated": true,
+      "all_recorded_actual_canonical_hashes_recreated": true,
+      "all_record_bytes_match_capture_manifest": true
+    }
+  ],
+  "correction": {
+    "prior_limitation": "Different saved raw-file and recorded actual-object hashes were treated as preventing reconstruction of complete actual-object identity.",
+    "corrected_identity_scope": "The complete saved canonical object is bound to the fresh pre-generation object digest recorded by the frozen client.",
+    "actual_full_server_info_hash_independently_recreated": true,
+    "saved_server_args_equal_complete_actual_server_info_identity_established": true,
+    "actual_full_server_info_original_http_bytes_separately_available": false,
+    "previous_reports_to_read_with_this_erratum": [
+      "dgx-spark-repetition-case3-mse-20261012.md",
+      "dgx-spark-repetition-case3-max-20261012.md",
+      "dgx-spark-repetition-case5-bf16-20261012.md"
+    ]
+  },
+  "frozen_source_provenance": {
+    "client_sha256": "bd1eca1db4f0d79fc2f8b461ffbf5d84580658686faf5125c9e60ab9a2a90db0",
+    "driver_sha256": "1cc17cecbd3e8c3bc3ae3a9c5dd3ff0ba88221376bcf52238b87eae2687c719e",
+    "source_manifest_sha256": "3fb1c96c2f43a5f7b82f3d8a269678c667c0029a0778fe6d892e0988ed4adcae",
+    "client_and_driver_hashes_match_source_manifest": true,
+    "client_records_actual_digest_before_generation_request": true,
+    "driver_checks_source_hashes_before_invoking_client": true,
+    "scope": "Local verification of captured records and frozen source provenance; no independent remote process attestation."
+  },
+  "evidence_sha256": {
+    "independent_private_cpu_erratum": "4ae2a7147843420e360530a2d5ff4e98d90a92e155721a7017b605e68c0ec7c2",
+    "frozen_client": "bd1eca1db4f0d79fc2f8b461ffbf5d84580658686faf5125c9e60ab9a2a90db0",
+    "frozen_driver": "1cc17cecbd3e8c3bc3ae3a9c5dd3ff0ba88221376bcf52238b87eae2687c719e",
+    "frozen_source_manifest": "3fb1c96c2f43a5f7b82f3d8a269678c667c0029a0778fe6d892e0988ed4adcae"
+  },
+  "limitations": [
+    "Hash equality binds the complete canonical object to the digest recorded by the frozen client, subject to ordinary cryptographic hash assumptions.",
+    "Original HTTP response byte formatting was not separately preserved.",
+    "This is not independent attestation of the remote process or measurement of every reported field against GPU, weights, kernels, allocator effects or numerical state.",
+    "No claim establishes unchanged configuration or incremental KV/SSM state throughout generation.",
+    "Different seeds, capacities, disabled deterministic inference, concurrency/history and other comparison limitations remain.",
+    "Stopping, parser/scoring, exact-cycle and bounded semantic-review findings are unchanged."
+  ],
+  "privacy": "Anonymous counts, hash rules and digests only; no raw configuration values, prompts, generated text, answer labels, item IDs, native ID sequences, credentials or deployment paths."
+}
