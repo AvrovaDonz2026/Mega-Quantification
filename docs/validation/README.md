@@ -41,6 +41,11 @@ R2 于 17:15:42 UTC 启动；18:23:29 UTC 只读观察确认已完成。实验�
 稳定性验证通过，应用层 readiness 仍为 unknown。历史 source capture 共捕获十个允许文件；
 相关归档文件与旧归档键哈希一致，归档相关 GDN 文件无 `TRACK_STATE`，当前 fork 的 snapshot 实现
 不适用于 R1/R2。详情及脱敏快照见上述原始源码对照报告。
+R3 于 19:18:59.637587 UTC 启动，19:23:00.606688 UTC 只读观察仍为 `request_streaming`
+（elapsed 218.747 秒、events/stream lines 各 32）；这是 SSE 行数，不能换算 token，GPU
+数值统计尚未取回。R3 保留 R1 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；
+源码身份与 microprobe 门禁已通过，单个冷请求仍在生成，结果未完成。两端原 GLM 已按授权暂停，
+实验后成对恢复 pending，不能声称恢复已完成。
 [当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP

@@ -1,6 +1,6 @@
 # 原始 GDN 源码自然生成对照：2026-10-20
 
-**状态：历史固定案例已精确复现；radix-off 单变量对照正在生成，尚无修复结论。**
+**状态：R1/R2 历史固定案例已精确复现；R3 beta-store 单变量对照已启动并正在生成，尚无修复结论。**
 原始源码 control 的两次长测均已完成并重复稳定。前组 MLP 实验完成、恢复
 原 GLM 并通过身份校验后，队列于 08:04:07 UTC 接上新 supervisor。两次均输出
 39,846 tokens、返回 `stop` 并由 EOS、terminal token 与脱敏 matched-stop 一致确认；
@@ -122,6 +122,21 @@ R2 的只读 source capture 已收集历史容器中的全部十个允许文件�
 键哈希与旧归档一致，另有两个新增文件仅记录为已捕获。
 归档历史源在相关 GDN 文件中没有 `TRACK_STATE`；当前 fork 的 snapshot 实现不能用于
 解释 R1/R2，也不应把 current-fork all-beta 审计当作历史源码证据。
+
+## R3 beta-store 单变量对照：已启动，正在生成
+
+R3 保留 R1 的 radix-on 协议，唯一推理算术变化是 `fused_gdn_gating.py` 的 beta
+store 移除 `.to(b.dtype.element_ty)`；原分配已为 FP32，这不是改变分配。原始源码
+SHA-256 为 `c7736d1e506fb2c3e5c0496a2ed8c23347c2507ebe73c08bc6745517495d0957`，
+候选 SHA-256 为 `7318818b58efcb17803b52f236319eda5cc47b813d64113d1c7b83dd2cac378d`。
+源码身份与 microprobe 是生成前门禁，R3 的流式观察证明这些门禁已通过。
+
+R3 于 `2026-10-20T19:18:59.637587Z` 启动。`2026-10-20T19:23:00.606688Z` 的只读观察
+为 `request_streaming`，elapsed `218.747` 秒、events `32`、stream lines `32`；这些
+是 SSE 行数，不能换算 token，也没有 GPU 数值统计或终态结果。协议为单个冷请求、
+288-token prompt、最多 49,152 个新 token、262,144 上下文、TP1、无 MTP、FP8 KV、
+FP32 SSM；`maxrunning=16` 是并发上限，不是 16 个请求。两端原 GLM 已按授权暂停，
+实验后成对恢复仍为 pending，不声称恢复已完成。
 
 新协调器已通过五种真实 systemd 故障注入：worker 被杀且创建 helper 存活、worker
 被杀且 child 存活、成功 child 退出状态、45 秒租约过期、首次恢复失败后的重试。

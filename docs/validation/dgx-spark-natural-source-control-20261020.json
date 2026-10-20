@@ -330,5 +330,49 @@
       "current_fork_snapshot_implementation_applies_to_r1_r2": false
     },
     "causal_limit": "R2 and R1 are exact output matches for this fixed case, so radix cache showed no observed token effect and is not required for this loop. This does not prove all internal state paths are noncausal, does not establish MSE repair, and does not establish application readiness."
+  },
+  "historical_replay_r3_in_progress": {
+    "experiment": "historical-beta-r3",
+    "state": "running_observed_request_streaming",
+    "experiment_started_at_utc": "2026-10-20T19:18:59.637587Z",
+    "observation_at_utc": "2026-10-20T19:23:00.606688Z",
+    "historical_protocol": {
+      "radix_cache": true,
+      "submitted_requests": 1,
+      "cold_request": true,
+      "prompt_tokens": 288,
+      "max_new_tokens": 49152,
+      "context_length": 262144,
+      "tp_size": 1,
+      "mtp_enabled": false,
+      "kv_cache_dtype": "fp8_e4m3",
+      "mamba_ssm_dtype": "float32",
+      "max_running_requests": 16
+    },
+    "source_change": {
+      "historical_source_sha256": "c7736d1e506fb2c3e5c0496a2ed8c23347c2507ebe73c08bc6745517495d0957",
+      "candidate_source_sha256": "7318818b58efcb17803b52f236319eda5cc47b813d64113d1c7b83dd2cac378d",
+      "change": "Remove .to(b.dtype.element_ty) from the beta store in fused_gdn_gating.py; the existing allocation is FP32.",
+      "r1_radix_protocol_preserved": true
+    },
+    "pre_generation_gates": {
+      "source_identity": "passed",
+      "microprobe": "passed",
+      "streaming_observation_proves_gates": true
+    },
+    "progress": {
+      "state": "request_streaming",
+      "elapsed_seconds": 218.747,
+      "events": 32,
+      "stream_lines": 32,
+      "events_are_sse_lines_not_tokens": true,
+      "gpu_numeric_statistics_available": false,
+      "terminal_result_available": false
+    },
+    "protected_pair": {
+      "authorized_paused": true,
+      "post_experiment_restore": "pending"
+    },
+    "causal_limit": "R3 is still generating. No completion, GPU numeric result, token count, repair conclusion, or service restoration conclusion is established."
   }
 }
