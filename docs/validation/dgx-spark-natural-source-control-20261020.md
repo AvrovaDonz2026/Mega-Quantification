@@ -151,6 +151,23 @@ RMS `0.0002853343030437827`；g delta 为 0，candidate sigmoid maxerr
 双端进程恢复；有限应用元数据响应不等于 readiness，应用 readiness 仍为 `unknown`，未作
 端到端推理结论。
 
+## R4 冷重复确认：已启动，正在生成
+
+R4 (`historical-beta-r4-confirm`) 重复 R3 的模型、镜像、算术、binds 和 server 参数，新增
+post-request 内存 cycle scan（period 不超过 8192、至少 5 copies）及 first-token divergence
+统计；后者不是 logits 测量。协调器于 `2026-10-20T21:03:22.395171Z` 启动实验，
+`2026-10-20T21:10:54Z` 观察为 `request_streaming`，elapsed `451.618` 秒、events/stream
+lines 各 `128`；这些是 SSE 行数，不是 tokens。源码门禁与 R4 CPU 测试（10 passed）已通过。
+
+R4 尚无终态、重复稳定或修复结论。两端原 GLM 按授权暂停，实验后恢复仍为 pending。
+
+## 历史 decode dtype 审计（只读）
+
+R1/R2 历史源码捕获显示 generic fused decode/verify kernel 以 FP32 计算 beta；ReplaySSM
+路径另有 BF16 roundtrip，但历史 metadata 显示 ReplaySSM disabled，不能据此归因 R1 的
+循环，也不改写 R3 的 prefill-only 算术范围。该审计未使用 current-fork 源码、GPU 或远程
+执行；R1/R2 的历史归档与 current-fork all-beta 描述仍分开解释。
+
 新协调器已通过五种真实 systemd 故障注入：worker 被杀且创建 helper 存活、worker
 被杀且 child 存活、成功 child 退出状态、45 秒租约过期、首次恢复失败后的重试。
 每种场景均实际连续观察 120 秒。注入使用 dummy 进程，没有操作 Docker、GPU 或
