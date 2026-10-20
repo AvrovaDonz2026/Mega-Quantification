@@ -93,18 +93,35 @@ loader 的运行时处理。
 维护协调关闭。后续只读应用观察中两端进程仍精确匹配且运行，但 observer framework
 为空、readiness 为 `unknown`；因此这里只确认进程恢复，不声称应用已就绪。
 
-## R2 单变量 radix-off 对照：进行中
+## R2 单变量 radix-off 对照：已完成
 
 R1 完成观察后，历史协议仅追加 server argv 的 `--disable-radix-cache`；metadata 的
 `mamba` strategy 仍为 `extra_buffer_lazy`，其余历史条件保持不变。R2 作业于
 17:15:42 UTC 启动，由双端维护协调器监管。
 
-17:28:26 UTC 只读观察确认请求仍在流式生成：已运行 732.692 秒，观察到 8,129 个
-输出 tokens 和 128 个 output events，child 仍 active，未观察到 failure。受保护的
-成对服务仍为精确暂停状态，实验后恢复仍待执行。
+18:23:29 UTC 只读观察确认 R2 已完成；运行耗时 3,903.27 秒（含启动，不能由此推导请求完成时刻）。
+唯一变量为 `--disable-radix-cache`，其余历史条件保持不变。输出达到 49,152-token
+长度上限，输出 ID 摘要与 R1 及历史轨迹完全一致
+（SHA-256 `075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5`）。
+周期分析同样确认 lag 2,032、起点 33,131、周期计数 13,989、覆盖 16,021 tokens，
+含 7 个完整周期；缓存 token 为 0、回收计数为 0，speculative verify 计数未观测。
+服务容量摘要为 1,731,408；该值低于 R1 的 1,737,140 和历史参考值 1,738,591，属于
+有意的可移植容量差异，不能作为输出差异解释。
 
-R2 尚无终止类型、输出摘要或周期统计；不能据此判断 radix cache 对历史循环的影响。
-原 GLM 恢复、应用层 readiness 及最终结论均待后续观察。
+18:20:49/51 UTC 清理完成，18:20:53/54 UTC 原 GLM 成对启动，18:22:56/57 UTC
+连续稳定性验证关闭，协调器于 18:22:57 UTC 通过。18:24 UTC 的应用观察确认两端
+进程身份精确匹配且运行；一端的应用元数据探针得到结构化响应，但 observer
+readiness 仍为 `unknown`，且没有端到端推理请求。因此这里只确认进程恢复和有限的
+应用元数据响应，不声称应用已就绪或推理可用。
+
+R2 与 R1 的固定案例输出完全一致，说明在此案例中关闭 radix cache 未观察到 token
+序列影响，且 radix cache 不是该循环的必要条件；这不证明所有内部状态路径均无因果
+作用，也不构成 MSE 修复结论。
+
+R2 的只读 source capture 已收集历史容器中的全部十个允许文件；其中相关归档文件的
+键哈希与旧归档一致，另有两个新增文件仅记录为已捕获。
+归档历史源在相关 GDN 文件中没有 `TRACK_STATE`；当前 fork 的 snapshot 实现不能用于
+解释 R1/R2，也不应把 current-fork all-beta 审计当作历史源码证据。
 
 新协调器已通过五种真实 systemd 故障注入：worker 被杀且创建 helper 存活、worker
 被杀且 child 存活、成功 child 退出状态、45 秒租约过期、首次恢复失败后的重试。
@@ -116,8 +133,9 @@ R2 尚无终止类型、输出摘要或周期统计；不能据此判断 radix c
 这是排查源码算术因素的对照。此前 65,536 上下文的原始 control 经 EOS 确认停止，
 all-beta control 返回服务 `stop`，其有效 EOS 证据仍有限。历史条件重放则在固定案例中
 精确复现 2,032-token 周期，且与历史输出逐 token
-完全一致。此结果证明该固定案例可重放，不证明 MSE 已修复或确定循环根因。R2
-仍在流式生成，不能将尚未完成的结果纳入结论。
+完全一致。R2 的 radix-off 结果表明该固定案例中 radix cache 未改变输出序列，不能
+据此断言内部状态无因果作用，也不证明 MSE 已修复或确定循环根因。历史归档源与当前
+fork 的 `TRACK_STATE` 观察必须分开解释。
 
 当前不建立循环修复、答案正确性、GPQA、视觉/MTP 质量、TP2、吞吐或 release 结论。
 运行方法见[控制器说明](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/README.md)。

@@ -261,41 +261,74 @@
     },
     "application_readiness": "unknown",
     "application_observer_framework": null,
-    "next_single_variable_stage": "radix_off_r2_request_streaming",
+    "next_single_variable_stage": "none_for_this_fixed_case",
     "systemd_dummy_recovery_probe": {
       "cases_passed": 5,
       "continuous_stability_seconds_each": 120,
       "docker_gpu_or_glm_actions": false,
       "probe_sha256": "b5df0d0b18a4001e883b48b1ec8765da1f5435590721e2b57ef4ff124c99628d"
     },
-    "causal_limit": "Exact reproducibility is established only for this fixed case. This does not establish MSE repair or application readiness; the radix-off comparison is in progress and has no terminal result yet."
+    "causal_limit": "R1 is an exact fixed-case replay with radix enabled; R2 completed separately with radix disabled. These results establish reproducibility for the fixed case and are referenced by the completed R2 record below; they do not establish MSE repair or application readiness."
   },
-  "historical_replay_r2_live_observation": {
+  "historical_replay_r2_completed": {
     "experiment": "historical-radix-r2",
-    "state": "request_streaming",
+    "state": "completed_exact_historical_replay_radix_off",
     "experiment_started_at_utc": "2026-10-20T17:15:42.908862+00:00",
     "server_argv_semantic_change": [
       "--disable-radix-cache"
     ],
     "metadata_mamba_strategy": "extra_buffer_lazy",
     "historical_protocol_preserved": true,
-    "observation": {
-      "observed_at_utc": "2026-10-20T17:28:26.921263+00:00",
-      "elapsed_seconds": 732.692,
-      "output_tokens_observed": 8129,
-      "output_events_observed": 128,
-      "child_active": true,
-      "failure_observed": false
+    "completion": {
+      "observed_at_utc": "2026-10-20T18:23:29.820358+00:00",
+      "elapsed_seconds_including_startup": 3903.27,
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "exact_match_r1_and_history": true,
+      "periodic_lag": 2032,
+      "periodic_onset": 33131,
+      "periodic_count": 13989,
+      "periodic_extent": 16021,
+      "periodic_complete_periods": 7,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "portable_capacity_max_total_num_tokens": 1731408,
+      "r1_capacity_max_total_num_tokens": 1737140,
+      "historical_capacity_reference": 1738591
     },
     "protected_pair": {
-      "state": "exact_paused",
-      "restoration_required": true
+      "state": "restored_exact_running_and_continuously_stable",
+      "cleanup_observed_utc": [
+        "2026-10-20T18:20:49Z",
+        "2026-10-20T18:20:51Z"
+      ],
+      "started_utc": [
+        "2026-10-20T18:20:53Z",
+        "2026-10-20T18:20:54Z"
+      ],
+      "verified_closed_utc": [
+        "2026-10-20T18:22:56Z",
+        "2026-10-20T18:22:57Z"
+      ],
+      "stable_seconds_observed": [121.191,121.566]
     },
-    "terminal_outcome_observed": false,
-    "output_sha256": null,
-    "finish_type": null,
-    "paired_process_restoration": "pending",
+    "paired_process_restoration": "process_stable_observation_passed",
     "application_readiness": "unknown",
-    "causal_limit": "R2 is an in-progress single-variable radix-off comparison. Streaming progress is observed, but terminal outcome, output hash, cycle statistics, paired restoration, and readiness are not yet established."
+    "application_observer_framework": {
+      "observed_at_utc": "2026-10-20T18:24:40Z",
+      "rank_1": {"framework": "tensorfold", "readiness": "unknown"},
+      "rank_0": {"framework": "tensorfold", "metadata_probe": "structured_response"},
+      "end_to_end_inference": false
+    },
+    "historical_source_capture": {
+      "state": "10_allowlisted_files_captured",
+      "relevant_archived_key_hashes_match": true,
+      "additional_files_captured": 2,
+      "track_state_in_archived_relevant_gdn_files": false,
+      "current_fork_snapshot_implementation_applies_to_r1_r2": false
+    },
+    "causal_limit": "R2 and R1 are exact output matches for this fixed case, so radix cache showed no observed token effect and is not required for this loop. This does not prove all internal state paths are noncausal, does not establish MSE repair, and does not establish application readiness."
   }
 }

@@ -28,15 +28,19 @@ control：均以匹配 EOS 停止且输出完全一致，未检出确认的 2,03
 lag 2,032（起点 33,131、覆盖 16,021 tokens）。这是一个固定案例的精确可复现性结果，
 不代表 MSE 已修复或确定根因。原 control 的自然 EOS 结果与历史 MSE 循环是不同实验，
 不可合并。双端进程恢复及连续 120 秒验证通过，应用层 readiness 仍为 unknown。随后
-radix-off 单变量 R2 已启动并观察到流式进度，终止与恢复仍待完成。
+radix-off 单变量 R2 也完成：仅追加 `--disable-radix-cache`，输出同样为 49,152-token
+长度上限，输出 SHA 与 R1/历史完全一致，lag 2,032（起点 33,131、覆盖 16,021、
+7 个完整周期），缓存 token 0、回收计数 0。R2 的固定案例结果表明 radix cache 未
+改变 token 序列，且不是该循环的必要条件；不证明所有内部状态路径无因果作用或 MSE 已修复。
 r2 队列过期未启动的记录保留；source-control 09:48 UTC 观察时 GLM 已恢复运行，
 10:01 UTC 独立复核时已退出，身份仍匹配且部署哈希未变。日志显示 NCCL 远端进程或网络错误，非 OOM；
 同容器恢复重试尚未成功；后续审计确认原服务跨节点运行 TP2。
 两端维护获授权后，历史 262k/radix-on 条件重放于 15:57:27 UTC 启动，并于约
 17:03 UTC 完成；实验后成对进程恢复于 17:05 UTC 验证关闭。应用层 readiness 未知。
-R2 于 17:15:42 UTC 启动，仅追加 `--disable-radix-cache`；17:28:26 UTC 观察到
-8,129 tokens 的流式进度，未观察到 failure，终止结果及成对恢复仍待完成。详情及
-脱敏快照见上述原始源码对照报告。
+R2 于 17:15:42 UTC 启动；18:23:29 UTC 只读观察确认已完成。实验后清理、成对恢复及连续约 121 秒
+稳定性验证通过，应用层 readiness 仍为 unknown。历史 source capture 共捕获十个允许文件；
+相关归档文件与旧归档键哈希一致，归档相关 GDN 文件无 `TRACK_STATE`，当前 fork 的 snapshot 实现
+不适用于 R1/R2。详情及脱敏快照见上述原始源码对照报告。
 [当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
