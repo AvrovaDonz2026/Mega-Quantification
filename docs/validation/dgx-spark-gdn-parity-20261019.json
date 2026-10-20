@@ -266,13 +266,13 @@
     "interpretation": "Beta patch did not break this fixed-prefix 512-token native window; this does not establish natural-generation repair or long-budget stopping behavior."
   },
   "mlp_recovery_pilot": {
-    "status": "blocked_gpu",
+    "status": "running_inference",
     "evidence_sha256": "cd15e8add08cb4011e2c328c1448c871766cc02e55dd97ccec7ef5d801ddafb0",
     "preflight_file_sha256": "5c7cc443a527cbe9961b86070affb48526e0e4071cbfb5cb120ef8a9dc421de9",
     "tool_sha256": "a1a0bcc2219e6996f365425fc0f942a0e220b118fbf95d27c181be83d8f69f3e",
     "gate_sha256": "0f29a592021202b6c49aa4e5e5f50aca5a3d12a0ea915ff1385c38ac71941322",
     "variant": "mlp",
-    "gpu_serving_verified": false,
+    "gpu_serving_verified": true,
     "restored_mlp_modules": 192,
     "restored_tensors": 192,
     "tensor_count": 2180,
@@ -297,7 +297,8 @@
       "radix_cache": false,
       "quantization_loader": "modelopt_mixed",
       "kv_cache_dtype": "fp8_e4m3",
-      "ssm_dtype": "float32"
+      "ssm_dtype": "float32",
+      "random_seed": 20261020
     },
     "source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
     "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
@@ -306,7 +307,7 @@
       "error_type": "GateError",
       "serving_containers_started": false
     },
-    "scope": "Static payload/preflight only; no GPU result, no MLP repair claim, no visual/MTP functional claim. Restoration includes weights and input activation path, not weight-only or new PTQ/W4A8.",
+    "scope": "Early control has two repeat-stable 4096-token outputs; MLP trial 1 is running, with no completed MLP or long-phase result. This does not establish MLP repair, natural stopping recovery, or visual/MTP functional accuracy. Restoration changes both MLP weights and input activation precision.",
     "queue_snapshot_20261019": {
       "state": "waiting_for_gpu",
       "snapshot_at_utc": "2026-10-19T09:42:52.411635+00:00",
@@ -322,9 +323,16 @@
       "pilot_evidence_root_exists": false
     },
     "latest_observation": {
-      "observed_at_utc": "2026-10-20T02:23:47.301750+00:00",
-      "active_compute_processes": 1,
-      "evidence_sha256": "10bec84edeea287c995d23fe3e5243f8d7376c6f0dfe389b18dd5b0c855df130"
+      "observed_at_utc": "2026-10-20T03:44:08.777952+00:00",
+      "phase": "early",
+      "arm": "mlp",
+      "state": "request",
+      "trial": 1,
+      "completed_control_trials": 2,
+      "completed_mlp_trials": 0,
+      "glm_running": false,
+      "active_compute_processes": 2,
+      "evidence_sha256": "156f98cf0d97be81c348e9562b6e5c96590f502e0d0266f02c589436c6f231ad"
     },
     "long_phase_prepared": {
       "budget": 49152,
@@ -337,6 +345,171 @@
       "historical_two_period_observation_minimum_tokens": 37195,
       "random_seed": 20261020,
       "tests_passed": 24
-    }
+    },
+    "prelaunch_observation_20261020": {
+      "observed_at_utc": "2026-10-20T02:23:47.301750+00:00",
+      "active_compute_processes": 1,
+      "evidence_sha256": "10bec84edeea287c995d23fe3e5243f8d7376c6f0dfe389b18dd5b0c855df130"
+    },
+    "offline_tests_passed": 27,
+    "r3": {
+      "state": "running_inference",
+      "supervisor_state": "phase_running",
+      "observed_at_utc": "2026-10-20T03:44:08.777952+00:00",
+      "early": {
+        "arm": "mlp",
+        "at_utc": "2026-10-20T03:42:13.272012+00:00",
+        "state": "request",
+        "trial": 1
+      },
+      "long_started": false,
+      "controller_sha256": "679297e5eeef5e464dbf979e77b73af2c2f4aa2297583836220447c6ccc14673",
+      "supervisor_sha256": "140587fa915938527dc71bfdd3a6ce164f5ba84fb3db773adf39dc200a449e43",
+      "fallback_restore_sha256": "759e2dbe8506b9936fc75290d63f70ab6d558373355161376ba60399bc3256cf",
+      "configuration_sha256": "da6714ae5e7b5294913dadfa212311eb6b978603ced2cfcc3e2d827ccef5cfad",
+      "early_budget": 4096,
+      "long_budget": 49152,
+      "repetitions_per_arm": 2,
+      "watchdog_seconds": {
+        "early": 18000,
+        "long": 64800
+      },
+      "systemd": {
+        "unit": "megaquant-mlp-r3-20261020",
+        "active": true,
+        "exec_stop_post_configured": true,
+        "timeout_stop_seconds": 600,
+        "runtime_max_seconds": 90000
+      },
+      "glm_restoration": {
+        "temporary_stop_authorized": true,
+        "running_before": true,
+        "running_at_observation": false,
+        "restore_required": true,
+        "strategy": "Python finally and systemd ExecStopPost; start same container ID; no removal",
+        "restore_completed": false
+      },
+      "control_serving_verified": true,
+      "mlp_serving_identity_verified": true,
+      "mlp_inference_completed": false,
+      "early_control": {
+        "cleanup": {
+          "container_id": "c3ecc4d172304cb86fd9ae5a2587f1e65d26edd722b7ae015bf6269d96b22f1a",
+          "removed": true,
+          "role": "baseline"
+        },
+        "completed_at_utc": "2026-10-20T03:34:16.394023+00:00",
+        "model_proof": {
+          "config_sha256": "b1dd2e1baee445c501cf3f72b95d20fca66024a76e1603953dc25eac6122bcbd",
+          "hf_quant_config_sha256": "b566faf30260068a2a58de0b890aa544148fb0f6c6eeaa8f311db42e2702fc28",
+          "input_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "mtp_quantized_layers": 8,
+          "output_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6",
+          "passed": true,
+          "payload_sha256_count": 2756,
+          "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+          "provenance_sha256_ok": true,
+          "restored_modules": 0,
+          "tensor_count": 2756,
+          "tokenizer_files": 2,
+          "variant_mlp": false,
+          "visual_quantized_layers": 110
+        },
+        "repeat_stable": true,
+        "runtime_source_sha256": "a0cc209fae962fec1d14254c2b90dadef734bd82931dc9e64ad97170ec3e1498",
+        "server_identity": {
+          "expected": {
+            "allow_auto_truncate": false,
+            "attention_backend": "flashinfer",
+            "context_length": 65536,
+            "disable_radix_cache": true,
+            "enable_multimodal": true,
+            "fp4_gemm_runner_backend": "flashinfer_cutlass",
+            "host": "127.0.0.1",
+            "kv_cache_dtype": "fp8_e4m3",
+            "linear_attn_backend": "triton",
+            "mamba_backend": "triton",
+            "mamba_ssm_dtype": "float32",
+            "max_running_requests": 1,
+            "model_path": "/models/Qwen3.8-27B-NVFP4-MSE-CONTROL",
+            "port": 32262,
+            "quantization": "modelopt_mixed",
+            "random_seed": 20261020,
+            "sampling_backend": "pytorch",
+            "speculative_algorithm": null,
+            "tp_size": 1
+          },
+          "model_info_sha256": "c4b77f6451f19c41c3d75c4427f6e8a74811264e8a61aff6e64fc1e51e0b585b",
+          "passed": true,
+          "server_info_sha256": "eaa3a3ce6c4f126230bdb7c382c72cbe492169e3653f672619d872750f649900"
+        },
+        "source_proof": {
+          "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+          "bundle_lock": {
+            "archive_sha256": "1f8612963f5322395ade27bcc503baff28d436cb85555341b7f500740d4a3033",
+            "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+            "variant": "all-beta"
+          },
+          "commit": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+          "exact_archive_tree": true,
+          "manifest_sha256": "5f2393f0d1eed7d1ebce4052ee49d488e73b52ce4ce4aad2ae63f49bd1e44699",
+          "verified_files": 10577
+        },
+        "trials": [
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 289.24004286609124,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.24756590369706827,
+            "natural_termination": false,
+            "output_ids_sha256": "63da06f34a6af81dd5d0b3f36322b9f743e55eac8650d9143b17ca16b4334e02",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 3,
+            "periodic_extent": 2035,
+            "periodic_lag": 2032,
+            "periodic_onset": 536,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 1
+          },
+          {
+            "cached_tokens": 0,
+            "contains_eos": false,
+            "contains_thinking_end": false,
+            "e2e_latency": 288.86523777002003,
+            "finish_reason_type": "length",
+            "first_thinking_end_index": null,
+            "historical_natural_lcp": 7,
+            "historical_natural_window_exact": false,
+            "logprobs_finite": true,
+            "mean_output_logprob": -0.24756590369706827,
+            "natural_termination": false,
+            "output_ids_sha256": "63da06f34a6af81dd5d0b3f36322b9f743e55eac8650d9143b17ca16b4334e02",
+            "output_tokens": 4096,
+            "periodic_complete_periods": 1,
+            "periodic_confirmed": false,
+            "periodic_count": 3,
+            "periodic_extent": 2035,
+            "periodic_lag": 2032,
+            "periodic_onset": 536,
+            "prompt_echo_exact": true,
+            "terminal_eos": false,
+            "thinking_end_count": 0,
+            "trial": 2
+          }
+        ]
+      },
+      "interpretation": "Both control trials are token-exact and end at the 4096-token budget. Historical trajectory LCP is only 7, so the historical loop has not been reproduced under this protocol. Long-budget control and MLP results are required; known-period detection only tests lag 2032."
+    },
+    "gpu_serving_scope": "Model/source/runtime/server identity gates passed for control and MLP; control has two completed outputs, while MLP trial 1 is in flight. No completed MLP or long-budget result."
   }
 }

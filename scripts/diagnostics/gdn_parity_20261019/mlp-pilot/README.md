@@ -164,3 +164,33 @@ stopping recovery, GPQA accuracy, throughput, or a production quality
 improvement. A stop does not mean the answer is correct, and reaching the
 length limit without a loop does not prove the repair worked. Neither phase
 promises iterative or cyclic repair.
+
+## 4. Remote supervisor deployment
+
+The checked-in `supervisor.py`, `fallback_restore.py`, and
+`supervisor-config.example.json` are deployment references copied from the
+run snapshot. On the GPU host, place both Python files beside the real
+`config.json` in `mlp-run-r3` and use the exact remote paths in that config. A systemd
+transient unit can be started with:
+
+```bash
+systemd-run --unit=megaquant-mlp-r3-20261020 \
+  --property=Type=exec \
+  --property=KillMode=mixed \
+  --property=TimeoutStopSec=600s \
+  --property=RuntimeMaxSec=25h \
+  --property='ExecStopPost=/usr/bin/python3 /home/zhiman/megaquant-aitop-validation-20261019/mlp-run-r3/fallback_restore.py' \
+  /usr/bin/python3 /home/zhiman/megaquant-aitop-validation-20261019/mlp-run-r3/supervisor.py
+```
+
+Stopping an existing service requires authorization; it was explicitly given
+for this validation session. The supervisor stops and restores the GLM container
+by its exact configured container ID; it never removes that container.
+Experiment cleanup is limited to the exact owner, job, source, image, and
+creation-time gates. `fallback_restore.py` is an `ExecStopPost` recovery path
+and persists the restore result in the shared status JSON.
+
+The early five-hour and long eighteen-hour values are watchdog ceilings, not
+expected runtimes. Evidence roots and phase logs must be fresh. Status and
+reports contain sanitized scalar fields and hashes; prompts, responses,
+tokens, and raw Docker `Env`/inspect output must remain private.

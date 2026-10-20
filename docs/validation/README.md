@@ -16,9 +16,11 @@ negative result：同一份真正 MSE 历史权重 view 使用 original / all-be
 精确复现 512-token native 窗口并以 length 结束。它不证明自然生成已修复或更长预算
 最终会停止，也不改变历史 GPQA 记录。
 
-MLP-only BF16 recovery pilot 尚无 serving 结果：静态 payload gate 已通过；
-2026-10-19 队列等满两小时后以 `expired_without_launch` 退出。该准备工作不代表 MLP 修复、视觉/MTP 功能
-或新的 PTQ/W4A8 结果。
+MLP-only BF16 recovery pilot 已在 2026-10-20 启动：截至 03:44 UTC，control 两次
+4,096-token 输出逐 token 一致、均达到预算；MLP trial 1 正在推理，long 尚未开始。
+该短阶段无法观察历史约 3.3 万 token 后的循环；尚无修复结论。r2 队列过期未启动的
+记录保留在报告中；r3 的临时 GLM 暂停及自动恢复由远端监督进程托管。
+[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

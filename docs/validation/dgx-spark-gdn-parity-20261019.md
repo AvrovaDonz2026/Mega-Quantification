@@ -106,28 +106,39 @@ exact，cold cache 为 0，重复稳定；四次均因 `length` 结束，没有 
 自然生成轨迹已修复，也不能判断更长预算是否最终停止。native IDs 和原始响应不发布，
 只保留相邻 JSON 中的摘要与 SHA；四个服务/client cleanup 均已移除且无残留容器。
 
-## MLP-only BF16 recovery pilot（尚无 GPU 结果）
+## MLP-only BF16 recovery pilot（运行中）
 
-该诊断目前只完成静态导出与 payload gate，尚未完成 GPU serving。MLP 变体从真正的
-MSE 导出恢复 192 个语言 MLP 投影，移除 576 个 scale tensor，输出共 2,180 个
-tensors 和 327 个 NVFP4 量化层；视觉 110 个投影和 MTP 8 个投影保持量化。weights
-与 input activation 都属于 `modelopt_mixed` 恢复范围，不是 weight-only、新 PTQ 或
-W4A8。逐张量 payload gate 通过，input inventory SHA 为
+MLP 变体从真正的 MSE 导出恢复 192 个语言 MLP 投影，移除 576 个 scale tensor，
+输出共 2,180 个 tensors 和 327 个 NVFP4 量化层；视觉 110 个投影和 MTP 8 个投影
+保持量化。它同时恢复 MLP 权重与输入激活精度，使用 `modelopt_mixed`。
+逐张量 payload gate 通过，input inventory SHA 为
 `f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6`，output
 inventory SHA 为 `74591b904b9724b25556af2925bd3c28b8efa9cd0c6270e2824a5513c73420d1`。
 
-自然起点 pilot controller 已准备 4,096-token 预算、两臂各两次、65,536 context、
-all-beta、temperature 0、无 MTP、radix disabled、FP8 KV、FP32 SSM；脚本位于
-[`mlp-pilot`](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/)。AITOP 的
-r1 因 GPU idle gate 被拦截且没有启动实验容器；r2 于 2026-10-19 11:40 UTC
-等满两小时后以 `expired_without_launch` 退出，没有创建实验目录。2026-10-20
-02:23 UTC 再次观察到 AITOP 有 1 个活动 GPU 进程。
+r1 被 GPU idle gate 拦截；r2 于 2026-10-19 11:40 UTC 等满两小时后以
+`expired_without_launch` 退出，没有创建实验目录。2026-10-20 获得临时停止现有
+GLM 服务并在实验后恢复的授权后，r3 已实际启动。
 
-因此本节不宣称 MLP 修复、自然输出改善或视觉/MTP 功能通过；待 GPU 空闲后才可运行
-pilot。另已准备显式 `--phase long`：从原题起点生成最多 49,152 tokens，
-两臂固定随机种子；历史 MSE 周期后缀起点为 33,131，因此 4,096-token early
-pilot 无法检验这个晚期循环。long 报告分别记录停止标记与已知 2,032-token 周期，
-不会把执行完成当作修复。相关离线测试共 24 项通过；尚未运行 long GPU 实验。
-详细脱敏 gate、工具 SHA、量化计数和队列证据见相邻 JSON。
+2026-10-20 03:44 UTC 的观察：control 两次各输出 4,096 tokens，逐 token 一致，
+耗时分别为 289.24 / 288.87 秒，冷缓存为 0、logprob 有限，均因达到预算结束；
+control 容器已清理。MLP 已通过模型、服务身份和运行源码 gate，03:42:13 UTC
+开始 trial 1，尚无完成输出。long 尚未开始。control 与历史自然输出的 LCP 仅为
+7，当前短阶段还没有复现历史循环。
+
+两臂均从原题的 288-token prompt 起点运行，65,536 context、temperature 0、
+seed 20261020、TP1、无 MTP、FP8 KV、FP32 SSM，关闭 radix cache 和 CUDA graphs。
+待两臂短阶段均完成两次稳定重复并清理后，监督进程才会接上每臂两次、最多 49,152 tokens
+的 long 阶段。历史周期后缀起点为 33,131，因此 4,096-token 短阶段无法检验该晚期
+循环。long 报告分别记录自然停止与已知 2,032-token 周期，只探测这一固定周期。
+
+远端由 systemd 托管，Python `finally` 与 `ExecStopPost` 负责清理本次诊断容器并
+启动原 GLM 容器；当前 GLM 仍处于获准的临时暂停状态，恢复尚未发生。early 5 小时、
+long 18 小时是 watchdog 上限。相关离线测试共 27 项通过，包括控制器失败和停止命令
+超时后仍尝试恢复服务。复现脚本与配置见
+[`mlp-pilot`](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/)。
+
+当前不建立 MLP 修复、自然停止恢复、GPQA 或视觉/MTP 功能通过的结论。停止也不代表
+回答正确；只有在同协议 control 复现相关退化后，才有对应的修复对照意义。
+完整脱敏状态、工具 SHA 和控制臂摘要见相邻 JSON。
 
 机器可读脱敏结果：[dgx-spark-gdn-parity-20261019.json](dgx-spark-gdn-parity-20261019.json)。
