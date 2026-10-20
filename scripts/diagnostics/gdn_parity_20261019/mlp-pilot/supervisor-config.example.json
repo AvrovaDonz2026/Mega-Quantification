@@ -3,7 +3,7 @@
   "experiment_prefix": "mlp-pilot-new",
   "controller_path": "/path/to/new-namespace/candidate-bundle-r1/mlp-pilot/controller.py",
   "model_gate_path": "/path/to/new-namespace/candidate-bundle-r1/mlp-pilot/model_gate.py",
-  "controller_sha256": "c075b830ec4a0c3c8930775d73cd435c164a3c0235a19f424ffeda646f60329e",
+  "controller_sha256": "14c87ef26f6843a1292f1f33fcf496489d19b4bbdd6571f43a615103396b7c03",
   "model_gate_sha256": "b8689ed6f243d2e5835d9cb54a26e2f970c0e9701bc302acf8807ead8cb1fb16",
   "expected_glm_id_full": "<existing-service-full-container-id>",
   "expected_glm_image": "sha256:<existing-service-image-id>",

@@ -1,10 +1,17 @@
 # 原始 GDN 源码自然生成对照：2026-10-20
 
-**状态：原始源码 control 的长测第一轮已开始，尚无完成结果。** 前组 MLP 实验完成、
-恢复原 GLM 并通过身份校验后，队列于 08:04:07 UTC 接上新 supervisor，第一轮生成
-于 08:08:59 UTC 开始。08:19:15 UTC 只读观察仍为 `request / control / trial 1`，
-unit 为 active/running，checkpoint 和 report 尚未生成；阻塞式请求无法提供实时
-token 数。08:14:20 UTC 核对的 13 个部署文件均未变化。
+**状态：原始源码 control 的两次长测均已完成并重复稳定。** 前组 MLP 实验完成、恢复
+原 GLM 并通过身份校验后，队列于 08:04:07 UTC 接上新 supervisor。两次均输出
+39,846 tokens、返回 `stop` 并由 EOS、terminal token 与脱敏 matched-stop 一致确认；
+耗时为 2,931.67 / 2,930.05 秒，thinking-end index 均为 39,666，
+输出哈希一致，未检出确认的 2,032-token 周期。09:48:12 UTC 观察时 supervisor 已完成，
+实验清理完成、原 GLM 当时已恢复运行，systemd unit 为 inactive/success。10:01:21 UTC
+独立复核确认 13 个部署文件哈希未变化、GLM 身份仍精确匹配，但 GLM 已退出。日志显示启动约 65 秒后因 NCCL 远端进程或网络错误退出，
+exit code 为 1、非 OOM；10:21 UTC 对同一容器的恢复重试也未通过稳定性检查。
+此复核时实验容器和 GPU 计算进程均为 0。
+后续只读审计确认原服务跨两个节点运行 TP2，两端的 master 摘要、端口与 rank 配对一致；
+另一端仍在运行。成对恢复尚未执行，后续 GPU 实验保持未启动。此发现解释了为何不能
+把单容器启动当作服务恢复，但尚不能证明底层网络故障的原因。
 完整脱敏字段见[相邻 JSON](dgx-spark-natural-source-control-20261020.json)。
 
 ## 要排除的因素
@@ -43,16 +50,21 @@ SHA、thinking-end、脱敏 matched-stop 摘要，以及已知 lag-2032 的周�
 同一 GLM 容器。实验后的服务恢复由 Python `finally` 与 systemd `ExecStopPost`
 托管。r3 的部署文件保持冻结。
 
-控制器与 supervisor 的 38 项目标测试通过，涵盖原始/修正源码、单臂/双臂主流程、
+当前控制器与 supervisor 的 55 项目标测试通过，涵盖原始/修正源码、单臂/双臂主流程、
 错误 trial 元数据、失败恢复，以及按源码/作业/镜像/创建时间限定的清理。干净 tracked
-副本完整 CPU 测试为 532 passed、34 skipped，Ruff 通过；本地跳过涉及缺失的
-Torch、Pillow、PyArrow。PR #52 的两项 pytest CI 检查已成功。队列四种本地门禁场景通过。
+副本完整 CPU 测试为 549 passed、34 skipped，Ruff 通过；本地跳过涉及缺失的
+Torch、Pillow、PyArrow。PR #52 在 `417b2b9` 的两项 pytest CI 检查已成功；本次新增修改的 CI 待推送后检查。队列四种本地门禁场景通过。新恢复检查要求精确身份与配置保持一致，连续运行 120 秒；
+有 healthcheck 时须为 healthy，总等待上限为 240 秒。它防止将短暂启动误报为恢复，
+不代表应用已就绪；原实验的冻结文件保持不变。单机 supervisor 还会在暂停前解析
+受保护服务的启动拓扑，拒绝跨节点或无法明确审计的启动方式，防止只暂停 TP2 的一端。
 
 ## 结论边界
 
-这是排查源码算术因素的对照，尚无已完成的新生成结果。历史循环的 262,144 上下文、开启
-radix cache、seed 213087260 等条件与本组不同。如果两种源码都停止，下一步逐项
-恢复历史条件，不能把多个协议变化一起解释为某个补丁的效果。
+这是排查源码算术因素的对照；两次 EOS 停止表明在当前协议下停止不依赖 beta 补丁，
+但未复现历史退化，不能排除历史根因，也不构成修复证明。原始与 all-beta control
+在当前协议下都停止；历史循环的 262,144 上下文、开启 radix cache、seed 213087260
+等条件与本组不同。若要定位历史差异，下一步逐项恢复这些历史条件，不能把多个协议
+变化一起解释为某个补丁的效果。
 
 当前不建立循环修复、答案正确性、GPQA、视觉/MTP 质量、TP2、吞吐或 release 结论。
 运行方法见[控制器说明](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/README.md)。

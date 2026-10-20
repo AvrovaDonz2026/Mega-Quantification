@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "state": "running_control_trial_1",
-  "observed_at_utc": "2026-10-20T08:19:15.880206+00:00",
-  "scope": "Original-source control-only natural-start diagnostic. First long request running; no completed output or loop-repair, GPQA, vision/MTP or release claim.",
+  "state": "completed_control",
+  "observed_at_utc": "2026-10-20T09:48:12.846261+00:00",
+  "scope": "Original-source control-only natural-start diagnostic. Both long trials completed repeat-stably at 39846 output tokens with matched EOS stops and no confirmed lag-2032 cycle. This does not establish a beta-patch repair, historical root cause, GPQA, vision/MTP or release claim.",
   "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
   "source_variant": "original",
   "source_revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
@@ -42,8 +42,8 @@
   "deployment_files_verified": 13,
   "launch_evidence_sha256": "ae822594576034bd7bafbbeaeb9a1d74a73d2ff0ca87b53b65717c07aa314b4c",
   "queue": {
-    "state": "starting_source_control",
-    "systemd_active": true,
+    "state": "completed_source_control",
+    "systemd_active": false,
     "previous_systemd_active": false,
     "supervisor_started": true,
     "evidence_started": true,
@@ -62,32 +62,115 @@
     "previous unit inactive and successful",
     "previous reports repeat-stable and cleaned",
     "same GLM restored and exact identity verified before temporary stop",
-    "Python finally plus ExecStopPost restores same GLM container"
+    "Python finally plus ExecStopPost attempt same-container restoration; immediate Running observation does not establish stable recovery"
   ],
   "termination_diagnostic": "New controller unions effective EOS metadata and retains sanitized matched-stop fields. Frozen r3 config-only EOS booleans remain incomplete and are not relabeled.",
   "local_validation": {
-    "targeted_tests_passed": 38,
-    "full_tests_passed": 532,
+    "targeted_tests_passed": 55,
+    "full_tests_passed": 549,
     "full_tests_skipped": 34,
     "ruff": "passed",
     "queue_gate_scenarios_passed": 4,
     "cpu_test_limit": "Local environment lacks torch, Pillow and pyarrow; optional tests were not executed locally; CI results are recorded separately.",
-    "ci_pytest_checks": "both successful on PR #52"
+    "ci_pytest_checks": "both successful at 417b2b9; latest changes pending push and CI"
   },
   "causal_limit": "Historical 262144-context/radix-enabled/seed-213087260 protocol differs. This run changes only source arithmetic relative to r3 control. If both sources stop, restore other historical factors one at a time.",
   "observation_evidence_sha256": "2dea466149ec93da72b4d05537fd729c27a13a77e1805fea51df7565d1366e91",
   "deployment_files_unchanged": true,
   "run": {
-    "supervisor_state": "phase_running",
-    "unit_state": "active/running",
+    "supervisor_state": "completed",
+    "unit_state": "inactive/success",
     "arm": "control",
-    "trial": 1,
-    "request_started_at_utc": "2026-10-20T08:08:59.781164+00:00",
-    "checkpoint_present": false,
-    "report_present": false,
-    "completion_tokens": null,
-    "progress_limit": "Blocking stream:false request; no current token count or finish metadata before response."
+    "trial": 2,
+    "request_started_at_utc": "2026-10-20T08:57:51.516854+00:00",
+    "checkpoint_present": true,
+    "report_present": true,
+    "completion_tokens": 39846,
+    "progress_limit": "Both trials completed; output and matched-stop summaries are retained below."
   },
-  "observation_at_utc": "2026-10-20T08:14:20.361610+00:00",
-  "progress_evidence_sha256": "606afb45b8810d41897b180109c84c1f5147bcec158e2316c5a594767b27ae94"
+  "completed_trial_1": {
+    "output_tokens": 39846,
+    "e2e_latency_seconds": 2931.66995651694,
+    "finish_reason_type": "stop",
+    "contains_eos": true,
+    "terminal_eos": true,
+    "matched_is_eos": true,
+    "matched_equals_terminal": true,
+    "first_thinking_end_index": 39666,
+    "thinking_end_count": 1,
+    "historical_natural_lcp": 14,
+    "periodic_confirmed": false,
+    "periodic_lag": 2032,
+    "output_ids_sha256": "cfe06b6d3459601c3401046711eedb1cb4dfd2571bb81032a11145acde1d4248"
+  },
+  "completed_trial_2": {
+    "output_tokens": 39846,
+    "e2e_latency_seconds": 2930.052434570971,
+    "finish_reason_type": "stop",
+    "contains_eos": true,
+    "terminal_eos": true,
+    "matched_is_eos": true,
+    "matched_equals_terminal": true,
+    "first_thinking_end_index": 39666,
+    "thinking_end_count": 1,
+    "historical_natural_lcp": 14,
+    "periodic_confirmed": false,
+    "periodic_lag": 2032,
+    "output_ids_sha256": "cfe06b6d3459601c3401046711eedb1cb4dfd2571bb81032a11145acde1d4248"
+  },
+  "completion": {
+    "completed_at_utc": "2026-10-20T09:46:43.267574+00:00",
+    "repeat_stable": true,
+    "both_trials_naturally_terminated": true,
+    "confirmed_periodic_trials": 0,
+    "cleanup_removed": true,
+    "unit_result": "inactive/success",
+    "glm_running_after_restore_reported": true
+  },
+  "observation_at_utc": "2026-10-20T09:48:12.846261+00:00",
+  "progress_evidence_sha256": "fabb11883765f86046aff024e763e6e5166a571e6c3b31866a96bea0715913bf",
+  "service_restore_followup": {
+    "observed_at_utc": "2026-10-20T10:01:21.992537+00:00",
+    "identity_exact": true,
+    "running": false,
+    "deployment_files": 13,
+    "deployment_hashes_unchanged": true,
+    "owned_experiment_container_count": 0,
+    "gpu_compute_process_count": 0,
+    "exit_code": 1,
+    "oom_killed": false,
+    "error_class": "NCCL remote-process-or-network error",
+    "status": "restore was reported running but exited after startup; repair in progress",
+    "distributed_service_followup": {
+      "cross_node_tp_size": 2,
+      "peer_pairing_verified": true,
+      "master_digest_and_port_match": true,
+      "rank_roles_match": true,
+      "other_rank_running_at_observation": true,
+      "coordinated_recovery_executed": false,
+      "network_root_cause_established": false,
+      "subsequent_gpu_experiment_started": false
+    },
+    "verification_evidence_sha256": "0bae7d1e3d6375fb219af049a48a9168bc16bedf7e0e0fedf6a22dd4fb84e64a",
+    "state_evidence_sha256": "8bfadd72501dc8d5c72e90bc4312e8fefcdf776359d53a78492ff1546c99a475",
+    "log_summary_evidence_sha256": "4329b9494a30dfa2b5a1f796d13fb7a5c1cb4c82a4b888276d2a4954d4ea0a56",
+    "retry": {
+      "started_at_utc": "2026-10-20T10:20:52.761937+00:00",
+      "observed_at_utc": "2026-10-20T10:21:57.436756+00:00",
+      "identity_exact": true,
+      "state": "restore_failed",
+      "running": false,
+      "exit_code": 1,
+      "oom_killed": false,
+      "evidence_sha256": "53a34569b8721c50876f790e7cab406da3a79bcaeaf99b2d728f1b8efaa61848"
+    },
+    "new_recovery_gate": {
+      "continuous_running_seconds": 120,
+      "timeout_seconds": 240,
+      "exact_identity_every_poll": true,
+      "health_if_exposed": "healthy",
+      "single_host_stop_requires_auditable_single_node_topology": true,
+      "application_readiness_established": false
+    }
+  }
 }

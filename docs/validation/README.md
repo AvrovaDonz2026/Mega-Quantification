@@ -23,9 +23,12 @@ MLP-only BF16 recovery pilot 已在 2026-10-20 完成：control / MLP 各两次
 运行中诊断器漏读部分 EOS 元数据，不能用其 `natural_termination=false` 认定没有
 EOS 停止。历史循环未在 control 复现，当前无修复结论。
 [原始 GDN 源码对照](dgx-spark-natural-source-control-20261020.md)已在前组清理及服务恢复
-后启动；08:19 UTC 观察时正在运行第一轮长请求，尚无完成结果。
-r2 队列过期未启动的记录保留；r3 已恢复 GLM，新对照再次临时暂停同一服务；恢复由
-远端监督进程托管。[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
+后启动；两次各输出 39,846 tokens，均以匹配 EOS 停止且输出完全一致，未检出确认的
+2,032-token 周期。结果显示当前协议下停止不依赖 beta 补丁，但未复现历史退化，不能排除历史根因或证明修复。
+r2 队列过期未启动的记录保留；source-control 09:48 UTC 观察时 GLM 已恢复运行，
+10:01 UTC 独立复核时已退出，身份仍匹配且部署哈希未变。日志显示 NCCL 远端进程或网络错误，非 OOM；
+同容器恢复重试尚未成功；后续审计确认原服务跨节点运行 TP2，成对恢复尚未完成，后续 GPU 实验未启动。
+[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

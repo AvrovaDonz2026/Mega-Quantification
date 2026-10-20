@@ -92,6 +92,43 @@ def test_known_period_stats_only_checks_requested_lag() -> None:
     assert stats["periodic_confirmed"] is False
 
 
+def test_period_stats_across_boundary_requires_generated_matches() -> None:
+    lag = 4
+    prefix = [index % lag for index in range(3 * lag)]
+    unmatched = [100 + index for index in range(10)]
+    stats = CONTROLLER_MODULE.period_stats_across_boundary(prefix, unmatched, lag)
+    assert stats["continuation_match_count"] == 0
+    assert stats["confirmed_across_boundary"] is False
+
+    one_match = unmatched.copy()
+    one_match[0] = prefix[-lag]
+    stats = CONTROLLER_MODULE.period_stats_across_boundary(prefix, one_match, lag)
+    assert stats["continuation_match_count"] == 1
+    assert stats["confirmed_across_boundary"] is False
+
+
+def test_period_stats_across_boundary_requires_two_generated_periods() -> None:
+    lag = 4
+    prefix = [index % lag for index in range(20 * lag)]
+    short = [index % lag for index in range(2 * lag - 1)]
+    stats = CONTROLLER_MODULE.period_stats_across_boundary(prefix, short, lag)
+    assert stats["continuation_matched_prefix_tokens"] == 2 * lag - 1
+    assert stats["confirmed_across_boundary"] is False
+
+    long = [index % lag for index in range(2 * lag)]
+    stats = CONTROLLER_MODULE.period_stats_across_boundary(prefix, long, lag)
+    assert stats["continuation_matched_prefix_tokens"] == 2 * lag
+    assert stats["confirmed_across_boundary"] is True
+    assert stats["crosses_input_continuation_boundary"] is True
+
+
+def test_period_stats_across_boundary_rejects_invalid_lag_or_prefix() -> None:
+    with pytest.raises(ValueError, match="lag must be positive"):
+        CONTROLLER_MODULE.period_stats_across_boundary([1, 2], [1], 0)
+    with pytest.raises(ValueError, match="at least one lag"):
+        CONTROLLER_MODULE.period_stats_across_boundary([1, 2], [1], 3)
+
+
 def test_termination_stats_natural_stop_requires_thinking_end_before_terminal_eos() -> None:
     out = [11, 22, 77, 33, 99]
     stats = CONTROLLER_MODULE.termination_stats(
@@ -366,21 +403,40 @@ def test_cli_rejects_unknown_variant_and_keeps_default_flags() -> None:
         "n",
     ]
     defaults = parser.parse_args(required)
+    assert defaults.trajectory == "natural"
     assert defaults.source_variant == "all-beta"
     assert defaults.arms == "both"
     with pytest.raises(SystemExit):
         parser.parse_args(required + ["--source-variant", "decode-beta"])
 
 
+def test_historical_prefix_trajectory_rejects_long_phase_and_out_of_range_budget() -> None:
+    with pytest.raises(ValueError, match="requires --phase early"):
+        CONTROLLER_MODULE.validate_trajectory_options("historical-prefix", "long", 49152)
+    with pytest.raises(ValueError, match="between 512 and 4096"):
+        CONTROLLER_MODULE.validate_trajectory_options("historical-prefix", "early", 8192)
+    CONTROLLER_MODULE.validate_trajectory_options("historical-prefix", "early", 512)
+    CONTROLLER_MODULE.validate_trajectory_options("historical-prefix", "early", 4096)
+
+
 @pytest.mark.parametrize("arms", ["both", "control"])
 @pytest.mark.parametrize("source_variant", ["original", "all-beta"])
+@pytest.mark.parametrize("trajectory", ["natural", "historical-prefix"])
 def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, arms: str, source_variant: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arms: str,
+    source_variant: str,
+    trajectory: str,
 ) -> None:
     module = CONTROLLER_MODULE
     image = module.IMAGE
     prompt = list(range(288))
-    reference = list(range(49152))
+    reference = (
+        [index % CONTROLLER_MODULE.KNOWN_PERIOD for index in range(49152)]
+        if trajectory == "historical-prefix"
+        else list(range(49152))
+    )
     module.NATIVE_SHA = "native-sha"
     module.PROMPT_SHA = "prompt-sha"
     remote = tmp_path / "remote"
@@ -421,7 +477,14 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
     source_archive.write_bytes(b"archive")
     source_dir.with_suffix(".manifest.json").write_text("{}")
 
-    calls = {"gates": [], "owned": [], "runtime": [], "cleanup": [], "models": []}
+    calls = {
+        "gates": [],
+        "owned": [],
+        "runtime": [],
+        "cleanup": [],
+        "models": [],
+        "requests": [],
+    }
     fake = types.ModuleType("run_v7")
     fake._LOCK_MODULE = types.SimpleNamespace(LOCK_PATH=lock)
     fake.now = lambda: "now"
@@ -476,7 +539,6 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
     )
     monkeypatch.setattr(module, "load_eos_metadata", lambda model: ({99}, {"sources": []}))
     monkeypatch.setattr(module, "termination_stats", lambda *args: {"natural_termination": True})
-    monkeypatch.setattr(module, "known_period_stats", lambda *args: {"periodic_confirmed": False})
     monkeypatch.setattr(module, "lcp", lambda left, right: 0)
 
     class FakeSocket:
@@ -524,17 +586,19 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
             return Response({"model_path": f"/models/Qwen3.8-27B-NVFP4-MSE-{arm}"})
         if "/flush_cache" in url:
             return Response()
+        calls["requests"].append(json.loads(request.data))
+        request_prompt = prompt + reference[:41472] if trajectory == "historical-prefix" else prompt
         return Response(
             {
                 "output_ids": [1, 2],
                 "meta_info": {
                     "completion_tokens": 2,
-                    "prompt_tokens": len(prompt),
+                    "prompt_tokens": len(request_prompt),
                     "cached_tokens": 0,
                     "output_token_logprobs": [[-1.0], [-1.0]],
                     "finish_reason": {"type": "stop"},
                 },
-                "prompt_token_ids": prompt,
+                "prompt_token_ids": request_prompt,
             }
         )
 
@@ -561,10 +625,32 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
         source_variant,
         "--arms",
         arms,
+        "--trajectory",
+        trajectory,
     ]
     monkeypatch.setattr(sys, "argv", argv)
     module.main()
     report = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert report["trajectory"] == trajectory
+    assert report["prompt_tokens"] == 288
+    assert report["input_tokens"] == (41760 if trajectory == "historical-prefix" else 288)
+    assert report["native_prefix_tokens"] == (41472 if trajectory == "historical-prefix" else 0)
+    expected_input_hash = "digest" if trajectory == "historical-prefix" else "prompt-sha"
+    assert report["input_ids_sha256"] == expected_input_hash
+    if trajectory == "historical-prefix":
+        assert report["fresh_prefill"] is True
+        assert report["incremental_state_reconstructed"] is False
+        assert all(
+            request["input_ids"] == prompt + reference[:41472] for request in calls["requests"]
+        )
+        assert all(
+            "continuation_reference_lcp" in trial and "period_2032_across_input_prefix" in trial
+            for arm in report["arms"].values()
+            for trial in arm["trials"]
+        )
+    else:
+        assert "fresh_prefill" not in report
+        assert all(request["input_ids"] == prompt for request in calls["requests"])
     assert report["selected_arms"] == (["control"] if arms == "control" else ["control", "mlp"])
     assert len(calls["gates"]) == len(report["selected_arms"])
     assert all(

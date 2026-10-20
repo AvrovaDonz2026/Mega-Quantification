@@ -7,7 +7,13 @@ experiment is a finite early-trajectory diagnostic; an explicit `long` phase
 is provided for a separate full-budget trajectory. This document does not
 contain or promise experiment results.
 
-The controller defaults to `--source-variant all-beta` and `--arms both`.
+The controller defaults to `--trajectory natural`, `--source-variant all-beta`,
+and `--arms both`.
+The single-host supervisor requires an auditable single-node launch before it
+can pause a protected service. It rejects cross-node rank/master launches,
+ambiguous topology, and opaque launch wrappers. A single-node `--tp 2` is
+allowed when no cross-node flags are present. Services spanning multiple hosts
+need a separate, authorized coordination procedure for both original containers.
 Use `--source-variant original` to select the original source package, and
 `--arms control` to run only the control arm. The selected source revision is
 read from the complete parent `source-lock.json`; the source gate verifies the
@@ -130,6 +136,26 @@ Both arms use the same startup random seed (`20261020`), checked against the
 server identity. This does not make different precision paths deterministic;
 the two cold-cache repetitions still check observed stability. Responses must
 finish with `stop` or `length`; a length finish must reach the requested budget.
+
+### Historical-prefix comparison
+
+Pass `--trajectory historical-prefix` to run an independent prefix comparison.
+This mode is valid only with `--phase early` and a budget from `512` through
+`4096`; it performs two cold-cache trials for each selected arm. The private
+case-3 fixture is checked by its native file and prompt hashes, then the server
+receives the 288-token prompt followed by exactly `41472` native reference
+tokens. The continuation reference is the next `--budget` native tokens.
+Reports record `trajectory`, `input_tokens`, `native_prefix_tokens`, the hashed
+reference window, and per-trial continuation LCP/exact fields. They also include
+a scalar lag-2032 summary showing whether a confirmed run crosses the
+input-prefix/continuation boundary. Token IDs, prompts, and response text are
+never written.
+
+This is a fresh-prefill comparison. It cannot reconstruct the historical
+incremental KV or SSM state and cannot establish natural-generation repair. The
+prefix execution must not be labeled as a natural trajectory. The existing
+supervisor accepts only the default `natural` trajectory; invoke this controller
+directly with a fresh evidence root for the prefix comparison.
 
 The optional `long` phase starts from the same 288-token original prompt and
 uses exactly `49152` new tokens (`288 + 49152 < 65536`). It does not append a
@@ -259,6 +285,13 @@ by its exact configured container ID; it never removes that container.
 Experiment cleanup is limited to the exact owner, job, source, image, and
 creation-time gates. `fallback_restore.py` is an `ExecStopPost` recovery path
 and persists the restore result in the shared status JSON.
+
+Both restoration paths require the exact container identity and configuration
+to remain unchanged throughout a continuous 120-second running observation.
+If Docker exposes health metadata, it must stay `healthy` during that window.
+The wait is bounded to 240 seconds; a container that exits after starting fails
+the restore gate and keeps restoration pending. `observed_seconds` records the
+window checked; it does not establish application readiness.
 
 The early five-hour and long eighteen-hour values are watchdog ceilings, not
 expected runtimes. Evidence roots and phase logs must be fresh. Status and

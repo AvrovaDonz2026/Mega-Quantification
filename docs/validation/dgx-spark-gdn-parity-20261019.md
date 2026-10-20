@@ -134,7 +134,7 @@ LCP 为 7 / 12。两臂都未检出确认的 2,032-token 周期，但该短预�
 两次输出 SHA 一致、repeat stable=true，各出现一次 thinking-end（index 24,735），
 同样未检出确认周期。所有 long 容器均已 removed；监督单元为 inactive/success，
 supervisor 为 completed。观察点记录 GLM running=true；随后新的 source-control
-supervisor 于 08:04:38 UTC 启动，并于 08:08:59 UTC 发起请求，GLM 随后再次暂停。
+supervisor 于 08:04:38 UTC 启动，临时暂停同一 GLM 后于 08:08:59 UTC 发起请求。
 
 control 没有复现历史自然循环，因此这组结果不能提供 MLP 修复的对照意义；两臂均为
 服务 `stop`，不能据此宣称自然停止恢复或答案正确。[原始源码对照](dgx-spark-natural-source-control-20261020.md)
@@ -160,7 +160,7 @@ seed 20261020、TP1、无 MTP、FP8 KV、FP32 SSM，关闭 radix cache 和 CUDA 
 
 远端由 systemd 托管，Python `finally` 与 `ExecStopPost` 负责清理本次诊断容器并
 启动原 GLM 容器；r3 结束时恢复已完成，观察点为 running=true。随后新的 source-control
-supervisor 于 08:04:38 UTC 启动，并于 08:08:59 UTC 发起请求，GLM 随后再次暂停。
+supervisor 于 08:04:38 UTC 启动，临时暂停同一 GLM 后于 08:08:59 UTC 发起请求。
 early 5 小时、long 18 小时是 watchdog
 上限。相关离线测试共 27 项通过，包括控制器失败和停止命令超时后仍尝试恢复服务。
 复现脚本与配置见

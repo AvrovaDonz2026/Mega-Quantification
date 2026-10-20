@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -255,7 +256,7 @@ def expected_value(config: dict[str, Any], *names: str) -> Any:
     return None
 
 
-def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+def verify_glm_identity(config: dict[str, Any], row: dict[str, Any]) -> str:
     expected_id = expected_value(
         config, "expected_glm_id_full", "expected_glm_full", "expected_glm_id"
     )
@@ -270,7 +271,6 @@ def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, A
         or not expected_image
     ):
         raise SupervisorError("GLM identity config missing")
-    row = docker_inspect(expected_id)
     actual_id = row.get("Id")
     if actual_id != expected_id:
         raise SupervisorError("GLM container id mismatch")
@@ -304,10 +304,242 @@ def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, A
         != expected_config_host
     ):
         raise SupervisorError("GLM config/hostconfig hash mismatch")
+    return expected_id
+
+
+def verify_glm(config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    expected_id = expected_value(
+        config, "expected_glm_id_full", "expected_glm_full", "expected_glm_id"
+    )
+    if not isinstance(expected_id, str) or not expected_id:
+        raise SupervisorError("GLM identity config missing")
+    row = docker_inspect(expected_id)
+    verify_glm_identity(config, row)
     state = row.get("State") if isinstance(row.get("State"), dict) else {}
     if state.get("Running") is not True:
         raise SupervisorError("GLM was not running")
     return expected_id, row, glm_snapshot(row)
+
+
+_TOPOLOGY_VALUE_FLAGS = {
+    "--tp": "tp",
+    "--tp-size": "tp",
+    "--tensor-parallel-size": "tp",
+    "--nnodes": "nnodes",
+    "--node-rank": "node_rank",
+    "--rank": "rank",
+    "--master": "master",
+    "--master-addr": "master",
+    "--master-port": "master_port",
+}
+_TOPOLOGY_DISTRIBUTED_FIELDS = frozenset(("node_rank", "rank", "master", "master_port"))
+
+
+def _glm_command_tokens(row: dict[str, Any]) -> list[str]:
+    config = row.get("Config")
+    if not isinstance(config, dict) or "Cmd" not in config:
+        raise SupervisorError("GLM launch command missing")
+    entrypoint = config.get("Entrypoint", [])
+    command = config.get("Cmd")
+
+    def as_tokens(raw: Any, *, required: bool) -> list[str]:
+        if raw is None:
+            if required:
+                raise SupervisorError("GLM launch command missing")
+            return []
+        if isinstance(raw, str):
+            try:
+                return shlex.split(raw)
+            except ValueError as exc:
+                raise SupervisorError("GLM launch command invalid") from exc
+        if isinstance(raw, list) and all(isinstance(value, str) for value in raw):
+            return list(raw)
+        raise SupervisorError("GLM launch command invalid")
+
+    entry_tokens = as_tokens(entrypoint, required=False)
+    # When Entrypoint is a shell plus -c/-lc, Docker passes Cmd as the script
+    # argument. Preserve that argument as one string before shlex tokenizing;
+    # splitting it as a normal argv list would truncate the script at token 3.
+    if (
+        len(entry_tokens) == 2
+        and Path(entry_tokens[0]).name in {"sh", "bash", "dash", "zsh"}
+        and entry_tokens[1] in {"-c", "-lc", "--command"}
+    ):
+        if command is None:
+            raise SupervisorError("GLM launch command missing")
+        script = command if isinstance(command, str) else (
+            command[0] if isinstance(command, list) and len(command) == 1 else None
+        )
+        if not isinstance(script, str) or not script:
+            raise SupervisorError("GLM launch command invalid")
+        try:
+            return shlex.split(script)
+        except ValueError as exc:
+            raise SupervisorError("GLM launch command invalid") from exc
+
+    command_tokens = as_tokens(command, required=not entry_tokens)
+    tokens = entry_tokens + command_tokens
+    if not tokens:
+        raise SupervisorError("GLM launch command missing")
+
+    # Docker commonly stores shell wrappers as separate argv entries, e.g.
+    # ["sh", "-c", "python ... --rank=1"].  Tokenize the script argument
+    # without executing it, while leaving opaque wrappers fail-closed later.
+    if len(tokens) >= 3 and Path(tokens[0]).name in {"sh", "bash", "dash", "zsh"}:
+        if tokens[1] in {"-c", "-lc", "--command"}:
+            try:
+                script_tokens = shlex.split(tokens[2])
+            except ValueError as exc:
+                raise SupervisorError("GLM launch command invalid") from exc
+            return script_tokens
+    return tokens
+
+
+def parse_glm_launch_topology(row: dict[str, Any]) -> dict[str, Any]:
+    """Parse only safe topology flags from the inspected GLM command.
+
+    This parser never executes or records command values.  A rank/master
+    launch without an explicit one-node proof is intentionally ambiguous.
+    """
+    tokens = _glm_command_tokens(row)
+    values: dict[str, str] = {}
+    present: set[str] = set()
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        flag, separator, inline = token.partition("=")
+        field = _TOPOLOGY_VALUE_FLAGS.get(flag)
+        if field is None:
+            index += 1
+            continue
+        value = inline if separator else None
+        if value is None:
+            if (
+                index + 1 >= len(tokens)
+                or not tokens[index + 1]
+                or tokens[index + 1].startswith("-")
+            ):
+                raise SupervisorError("GLM topology flag missing value")
+            value = tokens[index + 1]
+            index += 1
+        if not value:
+            raise SupervisorError("GLM topology flag missing value")
+        if field in values and values[field] != value:
+            raise SupervisorError("GLM topology flags conflict")
+        values[field] = value
+        present.add(field)
+        index += 1
+
+    integer_fields = ("tp", "nnodes", "node_rank", "rank", "master_port")
+    integers: dict[str, int] = {}
+    for field in integer_fields:
+        if field not in values:
+            continue
+        try:
+            parsed = int(values[field], 10)
+        except ValueError as exc:
+            raise SupervisorError("GLM topology value invalid") from exc
+        if parsed < 0 or (field in ("tp", "nnodes") and parsed == 0):
+            raise SupervisorError("GLM topology value invalid")
+        if field == "master_port" and not 1 <= parsed <= 65535:
+            raise SupervisorError("GLM topology port invalid")
+        integers[field] = parsed
+
+    nnodes = integers.get("nnodes")
+    node_rank = integers.get("node_rank")
+    rank = integers.get("rank")
+    distributed_present = bool(_TOPOLOGY_DISTRIBUTED_FIELDS & present)
+    if nnodes is not None and nnodes > 1:
+        topology_class = "cross_node"
+        reason = "nnodes_gt_one"
+    elif nnodes == 1:
+        if (node_rank is not None and node_rank != 0) or (rank is not None and rank != 0):
+            raise SupervisorError("GLM topology is not single node")
+        topology_class = "single_node"
+        reason = "explicit_nnodes_one"
+    elif distributed_present:
+        topology_class = "ambiguous_distributed"
+        reason = "rank_or_master_without_nnodes"
+    elif "tp" in present:
+        topology_class = "single_node"
+        reason = "explicit_tp_without_distributed_flags"
+    else:
+        topology_class = "unknown"
+        reason = "no_auditable_topology_flags"
+
+    return {
+        "topology_class": topology_class,
+        "reason": reason,
+        "tp_present": "tp" in present,
+        "nnodes_present": "nnodes" in present,
+        "node_rank_present": "node_rank" in present,
+        "rank_present": "rank" in present,
+        "master_present": "master" in present or "master_port" in present,
+        "tp": integers.get("tp"),
+        "nnodes": nnodes,
+        "node_rank": node_rank,
+        "rank": rank,
+    }
+
+
+def preflight_glm_topology(row: dict[str, Any]) -> dict[str, Any]:
+    summary = parse_glm_launch_topology(row)
+    if summary["topology_class"] != "single_node":
+        raise SupervisorError("GLM topology is not proven single node")
+    return summary
+
+
+def wait_glm_stable(
+    config: dict[str, Any],
+    *,
+    timeout_seconds: float = 240,
+    stable_seconds: float = 120,
+    poll_seconds: float = 2,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+) -> dict[str, Any]:
+    """Wait for the exact GLM container to remain running and healthy if supported."""
+    if timeout_seconds <= 0 or stable_seconds <= 0 or poll_seconds <= 0:
+        raise ValueError("GLM stability wait durations must be positive")
+    expected_id = expected_value(
+        config, "expected_glm_id_full", "expected_glm_full", "expected_glm_id"
+    )
+    if not isinstance(expected_id, str) or not expected_id:
+        raise SupervisorError("GLM identity config missing")
+
+    started_at = monotonic()
+    deadline = started_at + timeout_seconds
+    stable_since: float | None = None
+    saw_running = False
+    while True:
+        now = monotonic()
+        row = docker_inspect(expected_id)
+        verify_glm_identity(config, row)
+        snap = glm_snapshot(row)
+        if snap.get("running") is True:
+            saw_running = True
+            health = snap.get("health")
+            is_stable_state = "health" not in snap or health == "healthy"
+            if is_stable_state:
+                if stable_since is None:
+                    stable_since = now
+                observed = now - stable_since
+                if observed >= stable_seconds:
+                    return {**snap, "observed_seconds": round(observed, 3)}
+            else:
+                stable_since = None
+        elif saw_running:
+            raise SupervisorError("GLM exited during restore stability window")
+
+        remaining = deadline - now
+        if remaining <= 0:
+            raise SupervisorError("GLM restore stability timeout")
+        until_stable = (
+            stable_seconds - (now - stable_since)
+            if stable_since is not None
+            else poll_seconds
+        )
+        sleep(min(poll_seconds, remaining, max(0.0, until_stable)))
 
 
 def fresh_evidence_roots(
@@ -328,11 +560,21 @@ def build_phase_argv(
     *,
     source_variant: str | None = None,
     arms: str | None = None,
+    trajectory: str = "natural",
 ) -> list[str]:
     argv = [str(x) for x in base]
-    forbidden = {"--phase", "--budget", "--source-variant", "--arms", "--source-revision"}
+    forbidden = {
+        "--phase",
+        "--budget",
+        "--source-variant",
+        "--arms",
+        "--source-revision",
+        "--trajectory",
+    }
     if any(flag in argv for flag in forbidden):
         raise SupervisorError("base command must not contain phase or budget")
+    if trajectory != "natural":
+        raise SupervisorError("supervisor only accepts natural trajectory")
     try:
         root_index = argv.index("--root")
     except ValueError as exc:
@@ -345,6 +587,7 @@ def build_phase_argv(
         argv.extend(["--source-variant", source_variant])
     if arms is not None:
         argv.extend(["--arms", arms])
+    argv.extend(["--trajectory", trajectory])
     return argv
 
 
@@ -354,6 +597,19 @@ def valid_report(path: Path, expected: dict[str, Any] | None = None) -> bool:
     except (OSError, ValueError):
         return False
     if not isinstance(report, dict) or report.get("status") != "completed":
+        return False
+    # Explicit trajectory metadata was added after the original natural reports.
+    # Keep missing metadata compatible with those reports, while rejecting any
+    # report that claims an imposed historical prefix trajectory.
+    if report.get("trajectory", "natural") != "natural":
+        return False
+    if type(report.get("prompt_tokens")) is not int or report["prompt_tokens"] != 288:
+        return False
+    if type(report.get("native_prefix_tokens")) is not int or report["native_prefix_tokens"] != 0:
+        return False
+    if "input_tokens" in report and (
+        type(report["input_tokens"]) is not int or report["input_tokens"] != 288
+    ):
         return False
     comparison = report.get("comparison")
     arms = report.get("arms")
@@ -640,6 +896,7 @@ def main() -> int:
         )
         preflight_no_residuals()
         glm_id, before_row, before = verify_glm(config)
+        preflight_glm_topology(before_row)
         status["glm_before"] = before
         atomic_json(status_path, status)
 
@@ -698,14 +955,12 @@ def main() -> int:
                         pass
             if restored:
                 try:
-                    row = docker_inspect(glm_id)
-                    snap = glm_snapshot(row)
+                    snap = wait_glm_stable(config)
                     status["glm_restore"] = {
                         "running": snap.get("running"),
                         "health": snap.get("health"),
+                        "observed_seconds": snap["observed_seconds"],
                     }
-                    if snap.get("running") is not True:
-                        restored = False
                 except Exception:
                     restored = False
             if not restored:

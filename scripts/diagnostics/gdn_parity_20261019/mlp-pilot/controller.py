@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cold-cache natural-start MSE/MLP sensitivity pilot; persist only summaries."""
+"""Cold-cache natural/historical-prefix MSE/MLP sensitivity pilot."""
 
 from __future__ import annotations
 
@@ -213,6 +213,67 @@ def known_period_stats(tokens, lag=KNOWN_PERIOD):
     }
 
 
+def period_stats_across_boundary(prefix, continuation, lag=KNOWN_PERIOD):
+    """Summarize lag equality from historical input into generated continuation.
+
+    Prefix-only periodicity cannot confirm this comparison. Confirmation requires
+    the continuation's initial run to cover two complete lag-sized periods.
+    """
+    if lag <= 0:
+        raise ValueError("period lag must be positive")
+    prefix = list(prefix)
+    continuation = list(continuation)
+    if len(prefix) < lag:
+        raise ValueError("period boundary prefix must contain at least one lag")
+    combined = prefix + continuation
+    boundary = len(prefix)
+    matches = [
+        combined[boundary + index] == combined[boundary + index - lag]
+        for index in range(len(continuation))
+    ]
+    initial_run = next((i for i, matched in enumerate(matches) if not matched), len(matches))
+    total_matches = sum(matches)
+    max_consecutive = 0
+    current = 0
+    for matched in matches:
+        current = current + 1 if matched else 0
+        max_consecutive = max(max_consecutive, current)
+    cross_run = False
+    run_start = None
+    for index in range(lag, len(combined)):
+        if combined[index] == combined[index - lag]:
+            if run_start is None:
+                run_start = index
+            if run_start < boundary <= index:
+                cross_run = True
+                break
+        else:
+            run_start = None
+    return {
+        "periodic_lag": lag,
+        "continuation_matched_prefix_tokens": initial_run,
+        "continuation_match_count": total_matches,
+        "continuation_match_fraction": total_matches / len(continuation) if continuation else 0.0,
+        "continuation_max_consecutive": max_consecutive,
+        "crosses_input_continuation_boundary": cross_run,
+        "confirmed_across_boundary": initial_run >= 2 * lag,
+    }
+
+
+def validate_trajectory_options(trajectory, phase, budget):
+    """Validate trajectory-specific phase and budget constraints."""
+    if trajectory not in ("natural", "historical-prefix"):
+        raise ValueError(f"unknown trajectory: {trajectory}")
+    if trajectory == "historical-prefix" and phase != "early":
+        raise ValueError("historical-prefix trajectory requires --phase early")
+    if phase == "early":
+        maximum = 4096 if trajectory == "historical-prefix" else 8192
+        if not 512 <= budget <= maximum:
+            raise ValueError(f"{trajectory} early budget must be between 512 and {maximum}")
+    elif budget != 49152:
+        raise ValueError("long phase requires --budget 49152")
+
+
 def termination_stats(out, meta, eos, think_end, budget):
     reason = meta.get("finish_reason")
     if not isinstance(reason, dict) or reason.get("type") not in {"stop", "length"}:
@@ -268,6 +329,7 @@ def build_parser():
     p.add_argument("--ablation-tool", type=Path, required=True)
     p.add_argument("--native-private", type=Path, required=True)
     p.add_argument("--phase", choices=("early", "long"), default="early")
+    p.add_argument("--trajectory", choices=("natural", "historical-prefix"), default="natural")
     p.add_argument("--budget", type=int, default=None)
     p.add_argument("--source-variant", choices=("original", "all-beta"), default="all-beta")
     p.add_argument("--arms", choices=("both", "control"), default="both")
@@ -279,12 +341,12 @@ def main():
     o = p.parse_args()
     if o.phase == "early":
         o.budget = 4096 if o.budget is None else o.budget
-        if not 512 <= o.budget <= 8192:
-            p.error("early pilot budget must be between 512 and 8192")
     else:
         o.budget = 49152 if o.budget is None else o.budget
-        if o.budget != 49152:
-            p.error("long phase requires --budget 49152")
+    try:
+        validate_trajectory_options(o.trajectory, o.phase, o.budget)
+    except ValueError as exc:
+        p.error(str(exc))
     generate_timeout = 3600 if o.phase == "early" else 14400
     o.root.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(o.remote_root / "candidate-bundle-r1/parity-v7"))
@@ -306,12 +368,26 @@ def main():
         if len(native["cases"]) != 1 or native["cases"][0]["case"] != 3:
             raise RuntimeError("anonymous fixture identity differs")
         old = native["cases"][0]
-        ids = old["request"]["input_ids"]
-        reference = old["response"]["output_ids"]
-        if len(ids) != 288 or v.digest(ids) != PROMPT_SHA or len(reference) != 49152:
+        prompt = old["request"]["input_ids"]
+        answer = old["response"]["output_ids"]
+        if len(prompt) != 288 or v.digest(prompt) != PROMPT_SHA or len(answer) != 49152:
             raise RuntimeError("native prompt/output identity differs")
-        if any(type(x) is not int or x < 0 for x in ids + reference):
+        if any(type(x) is not int or x < 0 for x in prompt + answer):
             raise RuntimeError("native token type invalid")
+        cut = 41472
+        if o.trajectory == "historical-prefix":
+            if cut + o.budget > len(answer):
+                raise RuntimeError("historical continuation exceeds native reference")
+            if not all(
+                answer[i] == answer[i - KNOWN_PERIOD]
+                for i in range(33131 + KNOWN_PERIOD, len(answer))
+            ):
+                raise RuntimeError("historical native cycle no longer verifies")
+            ids = prompt + answer[:cut]
+            reference = answer[cut : cut + o.budget]
+        else:
+            ids = prompt
+            reference = answer[: o.budget]
         source_revision = source_revision_for_variant(o.source_variant, v._LOCK_MODULE.LOCK_PATH)
         arm_names = selected_arms(o.arms)
         report = {
@@ -319,20 +395,34 @@ def main():
             "started_at_utc": v.now(),
             "case": "anonymous-case3",
             "phase": o.phase,
+            "trajectory": o.trajectory,
+            **(
+                {"fresh_prefill": True, "incremental_state_reconstructed": False}
+                if o.trajectory == "historical-prefix"
+                else {}
+            ),
             "controller_sha256": v.sha256_file(Path(__file__)),
             "scope": (
-                "Natural-start early-trajectory pilot. Finite budget does not establish "
-                "long-loop repair, GPQA accuracy, or stopping recovery."
-                if o.phase == "early"
-                else "Natural-start long-budget trajectory from the original prompt. "
-                "Known-period scalars detect only lag-2032 repetition; stopping does "
-                "not establish answer correctness, and neither a detected loop nor "
-                "the absence of one within this budget establishes repair."
+                "Fresh-prefill historical-prefix continuation sensitivity. The request "
+                "does not reconstruct historical incremental KV/SSM state or establish "
+                "natural generation repair."
+                if o.trajectory == "historical-prefix"
+                else (
+                    "Natural-start early-trajectory pilot. Finite budget does not establish "
+                    "long-loop repair, GPQA accuracy, or stopping recovery."
+                    if o.phase == "early"
+                    else "Natural-start long-budget trajectory from the original prompt. "
+                    "Known-period scalars detect only lag-2032 repetition; stopping does "
+                    "not establish answer correctness, and neither a detected loop nor "
+                    "the absence of one within this budget establishes repair."
+                )
             ),
             "native_private_sha256": NATIVE_SHA,
             "prompt_ids_sha256": PROMPT_SHA,
-            "prompt_tokens": len(ids),
-            "native_prefix_tokens": 0,
+            "prompt_tokens": len(prompt),
+            "input_tokens": len(ids),
+            "native_prefix_tokens": len(ids) - len(prompt),
+            "input_ids_sha256": v.digest(ids),
             "historical_reference_window_sha256": v.digest(reference[: o.budget]),
             "max_new_tokens": o.budget,
             "repetitions_per_arm": 2,
@@ -536,12 +626,19 @@ def main():
                         "output_ids_sha256": v.digest(out),
                         "prompt_echo_exact": True,
                         "cached_tokens": 0,
-                        "historical_natural_lcp": lcp(out, reference[: o.budget]),
-                        "historical_natural_window_exact": out == reference[: o.budget],
                         "logprobs_finite": True,
                         "mean_output_logprob": sum(lp) / len(lp),
                         "e2e_latency": meta.get("e2e_latency"),
                     }
+                    if o.trajectory == "historical-prefix":
+                        row["continuation_reference_lcp"] = lcp(out, reference)
+                        row["continuation_reference_exact"] = out == reference
+                        row["period_2032_across_input_prefix"] = period_stats_across_boundary(
+                            ids, out
+                        )
+                    else:
+                        row["historical_natural_lcp"] = lcp(out, reference[: o.budget])
+                        row["historical_natural_window_exact"] = out == reference[: o.budget]
                     row.update(termination_stats(out, meta, eos, think_end, o.budget))
                     row.update(known_period_stats(out))
                     outputs[variant].append(out)
