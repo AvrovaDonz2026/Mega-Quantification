@@ -20,6 +20,25 @@ VARIANTS = {
 }
 
 
+def validate_request_counters(meta):
+    """Require a canonical zero retraction count and validate optional MTP stats."""
+    count = meta.get("num_retractions")
+    if type(count) is not int or count != 0:
+        raise RuntimeError("missing, malformed, or nonzero retraction count")
+    if "retraction_count" in meta:
+        legacy_count = meta["retraction_count"]
+        if type(legacy_count) is not int or legacy_count != 0:
+            raise RuntimeError("unexpected legacy retraction count")
+    spec_verify_ct = meta.get("spec_verify_ct") if "spec_verify_ct" in meta else None
+    if spec_verify_ct is not None and (
+        type(spec_verify_ct) is not int or spec_verify_ct < 0 or spec_verify_ct != 0
+    ):
+        raise RuntimeError("unexpected or malformed speculative verification count")
+    if "spec_verify_ct" in meta and spec_verify_ct is None:
+        raise RuntimeError("malformed speculative verification count")
+    return count, spec_verify_ct
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--root", type=Path, required=True)
@@ -238,10 +257,7 @@ def main():
                         or meta.get("cached_tokens") != 0
                     ):
                         raise RuntimeError("prompt echo, length, or cold-cache gate failed")
-                    if meta.get("spec_verify_ct", 0) not in (0, None) or meta.get(
-                        "retraction_count", 0
-                    ) not in (0, None):
-                        raise RuntimeError("unexpected MTP or retraction")
+                    num_retractions, spec_verify_ct = validate_request_counters(meta)
                     lcp = next(
                         (i for i, (x, y) in enumerate(zip(out, reference, strict=False)) if x != y),
                         min(len(out), len(reference)),
@@ -253,6 +269,8 @@ def main():
                         "finish_reason_type": meta.get("finish_reason", {}).get("type"),
                         "prompt_echo_exact": True,
                         "cached_tokens": 0,
+                        "num_retractions": num_retractions,
+                        "spec_verify_ct_observed": spec_verify_ct,
                         "native_reference_lcp": lcp,
                         "native_reference_match_count": sum(
                             x == y for x, y in zip(out, reference, strict=False)

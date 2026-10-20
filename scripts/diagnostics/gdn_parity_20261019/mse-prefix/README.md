@@ -28,7 +28,7 @@ contain the locked commits and does not fetch from a network:
 
 ```bash
 python3 ../build_sources.py \
-  --repo /Users/zxy/sglang \
+  --repo /path/to/sglang \
   --output "$REMOTE_ROOT/source-package" \
   --lock ../source-lock.json
 ```
@@ -93,6 +93,11 @@ radix cache disabled, no MTP/speculative decoding, and the pinned image,
 source, model, and runtime identities. It writes sanitized status,
 checkpoint, report, runtime-source, and cleanup records under the evidence
 root. The controller finishes by generating its stats and cleanup records.
+New reports require and retain the canonical integer `num_retractions=0`.
+The frozen 2026-10-19 controller checked the noncanonical `retraction_count`
+field and defaulted an absent value to zero; its reports do not prove that the
+canonical counter was zero. This correction does not alter the recorded
+continuation hashes or turn the fixed-prefix result into a natural replay.
 
 ## Scope
 

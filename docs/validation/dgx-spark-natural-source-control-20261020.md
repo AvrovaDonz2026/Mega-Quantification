@@ -44,19 +44,34 @@ runner 沿用 r3 的原始字节，SHA 为
 它记录 source/model/runtime gates、prompt echo、零缓存、有限 logprob、输出长度与
 SHA、thinking-end、脱敏 matched-stop 摘要，以及已知 lag-2032 的周期统计。旧 r3
 只读 config EOS 的 false 字段保留原值与限制，不追溯改标。
+冻结的 source-control 报告没有保留 `num_retractions`：旧控制器会拒绝存在的非零值，
+但接受缺失或 null，不能将其标为直接的零回收计数观测。新运行要求标准字段为整数零，
+并将该值保留在每次 trial 摘要中。
 
 队列持有跨 exec 的机器级租约。前组 unit 已成功退出、两阶段报告重复稳定且容器
 清理完成、原 GLM 恢复并通过精确身份校验，随后进入新 supervisor，再次临时暂停
 同一 GLM 容器。实验后的服务恢复由 Python `finally` 与 systemd `ExecStopPost`
 托管。r3 的部署文件保持冻结。
 
-当前控制器与 supervisor 的 55 项目标测试通过，涵盖原始/修正源码、单臂/双臂主流程、
+当前控制器与 supervisor 的 89 项目标测试通过，涵盖原始/修正源码、单臂/双臂主流程、
 错误 trial 元数据、失败恢复，以及按源码/作业/镜像/创建时间限定的清理。干净 tracked
-副本完整 CPU 测试为 549 passed、34 skipped，Ruff 通过；本地跳过涉及缺失的
-Torch、Pillow、PyArrow。PR #52 在 `417b2b9` 的两项 pytest CI 检查已成功；本次新增修改的 CI 待推送后检查。队列四种本地门禁场景通过。新恢复检查要求精确身份与配置保持一致，连续运行 120 秒；
+副本完整 CPU 测试为 583 passed、34 skipped，Ruff 通过；本地跳过涉及缺失的
+Torch、Pillow、PyArrow。PR #52 在 `d36bb59` 的两项 pytest CI 检查已成功。队列四种本地门禁场景通过。新恢复检查要求精确身份与配置保持一致，连续运行 120 秒；
 有 healthcheck 时须为 healthy，总等待上限为 240 秒。它防止将短暂启动误报为恢复，
 不代表应用已就绪；原实验的冻结文件保持不变。单机 supervisor 还会在暂停前解析
 受保护服务的启动拓扑，拒绝跨节点或无法明确审计的启动方式，防止只暂停 TP2 的一端。
+
+## 历史重放的只读准备
+
+11:52:26 UTC 在目标机重新读取完整 scored MSE 导出，确认原始 provenance、
+config、HF quant config、索引及全部 2,756 个张量内容哈希匹配，包含 519 个量化模块；
+原 288-token 测试输入及历史 49,152-token 输出夹具也通过身份检查。检查耗时 21.69 秒，
+未启动容器或调用 GPU。这排除了候选文件与锁定历史导出的字节差异，仍须验证实际
+loader 的运行时处理。
+
+历史重放准备器另行锁定原始镜像、完整启动模板、实际 override 目标和流式请求格式。
+其运行入口保持禁用；目标机 bind、实际导入代码、双机维护协调器和冷请求仍待验收。
+两端 GLM 的临时暂停及实验后成对恢复已获授权；本次预检不能标为已启动或完成的复现。
 
 ## 结论边界
 

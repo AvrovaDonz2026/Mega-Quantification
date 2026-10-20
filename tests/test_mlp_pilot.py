@@ -92,6 +92,43 @@ def test_known_period_stats_only_checks_requested_lag() -> None:
     assert stats["periodic_confirmed"] is False
 
 
+@pytest.mark.parametrize(
+    ("meta", "expected"),
+    [
+        ({"num_retractions": 0}, (0, None)),
+        ({"num_retractions": 0, "spec_verify_ct": 0}, (0, 0)),
+    ],
+)
+def test_validate_request_counters_accepts_observed_zero_and_missing_spec_stats(
+    meta: dict, expected: tuple[int, int | None]
+) -> None:
+    assert CONTROLLER_MODULE.validate_request_counters(meta) == expected
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        {},
+        {"num_retractions": None},
+        {"num_retractions": True},
+        {"num_retractions": 0.0},
+        {"num_retractions": "0"},
+        {"num_retractions": -1},
+        {"num_retractions": 1},
+        {"num_retractions": 0, "retraction_count": 1},
+        {"num_retractions": 0, "retraction_count": None},
+        {"num_retractions": 0, "spec_verify_ct": None},
+        {"num_retractions": 0, "spec_verify_ct": True},
+        {"num_retractions": 0, "spec_verify_ct": 0.0},
+        {"num_retractions": 0, "spec_verify_ct": -1},
+        {"num_retractions": 0, "spec_verify_ct": 1},
+    ],
+)
+def test_validate_request_counters_rejects_missing_or_invalid_metadata(meta: dict) -> None:
+    with pytest.raises(RuntimeError):
+        CONTROLLER_MODULE.validate_request_counters(meta)
+
+
 def test_period_stats_across_boundary_requires_generated_matches() -> None:
     lag = 4
     prefix = [index % lag for index in range(3 * lag)]
@@ -595,6 +632,7 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
                     "completion_tokens": 2,
                     "prompt_tokens": len(request_prompt),
                     "cached_tokens": 0,
+                    "num_retractions": 0,
                     "output_token_logprobs": [[-1.0], [-1.0]],
                     "finish_reason": {"type": "stop"},
                 },
@@ -652,6 +690,11 @@ def test_main_fake_lifecycle_preserves_source_and_selected_arm_contract(
         assert "fresh_prefill" not in report
         assert all(request["input_ids"] == prompt for request in calls["requests"])
     assert report["selected_arms"] == (["control"] if arms == "control" else ["control", "mlp"])
+    assert all(
+        trial["num_retractions"] == 0 and trial["spec_verify_ct_observed"] is None
+        for arm in report["arms"].values()
+        for trial in arm["trials"]
+    )
     assert len(calls["gates"]) == len(report["selected_arms"])
     assert all(
         isinstance(path, Path) and revision == commits[source_variant]

@@ -66,13 +66,13 @@
   ],
   "termination_diagnostic": "New controller unions effective EOS metadata and retains sanitized matched-stop fields. Frozen r3 config-only EOS booleans remain incomplete and are not relabeled.",
   "local_validation": {
-    "targeted_tests_passed": 55,
-    "full_tests_passed": 549,
+    "targeted_tests_passed": 89,
+    "full_tests_passed": 583,
     "full_tests_skipped": 34,
     "ruff": "passed",
     "queue_gate_scenarios_passed": 4,
     "cpu_test_limit": "Local environment lacks torch, Pillow and pyarrow; optional tests were not executed locally; CI results are recorded separately.",
-    "ci_pytest_checks": "both successful at 417b2b9; latest changes pending push and CI"
+    "ci_pytest_checks": "both successful at d36bb59"
   },
   "causal_limit": "Historical 262144-context/radix-enabled/seed-213087260 protocol differs. This run changes only source arithmetic relative to r3 control. If both sources stop, restore other historical factors one at a time.",
   "observation_evidence_sha256": "2dea466149ec93da72b4d05537fd729c27a13a77e1805fea51df7565d1366e91",
@@ -172,5 +172,56 @@
       "single_host_stop_requires_auditable_single_node_topology": true,
       "application_readiness_established": false
     }
+  },
+  "historical_replay_readonly_preflight": {
+    "observed_at_utc": "2026-10-20T11:52:26.284370+00:00",
+    "state": "model_and_fixture_verified_no_replay",
+    "passed": true,
+    "model": {
+      "algorithm": "mse",
+      "checkpoint_tool_sha256": "a1a0bcc2219e6996f365425fc0f942a0e220b118fbf95d27c181be83d8f69f3e",
+      "loader": "modelopt",
+      "metadata_sha256": {
+        "config.json": "1863a03b63ef930ee75c341c684e00ca8862c6dfe2477e26ea2f4a72415a5941",
+        "hf_quant_config.json": "9ec4f59889055843cb4a22c681f0a7fcaf3bb78e77b6f55a19b04b9a208bb1b7",
+        "model.safetensors.index.json": "dc4c2b5670797864dbf9f57b99a83734fbb10ad03cde130c3e018ef5f6a7e7f3"
+      },
+      "model_available": true,
+      "passed": true,
+      "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+      "quantized_layers": 519,
+      "scheme": "nvfp4_w4a4",
+      "tensor_count": 2756,
+      "tensor_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6"
+    },
+    "fixture": {
+      "fixture_sha256": "8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218",
+      "historical_output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "historical_output_tokens": 49152,
+      "historical_period_tokens": 2032,
+      "passed": true,
+      "prompt_ids_sha256": "20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436",
+      "prompt_tokens": 288
+    },
+    "controller_sha256": "fd490e6bb8699f7832cb814e776157048e820da073487e27ccd100e2eed8c98e",
+    "elapsed_seconds": 21.693918536999263,
+    "any_container_mutation": false,
+    "any_gpu_request": false,
+    "remaining_gates": [
+      "target launcher binds and imported override identity",
+      "paired maintenance coordinator",
+      "live server and endpoint ownership",
+      "cold historical request and terminal outcome"
+    ],
+    "causal_limit": "Serialized scored-MSE payload and metadata match; this is not a runtime replay or effective loader arithmetic proof.",
+    "paired_interruption_and_restore_authorized": true
+  },
+  "retraction_counter_evidence_limit": {
+    "canonical_api_field": "num_retractions",
+    "frozen_controller_rejects_nonzero_when_present": true,
+    "frozen_controller_accepts_missing_or_null": true,
+    "direct_zero_counter_retained": false,
+    "new_run_policy": "Require canonical exact integer zero and persist the scalar; missing speculation count is unobserved.",
+    "limit": "Completed trial rows remain frozen; do not relabel them as direct zero-retraction observations."
   }
 }

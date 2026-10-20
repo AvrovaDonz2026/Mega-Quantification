@@ -84,6 +84,25 @@ def _metadata_sha(value):
     return hashlib.sha256(payload).hexdigest()
 
 
+def validate_request_counters(meta):
+    """Require a canonical zero retraction count and validate optional MTP stats."""
+    count = meta.get("num_retractions")
+    if type(count) is not int or count != 0:
+        raise RuntimeError("missing, malformed, or nonzero retraction count")
+    if "retraction_count" in meta:
+        legacy_count = meta["retraction_count"]
+        if type(legacy_count) is not int or legacy_count != 0:
+            raise RuntimeError("unexpected legacy retraction count")
+    spec_verify_ct = meta.get("spec_verify_ct") if "spec_verify_ct" in meta else None
+    if spec_verify_ct is not None and (
+        type(spec_verify_ct) is not int or spec_verify_ct < 0 or spec_verify_ct != 0
+    ):
+        raise RuntimeError("unexpected or malformed speculative verification count")
+    if "spec_verify_ct" in meta and spec_verify_ct is None:
+        raise RuntimeError("malformed speculative verification count")
+    return count, spec_verify_ct
+
+
 def load_eos_metadata(model):
     """Load EOS ids and privacy-preserving provenance from a model directory."""
     config = json.loads((model / "config.json").read_text())
@@ -606,15 +625,7 @@ def main():
                         or meta.get("cached_tokens") != 0
                     ):
                         raise RuntimeError("prompt/cold-cache gate failed")
-                    if any(
-                        meta.get(key, 0) not in (0, None)
-                        for key in (
-                            "spec_verify_ct",
-                            "num_retractions",
-                            "retraction_count",
-                        )
-                    ):
-                        raise RuntimeError("unexpected MTP or retraction")
+                    num_retractions, spec_verify_ct = validate_request_counters(meta)
                     lp = [x[0] for x in meta.get("output_token_logprobs", [])]
                     if len(lp) != len(out) or any(
                         type(x) not in (int, float) or not math.isfinite(x) for x in lp
@@ -626,6 +637,8 @@ def main():
                         "output_ids_sha256": v.digest(out),
                         "prompt_echo_exact": True,
                         "cached_tokens": 0,
+                        "num_retractions": num_retractions,
+                        "spec_verify_ct_observed": spec_verify_ct,
                         "logprobs_finite": True,
                         "mean_output_logprob": sum(lp) / len(lp),
                         "e2e_latency": meta.get("e2e_latency"),

@@ -136,6 +136,13 @@ Both arms use the same startup random seed (`20261020`), checked against the
 server identity. This does not make different precision paths deterministic;
 the two cold-cache repetitions still check observed stability. Responses must
 finish with `stop` or `length`; a length finish must reach the requested budget.
+New trial reports require the canonical `meta_info.num_retractions` field to be
+an integer zero and retain that scalar. Missing, null, boolean or noninteger
+values fail the gate. An omitted speculation counter is reported as unobserved;
+the no-MTP condition is also checked against resolved server settings.
+Frozen earlier trial reports did not retain the retraction scalar. Their
+controller rejected positive canonical counts when present, but accepted an
+absent field; do not relabel those reports as direct zero-count observations.
 
 ### Historical-prefix comparison
 

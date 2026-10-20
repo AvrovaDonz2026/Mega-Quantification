@@ -1060,5 +1060,12 @@
       "regression_tests_passed": 22,
       "scope": "Corrected EOS helper executed from stdin against model metadata only. No model load, generation, or remote file update. Existing r3 termination labels are not retrospectively changed."
     }
+  },
+  "retraction_gate_followup_20261020": {
+    "scope": "Completed MSE native-prefix controller only; not the vision/MTP candidate matrix.",
+    "canonical_api_field": "num_retractions",
+    "frozen_controller_field": "retraction_count",
+    "direct_zero_counter_retained": false,
+    "limit": "The frozen controller defaulted an absent noncanonical field to zero. Its continuation hashes remain recorded, but no canonical zero-retraction observation is established. New runs require exact integer zero and retain the scalar."
   }
 }

@@ -105,6 +105,9 @@ exact，cold cache 为 0，重复稳定；四次均因 `length` 结束，没有 
 这是明确的 negative result：beta 补丁没有打破该固定前缀的 512-token 窗口。它不等同
 自然生成轨迹已修复，也不能判断更长预算是否最终停止。native IDs 和原始响应不发布，
 只保留相邻 JSON 中的摘要与 SHA；四个服务/client cleanup 均已移除且无残留容器。
+10 月 20 日审计发现此冻结控制器检查了非标准的 `retraction_count` 并将缺失值当作零，
+未保留实际 API 的 `num_retractions`；因此这四次请求没有直接的零回收计数证据。
+新控制器改为严格校验并保留标准字段；原 continuation 哈希和上述限制保持记录。
 
 ## MLP-only BF16 recovery pilot（r3 已完成）
 
