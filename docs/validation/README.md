@@ -52,9 +52,13 @@ R3 于 19:18:59.637587 UTC 启动，随后完成单变量 beta-store 对照：�
 
 2026-10-21 的 [MSE scale 审计与 matched-runner 记录](dgx-spark-mse-root-cause-20261021.md)
 确认当前磁盘上的 max/MSE 导出 scale 均完整且有限，但覆盖范围不匹配；MSE 的整模量化
-根因仍未确定。R5 因维护 heartbeat 错误中止，没有有效模型结果；恢复后的 runner 仅通过
-CPU 预检与故障注入测试，尚未用于冻结 R5 重跑。报告中的 scale 结论、GPU serving 诊断和
-整模因果判断不可混为一谈。
+根因仍未确定。第一次 R5 因维护 heartbeat 错误中止且无有效模型结果；独立 retry 已完成
+49,152-token 单次纯文本生成（MTP 关闭），源码门禁及双端恢复/超过 120 秒进程稳定性验证通过。
+retry 以 `length`
+结束，候选检测到周期 1,375；对历史 lag 2,032 只有 1 个完整周期的匹配，不能称为历史长循环
+复现。beta 单变量改动改变了输出轨迹，但没有解决重复或停止退化，也没有定位或修复 MSE 根因。
+覆盖范围不匹配是总体比较中的已知 confounder；不能把 vision/MTP 覆盖差异直接归因于该纯文本
+循环。报告中的 scale 审计、GPU serving 诊断和整模因果判断不可混为一谈。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
