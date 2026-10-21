@@ -308,9 +308,13 @@ concurrency or context instead of mixing rows from different protocols.
 Use a serving image built from the current checkout for the Compose client
 below. The original v0.1.2 image predates the GPQA client repair: SGLang extensions
 must be top-level JSON fields, rather than a nested SDK `extra_body` object.
-The repaired client also reserves chat-template tokens and counts truncated
-answers as wrong. When retaining an older serving image and using a separate
-updated CPU client, record both source revisions and the serving image digest.
+The repaired client also reserves chat-template tokens and requires an explicit
+`stop` finish reason for a correct answer. Length, missing, unknown, aborted,
+filtered and tool-call finishes count as wrong. The parser ignores answers in
+closed thinking blocks and an unclosed thinking tail; a closing tag without an
+opening tag also hides the preceding reasoning. When retaining an older serving
+image and using a separate updated CPU client, record both source revisions and
+the serving image digest.
 
 Fetch the official CSV on the host into `DATA_DIR`; the Spark input mount is
 read only inside the containers. `GPQA_CSV` below is the **container** path.
@@ -383,11 +387,14 @@ Create the CPU environment before starting the loop. A score is publishable
 only after `summary.json` exists and the
 checker passes: it requires exactly 198 unique dataset-matching records,
 rebuilds shuffled choices and gold letters from the CSV, reparses responses,
-counts truncated/unparsed rows as wrong, and compares the recomputed scores
-with the summary. Its JSON contains aggregate checks and file hashes, without
+requires an explicit `stop`, counts truncated/unparsed rows as wrong, and
+compares the recomputed scores with the summary. Its JSON contains aggregate
+checks and file hashes, without
 questions, answers, item IDs or local paths. Retain raw journals, the CSV,
 server logs and run metadata locally; publish the sanitized verification
-report and actual protocol with the final score. The historical W4A8 measurement
+report and actual protocol with the final score. Preserve historical journals
+and summaries when auditing a parser or scoring change; save the audit separately.
+The historical W4A8 measurement
 used 32k context. The two completed 256k measurements used new journals
 and passed these checks; reusing earlier 32k rows would invalidate a rerun.
 

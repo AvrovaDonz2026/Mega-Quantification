@@ -116,6 +116,43 @@ def test_correct_looking_truncated_and_unparsed_responses_count_wrong(run_fixtur
     assert report["scores"]["correct"] == 196
 
 
+@pytest.mark.parametrize(
+    ("finish_reason", "truncated"),
+    [
+        ("missing", False),
+        ("future_reason", False),
+        ("abort", False),
+        ("content_filter", False),
+        ("tool_calls", False),
+        ("length", True),
+    ],
+)
+def test_checker_only_scores_explicit_stop_reason(run_fixture, finish_reason, truncated):
+    dataset, run_dir, rows, summary, save = run_fixture
+    rows[0].update(finish_reason=finish_reason, truncated=truncated, correct=False)
+    summary["scores"].update(
+        correct=197,
+        accuracy=197 / 198,
+        truncated=int(truncated),
+        headline="197/198",
+    )
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+    assert report["scores"]["correct"] == 197
+
+
+@pytest.mark.parametrize("finish_reason", [None, {"type": "length"}, ""])
+def test_checker_rejects_malformed_finish_reason_schema(run_fixture, finish_reason):
+    dataset, run_dir, rows, _, save = run_fixture
+    rows[0].update(finish_reason=finish_reason, truncated=False, correct=False)
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert not report["passed"]
+    assert "scores" not in report
+    assert "journal row 1: invalid finish reason" in report["errors"]
+
+
 def test_repeated_wrong_options_in_the_dataset_are_accepted(run_fixture):
     dataset, run_dir, rows, _, save = run_fixture
     with dataset.open(newline="", encoding="utf-8") as handle:

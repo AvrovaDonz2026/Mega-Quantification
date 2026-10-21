@@ -19,10 +19,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from megaquant.eval_gpqa import ItemResult, build_gpqa_item, extract_choice
+from megaquant.eval_gpqa import (
+    ItemResult,
+    build_gpqa_item,
+    extract_choice,
+    is_truncated_finish_reason,
+    normalize_finish_reason,
+)
 
 DIAMOND_ITEMS = 198
-TRUNCATED_FINISH_REASONS = {"length", "max_tokens"}
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -176,7 +181,9 @@ def verify_results(
             continue
         if not isinstance(row["finish_reason"], str) or not row["finish_reason"]:
             errors.append(f"{prefix}: invalid finish reason")
-        elif row["truncated"] != (row["finish_reason"] in TRUNCATED_FINISH_REASONS):
+            continue
+        finish_reason = normalize_finish_reason(row["finish_reason"])
+        if row["truncated"] != is_truncated_finish_reason(finish_reason):
             errors.append(f"{prefix}: truncation flag disagrees with finish reason")
         if any(
             not _integer(row[field])
@@ -186,7 +193,11 @@ def verify_results(
         predicted = extract_choice(row["text"])
         if row["predicted"] != predicted:
             errors.append(f"{prefix}: saved prediction disagrees with response extraction")
-        correct = predicted == item.gold and not row["truncated"]
+        correct = (
+            finish_reason == "stop"
+            and predicted == item.gold
+            and not row["truncated"]
+        )
         if row["correct"] != correct:
             errors.append(f"{prefix}: saved correctness violates strict scoring")
         recomputed_correct += int(correct)

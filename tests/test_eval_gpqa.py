@@ -33,6 +33,7 @@ from megaquant.eval_gpqa import (
     gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
+    normalize_finish_reason,
     openai_chat_complete,
     remaining_new_tokens,
     resolve_eval_recipe_path,
@@ -274,6 +275,36 @@ def test_extract_choice_ignores_letters_inside_thinking() -> None:
     assert extract_choice(text) == "C"
     boxed = "reasoning done.\n\\boxed{B}\n"
     assert extract_choice(boxed) == "B"
+
+
+@pytest.mark.parametrize("tag", ["think", "thinking", "reasoning"])
+def test_extract_choice_ignores_unclosed_thinking(tag: str) -> None:
+    text = f"<{tag}>The answer is A, but the trace never closes."
+    assert visible_answer_span(text) == ""
+    assert extract_choice(text) is None
+
+
+def test_extract_choice_ignores_reopened_unclosed_thinking() -> None:
+    text = "<think>trace A</think>\nAnswer: C\n<thinking>trace B\nAnswer: B"
+    assert visible_answer_span(text).strip() == "Answer: C"
+    assert extract_choice(text) == "C"
+
+
+def test_extract_choice_keeps_plain_answer_without_thinking_tags() -> None:
+    assert visible_answer_span("Answer: D") == "Answer: D"
+    assert extract_choice("Answer: D") == "D"
+
+
+def test_extract_choice_treats_unmatched_thinking_close_as_implicit_open() -> None:
+    text = "Answer: A\n</think>\nAnswer: C"
+    assert visible_answer_span(text).strip() == "Answer: C"
+    assert extract_choice(text) == "C"
+
+
+def test_unmatched_thinking_close_hides_prior_answer_without_final_choice() -> None:
+    text = "Answer: A\n</think>\nNo final choice."
+    assert visible_answer_span(text).strip() == "No final choice."
+    assert extract_choice(text) is None
 
 
 def test_prompt_asks_for_untruncated_reasoning() -> None:
@@ -674,6 +705,38 @@ def test_score_recomputes_cached_correct_flags() -> None:
     assert scores["unparsed"] == 1
 
 
+@pytest.mark.parametrize(
+    "finish_reason",
+    [None, "", "future_reason", "abort", "content_filter", "tool_calls"],
+)
+def test_score_requires_explicit_success_finish_reason(finish_reason) -> None:
+    item = GPQAItem("a", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A")
+    row = ItemResult(
+        "a", "A", "A", True, False, finish_reason, 1, 1, 0, "Answer: A", item.choices
+    )
+    assert score_items([item], [row])["headline"] == "0/1"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "truncated"),
+    [
+        ("stop", "stop", False),
+        ("length", "length", True),
+        ("max_tokens", "max_tokens", True),
+        ({"type": "length"}, "length", True),
+        ({"type": "stop", "matched": 42}, "stop", False),
+        ({"type": "abort"}, "abort", False),
+        (None, "missing", False),
+        ({}, "unknown", False),
+    ],
+)
+def test_finish_reason_normalization(raw, expected: str, truncated: bool) -> None:
+    from megaquant.eval_gpqa import is_truncated_finish_reason
+
+    assert normalize_finish_reason(raw) == expected
+    assert is_truncated_finish_reason(raw) is truncated
+
+
 @pytest.mark.parametrize("truncated,text", [(True, "Answer: A"), (False, "")])
 def test_run_gpqa_never_scores_truncated_or_unparsed_answers_correct(
     tmp_path: Path, truncated: bool, text: str
@@ -695,6 +758,64 @@ def test_run_gpqa_never_scores_truncated_or_unparsed_answers_correct(
     assert summary["scores"]["headline"] == "0/1"
     row = json.loads((tmp_path / "gpqa_diamond.jsonl").read_text())
     assert row["correct"] is False
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "truncated", "expected"),
+    [
+        (None, False, "missing"),
+        ("abort", False, "abort"),
+        ("content_filter", False, "content_filter"),
+        ("tool_calls", False, "tool_calls"),
+        ({"type": "length"}, True, "length"),
+    ],
+)
+def test_run_gpqa_only_scores_explicit_stop(
+    tmp_path: Path, finish_reason, truncated: bool, expected: str
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    recipe.generation.continue_on_length = False
+    item = GPQAItem("a", "q", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    summary = run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_k: GenerationResult(
+            text="Answer: A",
+            finish_reason=finish_reason,
+            prompt_tokens=8,
+            completion_tokens=4,
+            truncated=truncated,
+        ),
+    )
+    row = json.loads((tmp_path / "gpqa_diamond.jsonl").read_text())
+    assert row["finish_reason"] == expected
+    assert row["correct"] is False
+    assert summary["scores"]["headline"] == "0/1"
+
+
+def test_openai_http_does_not_infer_stop_when_finish_reason_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recipe = load_eval_recipe(RECIPE)
+    response = {
+        "choices": [{"message": {"content": "Answer: A"}}],
+        "usage": {"prompt_tokens": 8, "completion_tokens": 4},
+    }
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *_args, **_kwargs: io.BytesIO(json.dumps(response).encode()),
+    )
+    result = openai_chat_complete(
+        base_url="http://sglang.local/v1",
+        model="test-model",
+        messages=[{"role": "user", "content": "Question"}],
+        sampling=recipe.sampling,
+        thinking=recipe.thinking,
+        max_tokens=512,
+        seed=0,
+    )
+    assert result.finish_reason == "missing"
+    assert result.truncated is False
 
 
 @pytest.mark.parametrize("retry_context_overflow", [False, True])

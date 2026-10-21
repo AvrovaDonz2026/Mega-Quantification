@@ -258,6 +258,24 @@ class ItemResult:
     choices: dict[str, str]
 
 
+TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
+
+
+def normalize_finish_reason(value: Any) -> str:
+    """Normalize OpenAI string and SGLang structured finish reasons."""
+    if isinstance(value, dict):
+        if "type" not in value:
+            return "unknown"
+        value = value["type"]
+    if not isinstance(value, str) or not value.strip():
+        return "missing" if value is None else "unknown"
+    return value.strip().lower()
+
+
+def is_truncated_finish_reason(value: Any) -> bool:
+    return normalize_finish_reason(value) in TRUNCATED_FINISH_REASONS
+
+
 # Chat-template / special-token headroom. The eval client estimates prompt
 # tokens before the first HTTP round trip; Qwen3.8 templates add tens of
 # tokens, and SGLang 400s if prompt + max_tokens exceeds context_length.
@@ -862,8 +880,8 @@ def load_gpqa_diamond(
     return items
 
 
-_THINK_SPLIT = re.compile(
-    r"</think>|</thinking>|</reasoning>",
+_THINK_TAG = re.compile(
+    r"<\s*(/?)\s*(think|thinking|reasoning)\s*>",
     flags=re.IGNORECASE,
 )
 _ANSWER_LINE = re.compile(
@@ -875,10 +893,25 @@ _SOLE_LETTER = re.compile(r"(?im)^\s*\(?([A-D])\)?\s*[.\s]*$")
 
 def visible_answer_span(text: str) -> str:
     """Drop thinking blocks so we do not score letters inside the trace."""
-    parts = _THINK_SPLIT.split(text)
-    if len(parts) > 1:
-        return parts[-1]
-    return text
+    visible: list[str] = []
+    thinking_depth = 0
+    cursor = 0
+    for match in _THINK_TAG.finditer(text):
+        if thinking_depth == 0:
+            if match.group(1):
+                # Some parsers strip the opening think tag but preserve its
+                # closing tag. Treat the preceding text as hidden reasoning.
+                visible.clear()
+            else:
+                visible.append(text[cursor : match.start()])
+        if match.group(1):
+            thinking_depth = max(0, thinking_depth - 1)
+        else:
+            thinking_depth += 1
+        cursor = match.end()
+    if thinking_depth == 0:
+        visible.append(text[cursor:])
+    return "".join(visible)
 
 
 def extract_choice(text: str) -> str | None:
@@ -976,13 +1009,13 @@ def openai_chat_complete(
     else:
         text = content
     usage = data.get("usage") or {}
-    finish = str(choice.get("finish_reason") or "stop")
+    finish = normalize_finish_reason(choice.get("finish_reason"))
     return GenerationResult(
         text=text,
         finish_reason=finish,
         prompt_tokens=int(usage.get("prompt_tokens") or 0),
         completion_tokens=int(usage.get("completion_tokens") or 0),
-        truncated=finish in {"length", "max_tokens"},
+        truncated=is_truncated_finish_reason(finish),
     )
 
 
@@ -1020,7 +1053,7 @@ def generate_untruncated(
     # servers omit usage (or return zero), so use the request as a conservative
     # fallback to keep the continuation budget moving forward.
     first_completion_tokens = first.completion_tokens or budget
-    truncated = first.truncated
+    truncated = first.truncated or is_truncated_finish_reason(first.finish_reason)
     continued = 0
     text = first.text
     finish = first.finish_reason
@@ -1056,7 +1089,7 @@ def generate_untruncated(
             text = text + follow.text
             completion_tokens += follow.completion_tokens
             finish = follow.finish_reason
-            truncated = follow.truncated
+            truncated = follow.truncated or is_truncated_finish_reason(follow.finish_reason)
             follow_completion_tokens = follow.completion_tokens or leftover
             if follow.prompt_tokens:
                 # The server's prompt usage includes the appended assistant /
@@ -1082,7 +1115,12 @@ def generate_untruncated(
 
 def _result_is_correct(row: ItemResult) -> bool:
     """Apply the scoring rule instead of trusting a cached journal flag."""
-    return not row.truncated and row.predicted is not None and row.predicted == row.gold
+    return (
+        normalize_finish_reason(row.finish_reason) == "stop"
+        and not row.truncated
+        and row.predicted is not None
+        and row.predicted == row.gold
+    )
 
 
 def score_items(
@@ -1239,13 +1277,20 @@ def run_gpqa(
             model=recipe.model,
         )
         predicted = extract_choice(gen.text)
+        finish_reason = normalize_finish_reason(gen.finish_reason)
+        truncated = gen.truncated or is_truncated_finish_reason(finish_reason)
         return ItemResult(
             item_id=item.item_id,
             gold=item.gold,
             predicted=predicted,
-            correct=not gen.truncated and predicted is not None and predicted == item.gold,
-            truncated=gen.truncated,
-            finish_reason=gen.finish_reason,
+            correct=(
+                finish_reason == "stop"
+                and not truncated
+                and predicted is not None
+                and predicted == item.gold
+            ),
+            truncated=truncated,
+            finish_reason=finish_reason,
             prompt_tokens=gen.prompt_tokens,
             completion_tokens=gen.completion_tokens,
             continued=gen.continued,

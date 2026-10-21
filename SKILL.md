@@ -19,6 +19,7 @@ Agent entry. Humans start at [README.md](README.md) and the
 
 - `megaquant plan` and eval/serve `--dry-run` must not download the 27B checkpoint.
 - A GPQA score is `correct/198` only when `summary.json` exists and the journal has exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal. For temperature-0 runs, require `scripts/check_gpqa_results.py` to pass against the actual CSV, seed and choice-shuffle policy before publishing a score.
+- GPQA correctness also requires an explicit `stop` finish reason. Missing, unknown, aborted, filtered, or tool-call finishes count as wrong; never infer `stop` from an absent reason. Ignore answers inside open or closed thinking blocks. Preserve historical journals and use a separate audit when parser or scoring rules change.
 - Do not commit `.env`, `.oss.env`, `docker-compose.override.yml`, SSH material, bucket names, tenant DNS, or host paths.
 - Do not publish the `*-draft` directory as scheme `w4a8`, `w4a4`, or `mixed`.
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
