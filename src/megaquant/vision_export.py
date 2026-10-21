@@ -21,6 +21,34 @@ _PROCESSOR_FILES = (
 )
 
 
+def _missing_export_tensors(root: Path, weight_map: dict[str, Any]) -> set[str]:
+    """Return indexed tensors absent from their local safetensors shards.
+
+    An index can claim a tensor is present even when a partially written shard
+    does not contain that key.  Inspect safetensors headers so this check does
+    not load the tensor payloads into memory.
+    """
+    from safetensors import safe_open
+
+    by_shard: dict[str, list[str]] = {}
+    for key, shard in weight_map.items():
+        by_shard.setdefault(str(shard), []).append(str(key))
+
+    missing: set[str] = set()
+    for shard, keys in by_shard.items():
+        path = root / shard
+        if not path.is_file():
+            missing.update(keys)
+            continue
+        try:
+            with safe_open(str(path), framework="pt", device="cpu") as handle:
+                available = set(handle.keys())
+        except Exception as exc:
+            raise BackendError(f"Unable to inspect vision shard {shard}: {exc}") from exc
+        missing.update(key for key in keys if key not in available)
+    return missing
+
+
 def _restore_processor_files(root: Path, source_root: Path | str) -> None:
     for filename in _PROCESSOR_FILES:
         dest = root / filename
@@ -76,6 +104,12 @@ def restore_vision(
     if quantize_vision:
         missing.update(
             {
+                key: exported[key]
+                for key in _missing_export_tensors(root, exported_vision)
+            }
+        )
+        missing.update(
+            {
                 key: shard
                 for key, shard in exported_vision.items()
                 if not (root / str(shard)).is_file()
@@ -86,7 +120,17 @@ def restore_vision(
                 "Quantized vision export is missing tensors or shards: "
                 + ", ".join(sorted(missing)[:3])
             )
-    elif missing:
+    else:
+        missing.update(
+            {
+                key: exported.get(key, shard)
+                for key in _missing_export_tensors(
+                    root,
+                    {key: exported[key] for key in expected if key in exported},
+                )
+            }
+        )
+    if not quantize_vision and missing:
         if (root / VISION_SHARD_NAME).exists():
             missing.update(
                 {

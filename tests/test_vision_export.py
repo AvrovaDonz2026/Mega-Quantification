@@ -190,6 +190,36 @@ def test_quantized_vision_rejects_incomplete_export(tmp_path: Path, missing: str
     assert not (export / VISION_SHARD_NAME).exists()
 
 
+def test_quantized_vision_rejects_shard_missing_indexed_tensor(tmp_path: Path) -> None:
+    _source, export, recipe = _quantized_vision_dirs(tmp_path)
+    packed = export / "packed.safetensors"
+    tensors = {
+        "model.visual.blocks.0.attn.qkv.weight": RawTensor(
+            dtype="U8", shape=(2, 8), data=bytes(16)
+        ),
+        "model.visual.blocks.0.attn.qkv.weight_scale": RawTensor(
+            dtype="F8_E4M3", shape=(2, 1), data=bytes(2)
+        ),
+        "model.visual.blocks.0.attn.qkv.weight_scale_2": RawTensor(
+            dtype="F32", shape=(), data=bytes(4)
+        ),
+    }
+    # Keep the index unchanged while removing one indexed tensor from the
+    # shard, matching a partially written or corrupted safetensors file.
+    write_safetensors(
+        packed,
+        {
+            name: tensor
+            for name, tensor in tensors.items()
+            if not name.endswith("weight_scale_2")
+        },
+    )
+
+    with pytest.raises(BackendError, match="Quantized vision export is missing"):
+        restore_vision_from_recipe(export, recipe)
+    assert not (export / "vision_export.json").exists()
+
+
 def test_quantized_vision_requires_image_preprocessor(tmp_path: Path) -> None:
     source, export, recipe = _quantized_vision_dirs(tmp_path)
     (source / "preprocessor_config.json").unlink()
