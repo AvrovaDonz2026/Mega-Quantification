@@ -102,6 +102,12 @@ and configuration blobs have separate digests; preserve the field names when
 recording them. A clean rebuild pins software inputs but does not promise an
 identical image ID or byte-identical recalibrated weights.
 
+The Spark SGLang image applies the pinned `megaquant-spark-v8` patch only to the
+recorded SGLang `0.5.20` source files. The build checks the upstream version and
+the SHA256 of every target file before writing; an unknown version, changed source,
+or stale patch manifest fails closed. Rebuild from the pinned base and rerun the
+manifest check after changing the base image or patch inputs.
+
 ## Prepare inputs
 
 Provide the full BF16 model at `MODELS_DIR/Qwen3.8-27B`. `DATA_DIR` must contain

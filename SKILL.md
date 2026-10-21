@@ -165,6 +165,11 @@ megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 
 Layout: `<prefix>/<scheme>/<content-hash>/`, prefix `Mega-Quantification`. Content-hash is SHA256 of sorted `{safetensors-name} {sha256}\n` lines. Publish one mixed export twice, `--scheme mixed` and `--scheme w4a8`, same hash. Bucket and endpoint come from the environment or `.oss.env`, never from git. Anonymous auth when access keys are unset.
 
+Use `scripts/oss_fetch.py` with the same scheme and 64-character content hash
+to download a published export. It records `SHA256SUMS.txt`; run
+`sha256sum -c SHA256SUMS.txt` before serving or republishing. Keep credentials,
+bucket names and host paths out of recipes and commits.
+
 ## Commands
 
 ```bash

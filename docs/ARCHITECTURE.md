@@ -100,6 +100,11 @@ class Recipe(BaseModel):
     export: ExportSpec
 ```
 
+`model.trust_remote_code` is passed to both `AutoTokenizer.from_pretrained`
+and model/config construction. Family adapters may add loader arguments, but
+they preserve this recipe setting so tokenizer and model do not load with
+different remote-code policies.
+
 Named schemes live in `megaquant.schemes.catalog.SCHEME_CATALOG`.
 `groups` in a YAML recipe override the catalog defaults.
 
