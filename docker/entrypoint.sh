@@ -51,6 +51,25 @@ fi
 
 if [[ "${MEGAQUANT_VERIFY_CONTAINER:-0}" == "1" ]]; then
   python scripts/container_manifest.py verify
+  # The Spark SGLang patch fixes numerics-critical paths (FP8 decode/verify,
+  # GDN gate precision). A volume mount or stray edit under site-packages
+  # would otherwise silently compute wrong results (pip version unchanged).
+  python - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+try:
+    import sglang
+except ImportError:
+    raise SystemExit(0)  # not a serving image; nothing to check
+import importlib.metadata
+from pathlib import Path
+from patch_sglang_spark import MANIFEST, patch_tree
+root = Path(sglang.__file__).parent
+if not (root / MANIFEST).exists():
+    raise SystemExit(0)  # sglang image without the spark patch; nothing to check
+patch = patch_tree(root, importlib.metadata.version("sglang"), check=True)
+print(f"[megaquant] sglang patch verified: {patch['patch']}")
+PY
 fi
 
 # SGLang FP8 JIT on sm_120 needs host g++/cc1plus on PATH.
