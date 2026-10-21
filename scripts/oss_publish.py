@@ -300,7 +300,7 @@ def publish(
     sha_path = write_sha256sums(export_dir, files, hashes)
     man_path = export_dir / "oss_manifest.json"
     man_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    upload_list = files + [sha_path, man_path]
+    upload_list = files + [sha_path]
 
     bucket = _bucket(endpoint, bucket_name)
     results: list[dict[str, str]] = []
@@ -309,6 +309,9 @@ def publish(
         status = _upload_one(bucket, key, path, force=force)
         results.append({"name": path.name, "key": key, "status": status})
         print(f"[oss] {status:9} {key} ({path.stat().st_size} bytes)", flush=True)
+    results.append(
+        {"name": man_path.name, "key": f"{key_prefix}/{man_path.name}", "status": "put"}
+    )
     manifest["upload"] = results
     man_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     _upload_one(bucket, f"{key_prefix}/{man_path.name}", man_path, force=True)
