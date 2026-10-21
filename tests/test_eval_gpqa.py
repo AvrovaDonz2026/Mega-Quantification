@@ -30,6 +30,7 @@ from megaquant.eval_gpqa import (
     eval_base_url_from_env,
     extract_choice,
     format_gpqa_prompt,
+    gpqa_prompt_sha256,
     gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
@@ -613,13 +614,18 @@ def test_continue_on_length_stops_restarted_prefix(tmp_path: Path) -> None:
         calls.append(kwargs["max_tokens"])
         if len(calls) == 1:
             return GenerationResult(prefix, "length", 100, 200, truncated=True)
-        return GenerationResult(prefix + " and continues", "length", 0, 200, truncated=True)
+        return GenerationResult(
+            prefix + " and continues", "length", 444, 200, truncated=True
+        )
 
     run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
     assert len(calls) == 2
     row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")["repeat"]
     assert row.truncated is True
     assert row.finish_reason == "repetition"
+    assert row.text == prefix
+    assert row.completion_tokens == 400
+    assert row.prompt_tokens == 444
 
 
 @pytest.mark.parametrize("with_usage", [False, True])
@@ -753,6 +759,71 @@ def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> 
     assert len(lines) == 2
     ids = [json.loads(ln)["item_id"] for ln in lines]
     assert ids == ["done", "pending"]
+
+
+def test_run_gpqa_resumes_unchanged_prompt_fingerprint(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    item = GPQAItem(
+        "same", "unchanged question?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A"
+    )
+    run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_kwargs: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _text: 8,
+    )
+    summary = run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_kwargs: pytest.fail("cached item must not be regenerated"),
+    )
+    assert summary["scores"]["headline"] == "1/1"
+
+
+def test_run_gpqa_warns_once_for_legacy_journal(tmp_path: Path, capsys) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    item = GPQAItem(
+        "legacy", "same choices and gold", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A"
+    )
+    row = asdict(_journal_item("legacy"))
+    row.pop("prompt_sha256", None)
+    (tmp_path / "gpqa_diamond.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    run_gpqa(recipe, items=[item], complete=lambda **_kwargs: pytest.fail("cached"))
+    err = capsys.readouterr().err
+    assert err.count("question text consistency cannot be verified") == 1
+    assert item.question not in err
+
+
+def test_load_gpqa_journal_rejects_malformed_prompt_fingerprint(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    row = asdict(_journal_item("bad"))
+    row["prompt_sha256"] = "not-a-sha256"
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(EvalError, match="Invalid prompt_sha256"):
+        load_gpqa_journal(path)
+
+
+def test_run_gpqa_rejects_resume_with_changed_question_fingerprint(
+    tmp_path: Path,
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    choices = {"A": "a", "B": "b", "C": "c", "D": "d"}
+    original = GPQAItem("same", "original question?", choices, "A")
+    changed = GPQAItem("same", "different question?", choices, "A")
+    run_gpqa(
+        recipe,
+        items=[original],
+        complete=lambda **_kwargs: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _text: 8,
+    )
+    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")["same"]
+    assert row.prompt_sha256 == gpqa_prompt_sha256(original)
+    with pytest.raises(EvalError, match="prompt fingerprint mismatch"):
+        run_gpqa(
+            recipe,
+            items=[changed],
+            complete=lambda **_kwargs: pytest.fail("must reject before requesting"),
+        )
 
 
 def test_run_gpqa_concurrency_fans_out(tmp_path: Path) -> None:

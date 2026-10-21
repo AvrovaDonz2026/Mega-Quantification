@@ -27,8 +27,10 @@ NVIDIA GB300 vLLM flags (``--kv-offloading-backend native``). Do not shrink
 
 Generation is **not** capped at a small ``max_new_tokens``. The budget is the
 remaining context (``max_model_len - prompt_tokens``). If the server still
-stops on length, the client continues until EOS. Completions are stored in
-full in the JSONL journal (stdout only prints a short status line).
+stops on length, the client continues until EOS; a continuation that clearly
+repeats already emitted text is recorded as repetition and its text is not
+appended. Completions are stored in full in the JSONL journal except for that
+rejected duplicate chunk (stdout only prints a short status line).
 """
 
 from __future__ import annotations
@@ -256,9 +258,15 @@ class ItemResult:
     continued: int
     text: str
     choices: dict[str, str]
+    prompt_sha256: str | None = None
 
 
 TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
+_PROMPT_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _valid_prompt_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _PROMPT_SHA256_RE.fullmatch(value) is not None
 
 
 def normalize_finish_reason(value: Any) -> str:
@@ -844,6 +852,11 @@ def format_gpqa_prompt(item: GPQAItem) -> str:
     return "\n".join(lines)
 
 
+def gpqa_prompt_sha256(item: GPQAItem) -> str:
+    """Return the journal fingerprint for the exact prompt sent to the model."""
+    return hashlib.sha256(format_gpqa_prompt(item).encode("utf-8")).hexdigest()
+
+
 def build_gpqa_item(
     row: dict[str, Any],
     *,
@@ -1104,27 +1117,26 @@ def generate_untruncated(
                 max_tokens=leftover,
                 seed=recipe.generation.seed + continued,
             )
+            # Settle usage and the prompt estimate for every request, including
+            # a duplicate continuation that is rejected below. The fallback
+            # mirrors the accepted-continuation path when the server omits
+            # prompt usage, while the requested budget remains the conservative
+            # completion estimate for the next round.
+            completion_tokens += follow.completion_tokens
+            follow_completion_tokens = follow.completion_tokens or leftover
+            if follow.prompt_tokens:
+                prompt_tokens = follow.prompt_tokens
+            else:
+                prompt_tokens = spent + (
+                    CONTINUATION_MESSAGE_TOKEN_RESERVE if continued == 1 else 0
+                )
             if _repeated_continuation(text, follow.text):
                 finish = "repetition"
                 truncated = True
                 break
             text = text + follow.text
-            completion_tokens += follow.completion_tokens
             finish = follow.finish_reason
             truncated = follow.truncated or is_truncated_finish_reason(follow.finish_reason)
-            follow_completion_tokens = follow.completion_tokens or leftover
-            if follow.prompt_tokens:
-                # The server's prompt usage includes the appended assistant /
-                # user messages and the prior completion, so use it directly.
-                prompt_tokens = follow.prompt_tokens
-            else:
-                # Without usage, account for the single appended assistant /
-                # user pair. Subsequent requests replace that pair's content;
-                # the wrapper reserve must not accumulate once per round.
-                # (continued was already incremented: == 1 on the first one.)
-                prompt_tokens = spent + (
-                    CONTINUATION_MESSAGE_TOKEN_RESERVE if continued == 1 else 0
-                )
             first_completion_tokens = follow_completion_tokens
             if continued >= 8:
                 break
@@ -1202,6 +1214,13 @@ def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
                 )
                 return rows, start
             raise EvalError(f"Corrupt GPQA journal {path} at line {line_no}: {exc}") from exc
+        if "prompt_sha256" in payload:
+            fingerprint = payload["prompt_sha256"]
+            if fingerprint is not None and not _valid_prompt_sha256(fingerprint):
+                line_no = data.count(b"\n", 0, start) + 1
+                raise EvalError(
+                    f"Invalid prompt_sha256 in GPQA journal {path} at line {line_no}"
+                )
         kwargs = {key: payload[key] for key in fields if key in payload}
         try:
             row = ItemResult(**kwargs)
@@ -1298,6 +1317,13 @@ def run_gpqa(
         # A resume must replay the same seed/shuffle: silently mixing rows
         # from two different shuffles would corrupt the summary.
         by_id = {item.item_id: item for item in items}
+        if any(row.prompt_sha256 is None for row in prior.values()):
+            print(
+                "[gpqa] warning: legacy journal rows have no prompt fingerprint; "
+                "question text consistency cannot be verified",
+                file=sys.stderr,
+                flush=True,
+            )
         for iid, row in prior.items():
             item = by_id.get(iid)
             if item is None:
@@ -1307,6 +1333,12 @@ def run_gpqa(
                     f"Journal {journal_path} was written with a different "
                     f"seed/shuffle (item {iid}: choices/gold mismatch). "
                     "Delete it or resume with the original seed."
+                )
+            if row.prompt_sha256 is not None and row.prompt_sha256 != gpqa_prompt_sha256(item):
+                raise EvalError(
+                    f"Journal {journal_path} has a prompt fingerprint mismatch "
+                    f"for item {iid}; the question or choices changed. "
+                    "Delete it or resume with the original prompt."
                 )
     rows: list[ItemResult] = []
     lock = threading.Lock()
@@ -1342,6 +1374,7 @@ def run_gpqa(
             continued=gen.continued,
             text=gen.text,
             choices=item.choices,
+            prompt_sha256=gpqa_prompt_sha256(item),
         )
 
     def write_row(row: ItemResult) -> None:
