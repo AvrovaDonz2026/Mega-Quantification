@@ -13,6 +13,7 @@ import pytest
 
 from megaquant.eval_gpqa import (
     CHAT_TEMPLATE_TOKEN_RESERVE,
+    CONTINUATION_MESSAGE_TOKEN_RESERVE,
     DEFAULT_EVAL_BASE_URL,
     DEFAULT_EVAL_RECIPE,
     DEFAULT_HTTP_TIMEOUT_SECONDS,
@@ -348,6 +349,157 @@ def test_continue_on_length_appends_full_text(tmp_path: Path) -> None:
     assert calls[0] == remaining_new_tokens(
         100 + CHAT_TEMPLATE_TOKEN_RESERVE, recipe.generation.max_model_len, 0
     )
+
+
+def test_continue_on_length_reserves_continuation_message_templates(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000},
+        },
+    )
+    item = GPQAItem(
+        item_id="t1",
+        question="Which particle?",
+        choices={"A": "up", "B": "down", "C": "strange", "D": "charm"},
+        gold="C",
+    )
+    calls: list[int] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        if len(calls) == 1:
+            return GenerationResult(
+                text="<think>long trace",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=200,
+                truncated=True,
+            )
+        return GenerationResult(
+            text="</think>\nAnswer: C",
+            finish_reason="stop",
+            prompt_tokens=0,
+            completion_tokens=10,
+        )
+
+    run_gpqa(
+        recipe,
+        items=[item],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 100,
+    )
+    assert calls == [
+        remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE, 1000, 0),
+        remaining_new_tokens(
+            100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE,
+            1000,
+            0,
+        ),
+    ]
+
+
+def test_continue_on_length_zero_usage_makes_progress(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000, "max_new_tokens": 300},
+        },
+    )
+    item = GPQAItem(
+        item_id="t1",
+        question="Which particle?",
+        choices={"A": "up", "B": "down", "C": "strange", "D": "charm"},
+        gold="C",
+    )
+    calls: list[int] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        return GenerationResult(
+            text="trace",
+            finish_reason="length",
+            prompt_tokens=0,
+            completion_tokens=0,
+            truncated=True,
+        )
+
+    result = run_gpqa(
+        recipe,
+        items=[item],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 100,
+    )
+    assert len(calls) < 8
+    assert calls == [300, 88]
+    assert result["scores"]["truncated"] == 1
+
+
+def test_continue_on_length_does_not_double_count_round_templates(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 2000},
+        },
+    )
+    item = GPQAItem(
+        item_id="t1",
+        question="Which particle?",
+        choices={"A": "up", "B": "down", "C": "strange", "D": "charm"},
+        gold="C",
+    )
+    calls: list[int] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        if len(calls) == 1:
+            return GenerationResult(
+                text="first",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=200,
+                truncated=True,
+            )
+        if len(calls) == 2:
+            return GenerationResult(
+                text=" second",
+                finish_reason="length",
+                prompt_tokens=100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE,
+                completion_tokens=300,
+                truncated=True,
+            )
+        return GenerationResult(
+            text="\n</think>\nAnswer: C",
+            finish_reason="stop",
+            prompt_tokens=0,
+            completion_tokens=10,
+        )
+
+    run_gpqa(
+        recipe,
+        items=[item],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 100,
+    )
+    assert calls == [
+        remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE, 2000, 0),
+        remaining_new_tokens(
+            100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE,
+            2000,
+            0,
+        ),
+        remaining_new_tokens(
+            100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE + 300,
+            2000,
+            0,
+        ),
+    ]
 
 
 def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> None:

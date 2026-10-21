@@ -222,6 +222,25 @@ def test_config_selectors_and_argv_are_strict(tmp_path: Path) -> None:
         )
 
 
+def test_supervisor_reads_revisions_from_source_lock(tmp_path: Path, monkeypatch) -> None:
+    module = _load_supervisor()
+    lock = {
+        "variants": {
+            "original": {"commit": "a" * 40},
+            "decode-beta": {"commit": "b" * 40},
+            "all-beta": {"commit": "c" * 40},
+            "shared-decode": {"commit": "d" * 40},
+        }
+    }
+    lock_path = tmp_path / "source-lock.json"
+    lock_path.write_text(json.dumps(lock))
+    monkeypatch.setattr(module, "SOURCE_LOCK_PATH", lock_path)
+
+    assert module.parse_run_config({"source_variant": "all-beta", "phases": ["long"]})[
+        "source_revision"
+    ] == "c" * 40
+
+
 def test_glm_topology_preflight_requires_single_node_proof() -> None:
     module = _load_supervisor()
     single = {"Config": {"Cmd": ["tensorfold", "serve", "--tp", "2"]}}

@@ -262,6 +262,11 @@ class ItemResult:
 # tokens before the first HTTP round trip; Qwen3.8 templates add tens of
 # tokens, and SGLang 400s if prompt + max_tokens exceeds context_length.
 CHAT_TEMPLATE_TOKEN_RESERVE = 256
+# Each continuation adds an assistant message containing the prior completion
+# and a user message asking for the remainder. The completion text is already
+# counted separately, but the two message wrappers and continuation prompt
+# still consume context.
+CONTINUATION_MESSAGE_TOKEN_RESERVE = CHAT_TEMPLATE_TOKEN_RESERVE
 
 _CONTEXT_OVERFLOW = re.compile(
     r"maximum context length of (\d+) tokens.*?"
@@ -1006,6 +1011,15 @@ def generate_untruncated(
     )
     if first.prompt_tokens:
         prompt_tokens = first.prompt_tokens
+    else:
+        # The caller's estimate excludes the initial chat-template wrapper.
+        # Carry that fixed overhead into the no-usage fallback so it is not
+        # charged again on every continuation.
+        prompt_tokens += CHAT_TEMPLATE_TOKEN_RESERVE
+    # A length finish normally consumes the requested budget. Some compatible
+    # servers omit usage (or return zero), so use the request as a conservative
+    # fallback to keep the continuation budget moving forward.
+    first_completion_tokens = first.completion_tokens or budget
     truncated = first.truncated
     continued = 0
     text = first.text
@@ -1013,9 +1027,12 @@ def generate_untruncated(
     completion_tokens = first.completion_tokens
     if recipe.generation.continue_on_length:
         while truncated:
-            spent = prompt_tokens + completion_tokens
+            spent = prompt_tokens + first_completion_tokens
             leftover = remaining_new_tokens(
-                spent + CHAT_TEMPLATE_TOKEN_RESERVE, max_len, cap
+                spent
+                + (CONTINUATION_MESSAGE_TOKEN_RESERVE if continued == 0 else 0),
+                max_len,
+                cap,
             )
             if leftover <= 1:
                 break
@@ -1040,6 +1057,17 @@ def generate_untruncated(
             completion_tokens += follow.completion_tokens
             finish = follow.finish_reason
             truncated = follow.truncated
+            follow_completion_tokens = follow.completion_tokens or leftover
+            if follow.prompt_tokens:
+                # The server's prompt usage includes the appended assistant /
+                # user messages and the prior completion, so use it directly.
+                prompt_tokens = follow.prompt_tokens
+            else:
+                # Without usage, account for the single appended assistant /
+                # user pair. Subsequent requests replace that pair's content;
+                # the wrapper reserve must not accumulate once per round.
+                prompt_tokens = spent + CONTINUATION_MESSAGE_TOKEN_RESERVE
+            first_completion_tokens = follow_completion_tokens
             if continued >= 8:
                 break
     return GenerationResult(

@@ -20,6 +20,12 @@ VARIANTS = {
 }
 
 
+def validate_budget(budget):
+    """Require the MSE-prefix early budget used by the mlp-pilot protocol."""
+    if not 512 <= budget <= 4096:
+        raise RuntimeError("unsupported continuation budget")
+
+
 def validate_request_counters(meta):
     """Require a canonical zero retraction count and validate optional MTP stats."""
     count = meta.get("num_retractions")
@@ -74,7 +80,8 @@ def main():
         if not all(answer[i] == answer[i - 2032] for i in range(33131 + 2032, len(answer))):
             raise RuntimeError("historical native cycle no longer verifies")
         cut = 41472
-        if not 1 <= o.budget <= 4096 or cut + o.budget > len(answer):
+        validate_budget(o.budget)
+        if cut + o.budget > len(answer):
             raise RuntimeError("unsupported continuation budget")
         ids = prompt + answer[:cut]
         reference = answer[cut : cut + o.budget]

@@ -17,6 +17,17 @@ CONTROLLER_MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONTROLLER_MODULE)
 
 
+@pytest.mark.parametrize("budget", [512, 4096])
+def test_validate_budget_accepts_protocol_boundaries(budget: int) -> None:
+    CONTROLLER_MODULE.validate_budget(budget)
+
+
+@pytest.mark.parametrize("budget", [0, 511, 4097, -1])
+def test_validate_budget_rejects_values_outside_protocol(budget: int) -> None:
+    with pytest.raises(RuntimeError, match="unsupported continuation budget"):
+        CONTROLLER_MODULE.validate_budget(budget)
+
+
 @pytest.mark.parametrize(
     ("meta", "expected"),
     [

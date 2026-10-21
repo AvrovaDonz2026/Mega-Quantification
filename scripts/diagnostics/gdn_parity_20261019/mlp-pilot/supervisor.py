@@ -26,10 +26,8 @@ JOBS = frozenset(("mlp-pilot-control", "mlp-pilot-mlp"))
 SOURCE = "49d3acfd4d54b0cf1afffcfeb369c63af4f56499"
 IMAGE = "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf"
 PHASES = (("early", 4096, 5 * 60 * 60), ("long", 49152, 18 * 60 * 60))
-SOURCE_VARIANT_REVISIONS = {
-    "original": "4a667614d810f7b5570be23eb75956c603a85c3a",
-    "all-beta": SOURCE,
-}
+SOURCE_LOCK_PATH = Path(__file__).resolve().parents[1] / "source-lock.json"
+LOCKED_VARIANTS = frozenset(("original", "decode-beta", "all-beta", "shared-decode"))
 ARM_NAMES = {"control": "control", "mlp": "mlp"}
 PHASE_BY_NAME = {phase: (budget, timeout) for phase, budget, timeout in PHASES}
 _CHUNK = 8 * 1024 * 1024
@@ -210,10 +208,30 @@ def _cleanup_jobs() -> frozenset[str]:
     return _ACTIVE_JOBS or JOBS
 
 
+def source_variant_revisions(lock_path: Path | None = None) -> dict[str, str]:
+    """Read the canonical parent source lock used by the controller."""
+    lock_path = SOURCE_LOCK_PATH if lock_path is None else Path(lock_path)
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        variants = lock["variants"]
+        if not isinstance(variants, dict) or set(variants) != set(LOCKED_VARIANTS):
+            raise ValueError("source lock must contain exactly the four pinned variants")
+        revisions = {}
+        for variant, item in variants.items():
+            revision = item.get("commit") if isinstance(item, dict) else None
+            if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+                raise ValueError("source lock revision is malformed")
+            revisions[variant] = revision
+        return revisions
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise SupervisorError(f"invalid source lock: {lock_path}") from exc
+
+
 def parse_run_config(config: dict[str, Any]) -> dict[str, Any]:
     """Validate run selectors and return the immutable values used everywhere."""
     variant = config.get("source_variant", "all-beta")
-    if variant not in SOURCE_VARIANT_REVISIONS:
+    source_revisions = source_variant_revisions()
+    if variant not in ("original", "all-beta"):
         raise SupervisorError("unknown source variant")
     arms = config.get("arms", "both")
     selected_arms = ["control", "mlp"] if arms == "both" else [arms]
@@ -226,7 +244,7 @@ def parse_run_config(config: dict[str, Any]) -> dict[str, Any]:
         raise SupervisorError("unknown phase")
     return {
         "source_variant": variant,
-        "source_revision": SOURCE_VARIANT_REVISIONS[variant],
+        "source_revision": source_revisions[variant],
         "selected_arms": selected_arms,
         "jobs": frozenset(f"mlp-pilot-{name}" for name in selected_arms),
         "phases": [(phase, *PHASE_BY_NAME[phase]) for phase in phases],
