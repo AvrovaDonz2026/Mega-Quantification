@@ -7,6 +7,21 @@ experiment is a finite early-trajectory diagnostic; an explicit `long` phase
 is provided for a separate full-budget trajectory. This document does not
 contain or promise experiment results.
 
+The controller defaults to `--trajectory natural`, `--source-variant all-beta`,
+and `--arms both`.
+The single-host supervisor requires an auditable single-node launch before it
+can pause a protected service. It rejects cross-node rank/master launches,
+ambiguous topology, and opaque launch wrappers. A single-node `--tp 2` is
+allowed when no cross-node flags are present. Services spanning multiple hosts
+need a separate, authorized coordination procedure for both original containers.
+Use `--source-variant original` to select the original source package, and
+`--arms control` to run only the control arm. The selected source revision is
+read from the complete parent `source-lock.json`; the source gate verifies the
+selected directory, archive, and manifest before either arm starts. Reports
+record `source_variant`, `source_revision`, and `selected_arms`. With one arm,
+`comparison.both_repeat_stable` covers that arm's two repeats and the report
+does not contain cross-arm `lcp` or `output_exact` fields.
+
 ## 1. Build an independent MLP/control model pair
 
 Start with the real scored MSE ModelOpt export and the matching original BF16
@@ -71,13 +86,15 @@ cp mlp-pilot/controller.py mlp-pilot/model_gate.py \
   "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/"
 ```
 
-The source package must include the `all-beta` directory, archive, and
-manifest. The controller pins that variant to revision
-`49d3acfd4d54b0cf1afffcfeb369c63af4f56499`; the parity-v7 runner, source lock,
-and source-lock helper must come from the same bundle copy. Pass the exact
-ablation tool used to create the models with `--ablation-tool`; the controller
-and gate in the remote bundle must be the copied files above. The validated
-serving image is pinned to
+The source package must include all four locked variants (`original`,
+`decode-beta`, `all-beta`, and `shared-decode`), each with its directory,
+archive, and manifest. A candidate matrix containing only all-beta is not a
+valid source lock. The selected revision is read from the parent lock and is
+checked by the source gate; do not hard-code a revision copied from another
+bundle. The parity-v7 runner, source lock, and source-lock helper must come
+from the same bundle copy. Pass the exact ablation tool used to create the
+models with `--ablation-tool`; the controller and gate in the remote bundle
+must be the copied files above. The validated serving image is pinned to
 `sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf`.
 
 ## 3. Run the pilot
@@ -101,7 +118,7 @@ python3 "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/controller.py" \
   --control /path/to/new/mlp-pilot-control \
   --mlp /path/to/new/mlp-pilot-mlp \
   --ablation-tool "$MEGAQUANT_REPO/scripts/prepare_precision_ablation.py" \
-  --native-private /private/path/native-case3.json \
+  --native-private /path/to/private/native-case3.json \
   --budget 4096
 ```
 
@@ -119,6 +136,33 @@ Both arms use the same startup random seed (`20261020`), checked against the
 server identity. This does not make different precision paths deterministic;
 the two cold-cache repetitions still check observed stability. Responses must
 finish with `stop` or `length`; a length finish must reach the requested budget.
+New trial reports require the canonical `meta_info.num_retractions` field to be
+an integer zero and retain that scalar. Missing, null, boolean or noninteger
+values fail the gate. An omitted speculation counter is reported as unobserved;
+the no-MTP condition is also checked against resolved server settings.
+Frozen earlier trial reports did not retain the retraction scalar. Their
+controller rejected positive canonical counts when present, but accepted an
+absent field; do not relabel those reports as direct zero-count observations.
+
+### Historical-prefix comparison
+
+Pass `--trajectory historical-prefix` to run an independent prefix comparison.
+This mode is valid only with `--phase early` and a budget from `512` through
+`4096`; it performs two cold-cache trials for each selected arm. The private
+case-3 fixture is checked by its native file and prompt hashes, then the server
+receives the 288-token prompt followed by exactly `41472` native reference
+tokens. The continuation reference is the next `--budget` native tokens.
+Reports record `trajectory`, `input_tokens`, `native_prefix_tokens`, the hashed
+reference window, and per-trial continuation LCP/exact fields. They also include
+a scalar lag-2032 summary showing whether a confirmed run crosses the
+input-prefix/continuation boundary. Token IDs, prompts, and response text are
+never written.
+
+This is a fresh-prefill comparison. It cannot reconstruct the historical
+incremental KV or SSM state and cannot establish natural-generation repair. The
+prefix execution must not be labeled as a natural trajectory. The existing
+supervisor accepts only the default `natural` trajectory; invoke this controller
+directly with a fresh evidence root for the prefix comparison.
 
 The optional `long` phase starts from the same 288-token original prompt and
 uses exactly `49152` new tokens (`288 + 49152 < 65536`). It does not append a
@@ -139,7 +183,7 @@ python3 "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/controller.py" \
   --control /path/to/new/mlp-pilot-control \
   --mlp /path/to/new/mlp-pilot-mlp \
   --ablation-tool "$MEGAQUANT_REPO/scripts/prepare_precision_ablation.py" \
-  --native-private /private/path/native-case3.json
+  --native-private /path/to/private/native-case3.json
 ```
 
 The earlier `r2` evidence remains an early run and is not automatically
@@ -153,6 +197,33 @@ periods. This detector checks only that known period and does not prove that
 other repetition is absent. `stopping_outcome` and `known_cycle_outcome` are
 independent summaries; a length-limited output is not treated as a failed
 experiment, and a run without a detected cycle does not establish a repair.
+
+For the minimum original-source control-only check, use a fresh evidence root
+and keep every other protocol value unchanged:
+
+```bash
+ORIGINAL_CONTROL_LONG_ROOT=/fresh/mlp-pilot-original-control-long
+python3 "$REMOTE_ROOT/candidate-bundle-r1/mlp-pilot/controller.py" \
+  --phase long \
+  --source-variant original \
+  --arms control \
+  --root "$ORIGINAL_CONTROL_LONG_ROOT" \
+  --remote-root "$REMOTE_ROOT" \
+  --export /path/to/scored-mse-export \
+  --bf16 /path/to/original-bf16-checkpoint \
+  --control /path/to/new/mlp-pilot-control \
+  --mlp /path/to/new/mlp-pilot-mlp \
+  --ablation-tool "$MEGAQUANT_REPO/scripts/prepare_precision_ablation.py" \
+  --native-private /path/to/private/native-case3.json
+```
+
+This is a procedure only; it does not state that a new experiment has started
+or finished. A control-only report checks repeat stability and the selected
+source and model/runtime gates, without claiming MSE repair. The next source
+check must change only the source variant; keep context, seed, and radix
+settings fixed. The historical protocol is not equivalent to this one. If
+original still does not cycle, restore historical conditions one at a time
+and record each change separately.
 
 The deployed r3 snapshot has controller SHA
 `679297e5eeef5e464dbf979e77b73af2c2f4aa2297583836220447c6ccc14673`.
@@ -173,9 +244,10 @@ termination still requires a terminal EOS after thinking-end; when a matched
 stop value is supplied, it must match that terminal token. A service `stop`
 alone is insufficient. This correction has not been deployed into the running
 r3 snapshot and cannot retrospectively relabel its results.
-The corrected controller SHA is
+The EOS-only revision SHA is
 `58abf92c21790043b5861c3be1cfb5399d0bc79a4831bfea993265317f3364cd`;
-the example supervisor config uses this hash for a new deployment.
+it is retained for the historical corrected helper and is not a claim that a
+new run has been deployed.
 
 ## Scope
 
@@ -192,22 +264,26 @@ promises iterative or cyclic repair.
 
 The checked-in `supervisor.py`, `fallback_restore.py`, and
 `supervisor-config.example.json` are references for a fresh deployment. The
-example hashes identify the current checked-in controller and model gate;
-the actual r3 deployment retains its original files and hashes. Replace all
-example paths, experiment prefix, and unit name with a fresh namespace before
-deployment. On the GPU host, place both Python files beside the real
-`config.json` in the new supervisor directory and use its exact remote paths.
-The following shows the historical r3 unit settings; do not reuse its live
-namespace:
+supervisor config accepts `source_variant` (`original` or `all-beta`), `arms`
+(`both` or `control`), and optional `phases` (`early`, `long`); defaults remain
+all-beta, both, and both phases. The example hashes identify source files at
+the time they were written, not a future deployment. After the current r3
+namespace has completed its cleanup and exact GLM restore, copy the files into
+a new namespace and recalculate controller, model-gate, supervisor, and
+fallback hashes at runtime with `sha256sum`; put those fresh values in the new
+config. Do not modify the running r3 snapshot or reuse its namespace. GLM
+stopping and restoration must retain the existing exact-ID/config mechanism.
+
+Use placeholder paths and a fresh unit name for the new namespace:
 
 ```bash
-systemd-run --unit=megaquant-mlp-r3-20261020 \
+systemd-run --unit=megaquant-mlp-new-YYYYMMDD \
   --property=Type=exec \
   --property=KillMode=mixed \
   --property=TimeoutStopSec=600s \
   --property=RuntimeMaxSec=25h \
-  --property='ExecStopPost=/usr/bin/python3 /home/zhiman/megaquant-aitop-validation-20261019/mlp-run-r3/fallback_restore.py' \
-  /usr/bin/python3 /home/zhiman/megaquant-aitop-validation-20261019/mlp-run-r3/supervisor.py
+  --property='ExecStopPost=/usr/bin/python3 /path/to/new-namespace/fallback_restore.py' \
+  /usr/bin/python3 /path/to/new-namespace/supervisor.py
 ```
 
 Stopping an existing service requires authorization; it was explicitly given
@@ -216,6 +292,13 @@ by its exact configured container ID; it never removes that container.
 Experiment cleanup is limited to the exact owner, job, source, image, and
 creation-time gates. `fallback_restore.py` is an `ExecStopPost` recovery path
 and persists the restore result in the shared status JSON.
+
+Both restoration paths require the exact container identity and configuration
+to remain unchanged throughout a continuous 120-second running observation.
+If Docker exposes health metadata, it must stay `healthy` during that window.
+The wait is bounded to 240 seconds; a container that exits after starting fails
+the restore gate and keeps restoration pending. `observed_seconds` records the
+window checked; it does not establish application readiness.
 
 The early five-hour and long eighteen-hour values are watchdog ceilings, not
 expected runtimes. Evidence roots and phase logs must be fresh. Status and

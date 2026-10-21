@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cold-cache natural-start MSE/MLP sensitivity pilot; persist only summaries."""
+"""Cold-cache natural/historical-prefix MSE/MLP sensitivity pilot."""
 
 from __future__ import annotations
 
@@ -14,11 +14,59 @@ from pathlib import Path
 from types import SimpleNamespace
 
 IMAGE = "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf"
-REVISION = "49d3acfd4d54b0cf1afffcfeb369c63af4f56499"
+LOCKED_VARIANTS = ("original", "decode-beta", "all-beta", "shared-decode")
 NATIVE_SHA = "8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218"
 PROMPT_SHA = "20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436"
 KNOWN_PERIOD = 2032
 RANDOM_SEED = 20261020
+
+
+def source_revision_for_variant(variant, lock_path=None):
+    """Return the revision from the four-variant source lock."""
+    if variant not in ("original", "all-beta"):
+        raise ValueError(f"unknown source variant: {variant}")
+    path = (
+        Path(lock_path)
+        if lock_path is not None
+        else Path(__file__).resolve().parents[1] / "source-lock.json"
+    )
+    try:
+        lock = json.loads(path.read_text())
+        variants = lock["variants"]
+        if set(variants) != set(LOCKED_VARIANTS):
+            raise ValueError("source lock must contain exactly the four pinned variants")
+        revision = variants[variant]["commit"]
+        if not isinstance(revision, str) or len(revision) != 40:
+            raise ValueError("source lock revision is malformed")
+        return revision
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"invalid source lock: {path}") from exc
+
+
+def source_paths(remote_root, variant):
+    if variant not in ("original", "all-beta"):
+        raise ValueError(f"unknown source variant: {variant}")
+    base = Path(remote_root) / "source-package"
+    stem = f"sglang-{variant}"
+    return base / stem, base / f"{stem}.tar.gz", base / f"{stem}.manifest.json"
+
+
+def selected_arms(arms):
+    if arms not in ("both", "control"):
+        raise ValueError(f"unknown arm selection: {arms}")
+    return ("control", "mlp") if arms == "both" else ("control",)
+
+
+def build_comparison(outputs, arms):
+    chosen = selected_arms(arms)
+    result = {
+        "both_repeat_stable": all(outputs[name][0] == outputs[name][1] for name in chosen),
+        "selected_arm_count": len(chosen),
+    }
+    if len(chosen) == 2:
+        left, right = outputs[chosen[0]][0], outputs[chosen[1]][0]
+        result.update({"control_vs_mlp_lcp": lcp(left, right), "output_exact": left == right})
+    return result
 
 
 def _strict_ids(value, source):
@@ -34,6 +82,25 @@ def _strict_ids(value, source):
 def _metadata_sha(value):
     payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
+
+
+def validate_request_counters(meta):
+    """Require a canonical zero retraction count and validate optional MTP stats."""
+    count = meta.get("num_retractions")
+    if type(count) is not int or count != 0:
+        raise RuntimeError("missing, malformed, or nonzero retraction count")
+    if "retraction_count" in meta:
+        legacy_count = meta["retraction_count"]
+        if type(legacy_count) is not int or legacy_count != 0:
+            raise RuntimeError("unexpected legacy retraction count")
+    spec_verify_ct = meta.get("spec_verify_ct") if "spec_verify_ct" in meta else None
+    if spec_verify_ct is not None and (
+        type(spec_verify_ct) is not int or spec_verify_ct < 0 or spec_verify_ct != 0
+    ):
+        raise RuntimeError("unexpected or malformed speculative verification count")
+    if "spec_verify_ct" in meta and spec_verify_ct is None:
+        raise RuntimeError("malformed speculative verification count")
+    return count, spec_verify_ct
 
 
 def load_eos_metadata(model):
@@ -165,6 +232,67 @@ def known_period_stats(tokens, lag=KNOWN_PERIOD):
     }
 
 
+def period_stats_across_boundary(prefix, continuation, lag=KNOWN_PERIOD):
+    """Summarize lag equality from historical input into generated continuation.
+
+    Prefix-only periodicity cannot confirm this comparison. Confirmation requires
+    the continuation's initial run to cover two complete lag-sized periods.
+    """
+    if lag <= 0:
+        raise ValueError("period lag must be positive")
+    prefix = list(prefix)
+    continuation = list(continuation)
+    if len(prefix) < lag:
+        raise ValueError("period boundary prefix must contain at least one lag")
+    combined = prefix + continuation
+    boundary = len(prefix)
+    matches = [
+        combined[boundary + index] == combined[boundary + index - lag]
+        for index in range(len(continuation))
+    ]
+    initial_run = next((i for i, matched in enumerate(matches) if not matched), len(matches))
+    total_matches = sum(matches)
+    max_consecutive = 0
+    current = 0
+    for matched in matches:
+        current = current + 1 if matched else 0
+        max_consecutive = max(max_consecutive, current)
+    cross_run = False
+    run_start = None
+    for index in range(lag, len(combined)):
+        if combined[index] == combined[index - lag]:
+            if run_start is None:
+                run_start = index
+            if run_start < boundary <= index:
+                cross_run = True
+                break
+        else:
+            run_start = None
+    return {
+        "periodic_lag": lag,
+        "continuation_matched_prefix_tokens": initial_run,
+        "continuation_match_count": total_matches,
+        "continuation_match_fraction": total_matches / len(continuation) if continuation else 0.0,
+        "continuation_max_consecutive": max_consecutive,
+        "crosses_input_continuation_boundary": cross_run,
+        "confirmed_across_boundary": initial_run >= 2 * lag,
+    }
+
+
+def validate_trajectory_options(trajectory, phase, budget):
+    """Validate trajectory-specific phase and budget constraints."""
+    if trajectory not in ("natural", "historical-prefix"):
+        raise ValueError(f"unknown trajectory: {trajectory}")
+    if trajectory == "historical-prefix" and phase != "early":
+        raise ValueError("historical-prefix trajectory requires --phase early")
+    if phase == "early":
+        maximum = 4096 if trajectory == "historical-prefix" else 8192
+        if not 512 <= budget <= maximum:
+            raise ValueError(f"{trajectory} early budget must be between 512 and {maximum}")
+    elif budget != 49152:
+        raise ValueError("long phase requires --budget 49152")
+
+
 def termination_stats(out, meta, eos, think_end, budget):
     reason = meta.get("finish_reason")
     if not isinstance(reason, dict) or reason.get("type") not in {"stop", "length"}:
@@ -209,7 +337,7 @@ def termination_stats(out, meta, eos, think_end, budget):
     }
 
 
-def main():
+def build_parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--remote-root", type=Path, required=True)
@@ -220,16 +348,24 @@ def main():
     p.add_argument("--ablation-tool", type=Path, required=True)
     p.add_argument("--native-private", type=Path, required=True)
     p.add_argument("--phase", choices=("early", "long"), default="early")
+    p.add_argument("--trajectory", choices=("natural", "historical-prefix"), default="natural")
     p.add_argument("--budget", type=int, default=None)
+    p.add_argument("--source-variant", choices=("original", "all-beta"), default="all-beta")
+    p.add_argument("--arms", choices=("both", "control"), default="both")
+    return p
+
+
+def main():
+    p = build_parser()
     o = p.parse_args()
     if o.phase == "early":
         o.budget = 4096 if o.budget is None else o.budget
-        if not 512 <= o.budget <= 8192:
-            p.error("early pilot budget must be between 512 and 8192")
     else:
         o.budget = 49152 if o.budget is None else o.budget
-        if o.budget != 49152:
-            p.error("long phase requires --budget 49152")
+    try:
+        validate_trajectory_options(o.trajectory, o.phase, o.budget)
+    except ValueError as exc:
+        p.error(str(exc))
     generate_timeout = 3600 if o.phase == "early" else 14400
     o.root.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(o.remote_root / "candidate-bundle-r1/parity-v7"))
@@ -251,36 +387,69 @@ def main():
         if len(native["cases"]) != 1 or native["cases"][0]["case"] != 3:
             raise RuntimeError("anonymous fixture identity differs")
         old = native["cases"][0]
-        ids = old["request"]["input_ids"]
-        reference = old["response"]["output_ids"]
-        if len(ids) != 288 or v.digest(ids) != PROMPT_SHA or len(reference) != 49152:
+        prompt = old["request"]["input_ids"]
+        answer = old["response"]["output_ids"]
+        if len(prompt) != 288 or v.digest(prompt) != PROMPT_SHA or len(answer) != 49152:
             raise RuntimeError("native prompt/output identity differs")
-        if any(type(x) is not int or x < 0 for x in ids + reference):
+        if any(type(x) is not int or x < 0 for x in prompt + answer):
             raise RuntimeError("native token type invalid")
+        cut = 41472
+        if o.trajectory == "historical-prefix":
+            if cut + o.budget > len(answer):
+                raise RuntimeError("historical continuation exceeds native reference")
+            if not all(
+                answer[i] == answer[i - KNOWN_PERIOD]
+                for i in range(33131 + KNOWN_PERIOD, len(answer))
+            ):
+                raise RuntimeError("historical native cycle no longer verifies")
+            ids = prompt + answer[:cut]
+            reference = answer[cut : cut + o.budget]
+        else:
+            ids = prompt
+            reference = answer[: o.budget]
+        source_revision = source_revision_for_variant(o.source_variant, v._LOCK_MODULE.LOCK_PATH)
+        arm_names = selected_arms(o.arms)
         report = {
             "schema_version": 1,
             "started_at_utc": v.now(),
             "case": "anonymous-case3",
             "phase": o.phase,
+            "trajectory": o.trajectory,
+            **(
+                {"fresh_prefill": True, "incremental_state_reconstructed": False}
+                if o.trajectory == "historical-prefix"
+                else {}
+            ),
             "controller_sha256": v.sha256_file(Path(__file__)),
             "scope": (
-                "Natural-start early-trajectory pilot. Finite budget does not establish "
-                "long-loop repair, GPQA accuracy, or stopping recovery."
-                if o.phase == "early"
-                else "Natural-start long-budget trajectory from the original prompt. "
-                "Known-period scalars detect only lag-2032 repetition; stopping does "
-                "not establish answer correctness, and neither a detected loop nor "
-                "the absence of one within this budget establishes repair."
+                "Fresh-prefill historical-prefix continuation sensitivity. The request "
+                "does not reconstruct historical incremental KV/SSM state or establish "
+                "natural generation repair."
+                if o.trajectory == "historical-prefix"
+                else (
+                    "Natural-start early-trajectory pilot. Finite budget does not establish "
+                    "long-loop repair, GPQA accuracy, or stopping recovery."
+                    if o.phase == "early"
+                    else "Natural-start long-budget trajectory from the original prompt. "
+                    "Known-period scalars detect only lag-2032 repetition; stopping does "
+                    "not establish answer correctness, and neither a detected loop nor "
+                    "the absence of one within this budget establishes repair."
+                )
             ),
             "native_private_sha256": NATIVE_SHA,
             "prompt_ids_sha256": PROMPT_SHA,
-            "prompt_tokens": len(ids),
-            "native_prefix_tokens": 0,
+            "prompt_tokens": len(prompt),
+            "input_tokens": len(ids),
+            "native_prefix_tokens": len(ids) - len(prompt),
+            "input_ids_sha256": v.digest(ids),
             "historical_reference_window_sha256": v.digest(reference[: o.budget]),
             "max_new_tokens": o.budget,
             "repetitions_per_arm": 2,
+            "source_variant": o.source_variant,
+            "selected_arms": list(arm_names),
+            "selected_arm_count": len(arm_names),
             "image_id": IMAGE,
-            "source_revision": REVISION,
+            "source_revision": source_revision,
             "ablation_tool_sha256": v.sha256_file(o.ablation_tool),
             "model_gate_sha256": v.sha256_file(Path(__file__).with_name("model_gate.py")),
             "protocol": {
@@ -301,7 +470,9 @@ def main():
             "arms": {},
         }
         outputs = {}
-        for variant, model in [("control", o.control), ("mlp", o.mlp)]:
+        source_dir, source_archive, source_manifest = source_paths(o.remote_root, o.source_variant)
+        for variant in arm_names:
+            model = o.control if variant == "control" else o.mlp
             arm_root = o.root / variant
             arm_root.mkdir()
             progress("model_gate", arm=variant)
@@ -312,11 +483,11 @@ def main():
                 root=arm_root,
                 job_id="mlp-pilot-" + variant,
                 model_scheme=scheme_label,
-                source_variant="all-beta",
-                source_revision=REVISION,
-                source=o.remote_root / "source-package/sglang-all-beta",
-                source_archive=o.remote_root / "source-package/sglang-all-beta.tar.gz",
-                source_manifest=o.remote_root / "source-package/sglang-all-beta.manifest.json",
+                source_variant=o.source_variant,
+                source_revision=source_revision,
+                source=source_dir,
+                source_archive=source_archive,
+                source_manifest=source_manifest,
                 model=model,
                 image=IMAGE,
                 image_id=IMAGE,
@@ -324,8 +495,8 @@ def main():
                 force_shared_decode="0",
                 health_timeout=1200,
             )
-            source = v.source_gate(a)
-            source.pop("source_file_hashes", None)
+            source_proof = v.source_gate(a)
+            source_proof.pop("source_file_hashes", None)
             eos, eos_proof = load_eos_metadata(model)
             tok = json.loads((model / "tokenizer.json").read_text())
             think_end = [
@@ -349,7 +520,7 @@ def main():
             server = None
             arm = {
                 "model_proof": proof,
-                "source_proof": source,
+                "source_proof": source_proof,
                 "termination_metadata": eos_proof,
                 "trials": [],
             }
@@ -358,7 +529,7 @@ def main():
             try:
                 progress("starting", arm=variant)
                 server = v.run(command).stdout.strip()
-                v.owned(server, a.job_id, "baseline", IMAGE, REVISION)
+                v.owned(server, a.job_id, "baseline", IMAGE, source_revision)
                 info = v.wait_health(a, server, "baseline", port)
                 model_info = get(port, "/model_info")
                 expected = {
@@ -454,15 +625,7 @@ def main():
                         or meta.get("cached_tokens") != 0
                     ):
                         raise RuntimeError("prompt/cold-cache gate failed")
-                    if any(
-                        meta.get(key, 0) not in (0, None)
-                        for key in (
-                            "spec_verify_ct",
-                            "num_retractions",
-                            "retraction_count",
-                        )
-                    ):
-                        raise RuntimeError("unexpected MTP or retraction")
+                    num_retractions, spec_verify_ct = validate_request_counters(meta)
                     lp = [x[0] for x in meta.get("output_token_logprobs", [])]
                     if len(lp) != len(out) or any(
                         type(x) not in (int, float) or not math.isfinite(x) for x in lp
@@ -474,12 +637,21 @@ def main():
                         "output_ids_sha256": v.digest(out),
                         "prompt_echo_exact": True,
                         "cached_tokens": 0,
-                        "historical_natural_lcp": lcp(out, reference[: o.budget]),
-                        "historical_natural_window_exact": out == reference[: o.budget],
+                        "num_retractions": num_retractions,
+                        "spec_verify_ct_observed": spec_verify_ct,
                         "logprobs_finite": True,
                         "mean_output_logprob": sum(lp) / len(lp),
                         "e2e_latency": meta.get("e2e_latency"),
                     }
+                    if o.trajectory == "historical-prefix":
+                        row["continuation_reference_lcp"] = lcp(out, reference)
+                        row["continuation_reference_exact"] = out == reference
+                        row["period_2032_across_input_prefix"] = period_stats_across_boundary(
+                            ids, out
+                        )
+                    else:
+                        row["historical_natural_lcp"] = lcp(out, reference[: o.budget])
+                        row["historical_natural_window_exact"] = out == reference[: o.budget]
                     row.update(termination_stats(out, meta, eos, think_end, o.budget))
                     row.update(known_period_stats(out))
                     outputs[variant].append(out)
@@ -489,14 +661,9 @@ def main():
                 arm["repeat_stable"] = outputs[variant][0] == outputs[variant][1]
                 arm["completed_at_utc"] = v.now()
             finally:
-                arm["cleanup"] = v.cleanup(server, a.job_id, "baseline", IMAGE, REVISION)
+                arm["cleanup"] = v.cleanup(server, a.job_id, "baseline", IMAGE, source_revision)
                 v.write_json(arm_root / "checkpoint.json", arm)
-        left, right = outputs["control"][0], outputs["mlp"][0]
-        report["comparison"] = {
-            "control_vs_mlp_lcp": lcp(left, right),
-            "output_exact": left == right,
-            "both_repeat_stable": all(x["repeat_stable"] for x in report["arms"].values()),
-        }
+        report["comparison"] = build_comparison(outputs, o.arms)
         report["stopping_outcome"] = {
             variant: {
                 "natural_termination_trials": sum(

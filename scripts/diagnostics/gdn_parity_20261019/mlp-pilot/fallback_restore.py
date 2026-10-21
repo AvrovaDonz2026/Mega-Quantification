@@ -2,7 +2,6 @@
 """systemd ExecStopPost fallback, restricted to this run's exact containers."""
 
 import json
-import time
 from pathlib import Path
 
 import supervisor as s
@@ -10,6 +9,9 @@ import supervisor as s
 
 def main():
     config = json.loads(Path(__file__).with_name("config.json").read_text())
+    run_options = s.parse_run_config(config)
+    s._ACTIVE_SOURCE_REVISIONS = frozenset({run_options["source_revision"]})
+    s._ACTIVE_JOBS = run_options["jobs"]
     status_path = Path(config["root_path"]) / "supervisor-status.json"
     if not status_path.exists():
         return 0
@@ -27,27 +29,28 @@ def main():
     glm_id = config["expected_glm_id_full"]
     try:
         row = s.docker_inspect(glm_id)
-        snap = s.glm_snapshot(row)
-        if (
-            snap["id"] != glm_id
-            or snap["name"] != config["expected_glm_name"]
-            or snap["image_id"] != config["expected_glm_image"]
-            or snap["config_hostconfig_sha256"] != config["expected_config_hostconfig_sha256"]
-        ):
-            raise s.SupervisorError("fallback identity gate failed")
+        s.verify_glm_identity(config, row)
         restored = False
         for attempt in range(3):
             try:
                 result = s.command(["docker", "start", glm_id], timeout=45)
-                snap = s.glm_snapshot(s.docker_inspect(glm_id))
-                if result.returncode == 0 and snap["running"]:
+                if result.returncode == 0:
                     restored = True
                     break
             except Exception:
                 pass
             if attempt < 2:
-                time.sleep(2)
-        status["fallback_restore"] = {"running": restored, "at_utc": s.utc_now()}
+                s.time.sleep(2)
+        if restored:
+            snap = s.wait_glm_stable(config)
+            status["fallback_restore"] = {
+                "running": snap.get("running"),
+                "health": snap.get("health"),
+                "observed_seconds": snap["observed_seconds"],
+                "at_utc": s.utc_now(),
+            }
+        else:
+            status["fallback_restore"] = {"running": False, "at_utc": s.utc_now()}
         if restored:
             status["glm_restore_required"] = False
         s.atomic_json(status_path, status)

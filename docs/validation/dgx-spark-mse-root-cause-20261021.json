@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-21",
+  "status": "scale_audit_complete_full_model_causality_pending",
+  "cpu_preflight": {
+    "returncode": 0,
+    "network": "none",
+    "gpu": false,
+    "tests": 19
+  },
+  "scale_audit": {
+    "max": {
+      "scale_tensors": 1203,
+      "text_weight_layers": 401,
+      "vision_weight_layers": 0,
+      "mtp_weight_layers": 0,
+      "all_finite_positive": true,
+      "complete_weight_pairs": 401
+    },
+    "mse": {
+      "scale_tensors": 1557,
+      "text_weight_layers": 401,
+      "vision_weight_layers": 110,
+      "mtp_weight_layers": 8,
+      "all_finite_positive": true,
+      "complete_weight_pairs": 519
+    }
+  },
+  "r5": {
+    "status": "aborted_by_maintenance_heartbeat_failure",
+    "valid_model_result": false,
+    "restoration": "both_original_processes_stable"
+  },
+  "maintenance_patch": {
+    "heartbeat_retry_budget_seconds": 20,
+    "worker_lease_seconds": 45,
+    "lifecycle_commands_retried": false,
+    "focused_fault_injection_tests": 6
+  },
+  "conclusion": "existing_max_and_mse_exports_are_not_matched_in_vision_mtp_coverage"
+}

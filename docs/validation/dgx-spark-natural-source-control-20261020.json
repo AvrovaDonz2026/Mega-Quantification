@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "state": "completed_control",
+  "observed_at_utc": "2026-10-20T09:48:12.846261+00:00",
+  "scope": "Original-source control-only natural-start diagnostic. Both long trials completed repeat-stably at 39846 output tokens with matched EOS stops and no confirmed lag-2032 cycle. This does not establish a beta-patch repair, historical root cause, GPQA, vision/MTP or release claim.",
+  "image_id": "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf",
+  "source_variant": "original",
+  "source_revision": "4a667614d810f7b5570be23eb75956c603a85c3a",
+  "comparison_source_revision": "49d3acfd4d54b0cf1afffcfeb369c63af4f56499",
+  "selected_arms": [
+    "control"
+  ],
+  "phases": [
+    "long"
+  ],
+  "repetitions_per_arm": 2,
+  "max_new_tokens": 49152,
+  "protocol": {
+    "prompt_tokens": 288,
+    "native_prefix_tokens": 0,
+    "context_length": 65536,
+    "temperature": 0,
+    "seed": 20261020,
+    "tp_size": 1,
+    "mtp": false,
+    "kv_cache_dtype": "fp8_e4m3",
+    "mamba_ssm_dtype": "float32",
+    "quantization_loader": "modelopt_mixed",
+    "radix_cache": false,
+    "cuda_graphs": false,
+    "allow_auto_truncate": false
+  },
+  "unchanged_runner_sha256": "338fce065587d36a05560b202c896eb2d78c6bf6f4133c297513a6318a5779cb",
+  "four_variant_source_lock_sha256": "8c62b39d1ff30cbdc4cb709f1b1a6bad842a175523dbd98e81ee8399e923491e",
+  "tools_sha256": {
+    "controller.py": "c075b830ec4a0c3c8930775d73cd435c164a3c0235a19f424ffeda646f60329e",
+    "model_gate.py": "b8689ed6f243d2e5835d9cb54a26e2f970c0e9701bc302acf8807ead8cb1fb16",
+    "supervisor.py": "5c5bda03ee3d77add48eee058b58d8ec8c7c42a6deefad54f2b306fa0a85c2b9",
+    "fallback_restore.py": "e153a38b8047707a6fc93731b4801476ded54e7e5d944aa37f088c4ddb1503c0"
+  },
+  "deployment_lock_sha256": "deed12328e97f2af92964b67513d3f25c0c3b24d7f2c5aad7319f0c88a5df673",
+  "deployment_files_verified": 13,
+  "launch_evidence_sha256": "ae822594576034bd7bafbbeaeb9a1d74a73d2ff0ca87b53b65717c07aa314b4c",
+  "queue": {
+    "state": "completed_source_control",
+    "systemd_active": false,
+    "previous_systemd_active": false,
+    "supervisor_started": true,
+    "evidence_started": true,
+    "runtime_max_seconds": 172800,
+    "timeout_stop_seconds": 600,
+    "exec_stop_post_configured": true,
+    "handoff_at_utc": "2026-10-20T08:04:07.890430+00:00",
+    "previous_reports_repeat_stable": true,
+    "previous_containers_removed": true,
+    "previous_glm_restored_and_identity_verified": true
+  },
+  "scheduling_gates": [
+    "machine-wide lease held across exec",
+    "frozen deployment hashes",
+    "exact original/control/long scope",
+    "previous unit inactive and successful",
+    "previous reports repeat-stable and cleaned",
+    "same GLM restored and exact identity verified before temporary stop",
+    "Python finally plus ExecStopPost attempt same-container restoration; immediate Running observation does not establish stable recovery"
+  ],
+  "termination_diagnostic": "New controller unions effective EOS metadata and retains sanitized matched-stop fields. Frozen r3 config-only EOS booleans remain incomplete and are not relabeled.",
+  "local_validation": {
+    "targeted_tests_passed": 89,
+    "full_tests_passed": 583,
+    "full_tests_skipped": 34,
+    "ruff": "passed",
+    "queue_gate_scenarios_passed": 4,
+    "cpu_test_limit": "Local environment lacks torch, Pillow and pyarrow; optional tests were not executed locally; CI results are recorded separately.",
+    "ci_pytest_checks": "both successful at d36bb59"
+  },
+  "causal_limit": "Historical 262144-context/radix-enabled/seed-213087260 protocol differs. This run changes only source arithmetic relative to r3 control. If both sources stop, restore other historical factors one at a time.",
+  "observation_evidence_sha256": "2dea466149ec93da72b4d05537fd729c27a13a77e1805fea51df7565d1366e91",
+  "deployment_files_unchanged": true,
+  "run": {
+    "supervisor_state": "completed",
+    "unit_state": "inactive/success",
+    "arm": "control",
+    "trial": 2,
+    "request_started_at_utc": "2026-10-20T08:57:51.516854+00:00",
+    "checkpoint_present": true,
+    "report_present": true,
+    "completion_tokens": 39846,
+    "progress_limit": "Both trials completed; output and matched-stop summaries are retained below."
+  },
+  "completed_trial_1": {
+    "output_tokens": 39846,
+    "e2e_latency_seconds": 2931.66995651694,
+    "finish_reason_type": "stop",
+    "contains_eos": true,
+    "terminal_eos": true,
+    "matched_is_eos": true,
+    "matched_equals_terminal": true,
+    "first_thinking_end_index": 39666,
+    "thinking_end_count": 1,
+    "historical_natural_lcp": 14,
+    "periodic_confirmed": false,
+    "periodic_lag": 2032,
+    "output_ids_sha256": "cfe06b6d3459601c3401046711eedb1cb4dfd2571bb81032a11145acde1d4248"
+  },
+  "completed_trial_2": {
+    "output_tokens": 39846,
+    "e2e_latency_seconds": 2930.052434570971,
+    "finish_reason_type": "stop",
+    "contains_eos": true,
+    "terminal_eos": true,
+    "matched_is_eos": true,
+    "matched_equals_terminal": true,
+    "first_thinking_end_index": 39666,
+    "thinking_end_count": 1,
+    "historical_natural_lcp": 14,
+    "periodic_confirmed": false,
+    "periodic_lag": 2032,
+    "output_ids_sha256": "cfe06b6d3459601c3401046711eedb1cb4dfd2571bb81032a11145acde1d4248"
+  },
+  "completion": {
+    "completed_at_utc": "2026-10-20T09:46:43.267574+00:00",
+    "repeat_stable": true,
+    "both_trials_naturally_terminated": true,
+    "confirmed_periodic_trials": 0,
+    "cleanup_removed": true,
+    "unit_result": "inactive/success",
+    "glm_running_after_restore_reported": true
+  },
+  "observation_at_utc": "2026-10-20T09:48:12.846261+00:00",
+  "progress_evidence_sha256": "fabb11883765f86046aff024e763e6e5166a571e6c3b31866a96bea0715913bf",
+  "service_restore_followup": {
+    "observed_at_utc": "2026-10-20T10:01:21.992537+00:00",
+    "identity_exact": true,
+    "running": false,
+    "deployment_files": 13,
+    "deployment_hashes_unchanged": true,
+    "owned_experiment_container_count": 0,
+    "gpu_compute_process_count": 0,
+    "exit_code": 1,
+    "oom_killed": false,
+    "error_class": "NCCL remote-process-or-network error",
+    "status": "restore was reported running but exited after startup; repair in progress",
+    "distributed_service_followup": {
+      "cross_node_tp_size": 2,
+      "peer_pairing_verified": true,
+      "master_digest_and_port_match": true,
+      "rank_roles_match": true,
+      "other_rank_running_at_observation": true,
+      "coordinated_recovery_executed": false,
+      "network_root_cause_established": false,
+      "subsequent_gpu_experiment_started": false
+    },
+    "verification_evidence_sha256": "0bae7d1e3d6375fb219af049a48a9168bc16bedf7e0e0fedf6a22dd4fb84e64a",
+    "state_evidence_sha256": "8bfadd72501dc8d5c72e90bc4312e8fefcdf776359d53a78492ff1546c99a475",
+    "log_summary_evidence_sha256": "4329b9494a30dfa2b5a1f796d13fb7a5c1cb4c82a4b888276d2a4954d4ea0a56",
+    "retry": {
+      "started_at_utc": "2026-10-20T10:20:52.761937+00:00",
+      "observed_at_utc": "2026-10-20T10:21:57.436756+00:00",
+      "identity_exact": true,
+      "state": "restore_failed",
+      "running": false,
+      "exit_code": 1,
+      "oom_killed": false,
+      "evidence_sha256": "53a34569b8721c50876f790e7cab406da3a79bcaeaf99b2d728f1b8efaa61848"
+    },
+    "new_recovery_gate": {
+      "continuous_running_seconds": 120,
+      "timeout_seconds": 240,
+      "exact_identity_every_poll": true,
+      "health_if_exposed": "healthy",
+      "single_host_stop_requires_auditable_single_node_topology": true,
+      "application_readiness_established": false
+    }
+  },
+  "historical_replay_readonly_preflight": {
+    "observed_at_utc": "2026-10-20T11:52:26.284370+00:00",
+    "state": "model_and_fixture_verified_no_replay",
+    "passed": true,
+    "model": {
+      "algorithm": "mse",
+      "checkpoint_tool_sha256": "a1a0bcc2219e6996f365425fc0f942a0e220b118fbf95d27c181be83d8f69f3e",
+      "loader": "modelopt",
+      "metadata_sha256": {
+        "config.json": "1863a03b63ef930ee75c341c684e00ca8862c6dfe2477e26ea2f4a72415a5941",
+        "hf_quant_config.json": "9ec4f59889055843cb4a22c681f0a7fcaf3bb78e77b6f55a19b04b9a208bb1b7",
+        "model.safetensors.index.json": "dc4c2b5670797864dbf9f57b99a83734fbb10ad03cde130c3e018ef5f6a7e7f3"
+      },
+      "model_available": true,
+      "passed": true,
+      "provenance_sha256": "66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c",
+      "quantized_layers": 519,
+      "scheme": "nvfp4_w4a4",
+      "tensor_count": 2756,
+      "tensor_inventory_sha256": "f615a477133ef97e8694515654e18ddd74144bb0cafb020be1b99e13a4c4b8f6"
+    },
+    "fixture": {
+      "fixture_sha256": "8e151d76fdd25603216aeb79c59a39d637ad25c47efd87a3581f6b65b3dc7218",
+      "historical_output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "historical_output_tokens": 49152,
+      "historical_period_tokens": 2032,
+      "passed": true,
+      "prompt_ids_sha256": "20e75efb3ff7b137eee5484d35b30e0bb3668d8cc810b36990c7d3cae662d436",
+      "prompt_tokens": 288
+    },
+    "controller_sha256": "fd490e6bb8699f7832cb814e776157048e820da073487e27ccd100e2eed8c98e",
+    "elapsed_seconds": 21.693918536999263,
+    "any_container_mutation": false,
+    "any_gpu_request": false,
+    "remaining_gates": [
+      "target launcher binds and imported override identity",
+      "paired maintenance coordinator",
+      "live server and endpoint ownership",
+      "cold historical request and terminal outcome"
+    ],
+    "causal_limit": "Serialized scored-MSE payload and metadata match; this is not a runtime replay or effective loader arithmetic proof.",
+    "paired_interruption_and_restore_authorized": true
+  },
+  "retraction_counter_evidence_limit": {
+    "canonical_api_field": "num_retractions",
+    "frozen_controller_rejects_nonzero_when_present": true,
+    "frozen_controller_accepts_missing_or_null": true,
+    "direct_zero_counter_retained": false,
+    "new_run_policy": "Require canonical exact integer zero and persist the scalar; missing speculation count is unobserved.",
+    "limit": "Completed trial rows remain frozen; do not relabel them as direct zero-retraction observations."
+  },
+  "historical_replay_completed": {
+    "experiment": "historical-replay-r1",
+    "state": "completed_exact_historical_replay",
+    "experiment_started_at_utc": "2026-10-20T15:57:27+00:00",
+    "completion_observed_minute_utc": "2026-10-20T17:03Z",
+    "elapsed_seconds_including_startup": 3936.556,
+    "historical_protocol": {
+      "context_length": 262144,
+      "disable_radix_cache": false,
+      "max_running_requests": 16,
+      "max_mamba_cache_size": 64,
+      "mamba_ssm_dtype": "float32",
+      "random_seed": 213087260,
+      "quantization": "modelopt",
+      "mtp_enabled": false,
+      "submitted_requests": 1,
+      "max_new_tokens": 49152
+    },
+    "result": {
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "exact_historical_output_match": true,
+      "periodic_lag": 2032,
+      "periodic_onset": 33131,
+      "periodic_count": 13989,
+      "periodic_extent": 16021,
+      "periodic_complete_periods": 7,
+      "cached_tokens": 0,
+      "num_retractions": 0
+    },
+    "paired_process_restoration": {
+      "state": "exact_running_and_continuous_120s_verified_closed",
+      "verified_closed_at_utc": "2026-10-20T17:05:14+00:00"
+    },
+    "application_readiness": "unknown",
+    "application_observer_framework": null,
+    "next_single_variable_stage": "none_for_this_fixed_case",
+    "systemd_dummy_recovery_probe": {
+      "cases_passed": 5,
+      "continuous_stability_seconds_each": 120,
+      "docker_gpu_or_glm_actions": false,
+      "probe_sha256": "b5df0d0b18a4001e883b48b1ec8765da1f5435590721e2b57ef4ff124c99628d"
+    },
+    "causal_limit": "R1 is an exact fixed-case replay with radix enabled; R2 completed separately with radix disabled. These results establish reproducibility for the fixed case and are referenced by the completed R2 record below; they do not establish MSE repair or application readiness."
+  },
+  "historical_replay_r2_completed": {
+    "experiment": "historical-radix-r2",
+    "state": "completed_exact_historical_replay_radix_off",
+    "experiment_started_at_utc": "2026-10-20T17:15:42.908862+00:00",
+    "server_argv_semantic_change": [
+      "--disable-radix-cache"
+    ],
+    "metadata_mamba_strategy": "extra_buffer_lazy",
+    "historical_protocol_preserved": true,
+    "completion": {
+      "observed_at_utc": "2026-10-20T18:23:29.820358+00:00",
+      "elapsed_seconds_including_startup": 3903.27,
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5",
+      "exact_match_r1_and_history": true,
+      "periodic_lag": 2032,
+      "periodic_onset": 33131,
+      "periodic_count": 13989,
+      "periodic_extent": 16021,
+      "periodic_complete_periods": 7,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "portable_capacity_max_total_num_tokens": 1731408,
+      "r1_capacity_max_total_num_tokens": 1737140,
+      "historical_capacity_reference": 1738591
+    },
+    "protected_pair": {
+      "state": "restored_exact_running_and_continuously_stable",
+      "cleanup_observed_utc": [
+        "2026-10-20T18:20:49Z",
+        "2026-10-20T18:20:51Z"
+      ],
+      "started_utc": [
+        "2026-10-20T18:20:53Z",
+        "2026-10-20T18:20:54Z"
+      ],
+      "verified_closed_utc": [
+        "2026-10-20T18:22:56Z",
+        "2026-10-20T18:22:57Z"
+      ],
+      "stable_seconds_observed": [
+        121.191,
+        121.566
+      ]
+    },
+    "paired_process_restoration": "process_stable_observation_passed",
+    "application_readiness": "unknown",
+    "application_observer_framework": {
+      "observed_at_utc": "2026-10-20T18:24:40Z",
+      "rank_1": {
+        "framework": "tensorfold",
+        "readiness": "unknown"
+      },
+      "rank_0": {
+        "framework": "tensorfold",
+        "metadata_probe": "structured_response"
+      },
+      "end_to_end_inference": false
+    },
+    "historical_source_capture": {
+      "state": "10_allowlisted_files_captured",
+      "relevant_archived_key_hashes_match": true,
+      "additional_files_captured": 2,
+      "track_state_in_archived_relevant_gdn_files": false,
+      "current_fork_snapshot_implementation_applies_to_r1_r2": false
+    },
+    "causal_limit": "R2 and R1 are exact output matches for this fixed case, so radix cache showed no observed token effect and is not required for this loop. This does not prove all internal state paths are noncausal, does not establish MSE repair, and does not establish application readiness."
+  },
+  "historical_replay_r3_completed": {
+    "experiment": "historical-beta-r3",
+    "state": "completed_length_no_confirmed_long_cycle",
+    "experiment_started_at_utc": "2026-10-20T19:18:59.637587Z",
+    "observation_at_utc": "2026-10-20T20:25:34Z",
+    "historical_protocol": {
+      "radix_cache": true,
+      "submitted_requests": 1,
+      "cold_request": true,
+      "prompt_tokens": 288,
+      "max_new_tokens": 49152,
+      "context_length": 262144,
+      "tp_size": 1,
+      "mtp_enabled": false,
+      "kv_cache_dtype": "fp8_e4m3",
+      "mamba_ssm_dtype": "float32",
+      "max_running_requests": 16
+    },
+    "source_change": {
+      "historical_source_sha256": "c7736d1e506fb2c3e5c0496a2ed8c23347c2507ebe73c08bc6745517495d0957",
+      "candidate_source_sha256": "7318818b58efcb17803b52f236319eda5cc47b813d64113d1c7b83dd2cac378d",
+      "change": "Remove .to(b.dtype.element_ty) from the beta store in fused_gdn_gating.py; the existing allocation is FP32.",
+      "direct_scope": "Prefill/extend beta producer; ordinary decode computes beta in a separate kernel. An initial recurrent-state change may affect the later trajectory.",
+      "r1_radix_protocol_preserved": true
+    },
+    "pre_generation_gates": {
+      "source_identity": "passed",
+      "microprobe": "passed",
+      "streaming_observation_proves_gates": true
+    },
+    "progress": {
+      "state": "completed",
+      "elapsed_seconds_including_startup": 3916.324,
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_ids_sha256": "57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa",
+      "different_from_r1_r2_output": true,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "terminal_stop_match_observed": false,
+      "periodic_lag": 2032,
+      "periodic_onset": 10959,
+      "periodic_count": 10,
+      "periodic_extent": 2042,
+      "periodic_complete_periods": 1,
+      "periodic_confirmation": "not_confirmed_match_count_below_full_period_threshold",
+      "r1_baseline_periodic_count": 13989,
+      "r1_baseline_periodic_onset": 33131,
+      "r1_baseline_periodic_extent": 16021
+    },
+    "microprobe": {
+      "legacy_vs_candidate_max_abs": 0.0005898475646972656,
+      "legacy_vs_candidate_rms": 0.0002853343030437827,
+      "g_delta_max_abs": 0.0,
+      "candidate_sigmoid_max_error": 5.960464477539063e-08,
+      "literal_first_logits_measured": false
+    },
+    "protected_pair": {
+      "authorized_paused": true,
+      "post_experiment_restore": "process_stable",
+      "replay_stable_seconds": 121.5060659,
+      "peer_stable_seconds": 121.1523031,
+      "exact_identity": true,
+      "running": true
+    },
+    "application_observation": {
+      "observed_at_utc": "2026-10-20T20:28:03.868541Z",
+      "both_processes_exact_and_running": true,
+      "rank_0_metadata_response": "structured_json",
+      "rank_1_application_http": false,
+      "readiness": "unknown",
+      "end_to_end_inference": false
+    },
+    "server_capacity": {
+      "max_total_num_tokens": 1728271,
+      "historical_capacity_reference": 1738591,
+      "capacity_difference_is_not_output_evidence": true
+    },
+    "causal_limit": "R3 did not reproduce the previously confirmed long lag-2032 cycle under this fixed case, but the short match is below the full-period confirmation threshold. Other periods were not tested; this does not establish normal stopping, answer correctness, MSE repair, or application readiness."
+  },
+  "historical_replay_r4_in_progress": {
+    "experiment": "historical-beta-r4-confirm",
+    "state": "running_observed_request_streaming",
+    "experiment_started_at_utc": "2026-10-20T21:03:22.395171Z",
+    "observation_at_utc": "2026-10-20T21:44:13Z",
+    "protocol": {
+      "same_as": "historical-beta-r3",
+      "submitted_requests": 1,
+      "cold_request": true,
+      "new_observation": "post_request_cycle_scan_period_le_8192_at_least_5_copies_and_first_token_divergence",
+      "first_token_divergence_is_not_logits": true
+    },
+    "progress": {
+      "state": "request_streaming",
+      "elapsed_seconds": 2418.958,
+      "events": 944,
+      "stream_lines": 944,
+      "events_are_sse_lines_not_tokens": true,
+      "terminal_result_available": false,
+      "repeat_stability_available": false,
+      "repair_conclusion_available": false
+    },
+    "gates": {
+      "cpu_tests_passed": 10,
+      "source_and_runtime_gate": "passed"
+    },
+    "protected_pair": {
+      "authorized_paused": true,
+      "post_experiment_restore": "pending"
+    },
+    "decode_audit": {
+      "scope": "R1/R2 historical source captures only",
+      "generic_decode_beta": "FP32",
+      "replayssm_beta_roundtrip": "BF16_then_FP32",
+      "historical_metadata_replayssm": "disabled",
+      "r1_attribution": "not_established",
+      "current_fork_or_gpu_execution": false
+    },
+    "hf_5_12_1_reference_semantics": {
+      "projection_beta_dtype": "projection/input dtype",
+      "bf16_eager_beta": "b.sigmoid()",
+      "fallback_recurrence_dtype": "float32",
+      "r3_patch_is_hf_faithful": false,
+      "r3_patch_scope": "SGLang target consistency and numerical improvement"
+    },
+    "causal_limit": "At this 2026-10-20T21:44:13Z observation, R4 was still generating; no terminal output, cycle result, repeat stability, repair conclusion, or service restoration conclusion was yet established."
+  },
+  "historical_replay_r4_completed": {
+    "experiment": "historical-beta-r4-confirm",
+    "state": "completed_repeat_stable_with_periodic_cycle",
+    "experiment_started_at_utc": "2026-10-20T21:03:22.395171Z",
+    "completion_observed_at_utc": "2026-10-20T22:12:33Z",
+    "elapsed_seconds_including_startup_and_postscan": 3944.766,
+    "historical_protocol": {
+      "same_as": "historical-beta-r3",
+      "submitted_requests": 1,
+      "cold_request": true
+    },
+    "result": {
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "output_ids_sha256": "57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa",
+      "same_output_as_r3": true,
+      "repeat_stable_across_r3_r4": true,
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "spec_verify_ct_observed": null,
+      "first_token_divergence_index": 12,
+      "first_token_divergence_reference": "baseline",
+      "first_token_divergence_is_logits": false,
+      "candidate_cycle": {
+        "period": 1588,
+        "onset": 40236,
+        "matching_positions": 7328,
+        "coverage_tokens": 8916,
+        "full_repeats_after_initial_segment": 4,
+        "includes_initial_segment_and_residual": true,
+        "measurement": "R4_direct_post_request_scan",
+        "r3_inference": "same_output_hash_as_r4_not_direct_scan"
+      },
+      "historical_reference_cycle": {
+        "period": 2032,
+        "onset": 33131,
+        "matching_positions": 13989,
+        "coverage_tokens": 16021,
+        "full_repeats_excluding_initial_segment": 6,
+        "legacy_complete_periods_field": 7,
+        "legacy_field_uses_different_counting_convention": true
+      },
+      "period_2032_algorithmic_scan": {
+        "onset": 10959,
+        "matching_positions": 10,
+        "coverage_tokens": 2042,
+        "full_period_confirmed": false
+      }
+    },
+    "capacity": {
+      "max_total_num_tokens": 1739296,
+      "difference_from_r1_r2_is_portability_capacity_not_arithmetic": true
+    },
+    "protected_pair": {
+      "restoration": "process_stable",
+      "exact_identity": true,
+      "running": true,
+      "cleanup": "observed_absent",
+      "maintenance_armed": false,
+      "peer_stable_seconds": 121.151,
+      "replay_stable_seconds": 121.501
+    },
+    "application_observation": {
+      "observed_at_utc": "2026-10-20T22:13:30Z",
+      "both_processes_exact_and_running": true,
+      "rank_0_models_http": "structured_json",
+      "readiness": "unknown",
+      "end_to_end_inference": false
+    },
+    "application_readiness": "unknown",
+    "causal_limit": "R4 reproduced R3's exact token sequence and detected a period-1588 cycle. The repeated cycle is not a repair; the run ended at its token limit. No normal stop, answer correctness, MSE repair, or application readiness is established."
+  }
+}

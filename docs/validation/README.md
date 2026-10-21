@@ -16,13 +16,37 @@ negative result：同一份真正 MSE 历史权重 view 使用 original / all-be
 精确复现 512-token native 窗口并以 length 结束。它不证明自然生成已修复或更长预算
 最终会停止，也不改变历史 GPQA 记录。
 
-MLP-only BF16 recovery pilot 已在 2026-10-20 完成短阶段：control / MLP 各两次
-4,096-token 输出均臂内逐 token 一致、全部达到预算。05:41 UTC 最新观察时，长阶段
-control 两次均在 34,189 tokens 后返回 `stop` 且输出稳定，MLP long trial 1 正在推理。
-首条未检出已知周期，但运行中诊断器的 EOS 集合漏读 generation/tokenizer 元数据，
-不能按其 `natural_termination=false` 认定未正常停止，亦无修复结论。
-r2 队列过期未启动的记录保留；r3 的临时 GLM 暂停与实验后恢复由
-远端监督进程托管。[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
+MLP-only BF16 recovery pilot 已在 2026-10-20 完成：control / MLP 各两次
+4,096-token 短阶段输出均臂内逐 token 一致、全部达到预算；长阶段 control 两次均在
+34,189 tokens 后返回 `stop`，MLP 两次均在 25,000 tokens 后返回服务 `stop`。
+长响应各臂内输出稳定，四条均未检出确认的 2,032-token 周期。
+运行中诊断器漏读部分 EOS 元数据，不能用其 `natural_termination=false` 认定没有
+EOS 停止。历史循环未在 control 复现，当前无修复结论。
+[原始 GDN 源码对照](dgx-spark-natural-source-control-20261020.md)先完成两次 39,846-token
+control：均以匹配 EOS 停止且输出完全一致，未检出确认的 2,032-token 周期。随后独立的
+历史条件重放输出 49,152 tokens 达长度上限，输出 SHA 与历史完全一致，并精确复现
+lag 2,032（起点 33,131、覆盖 16,021 tokens）。这是一个固定案例的精确可复现性结果，
+不代表 MSE 已修复或确定根因。原 control 的自然 EOS 结果与历史 MSE 循环是不同实验，
+不可合并。双端进程恢复及连续 120 秒验证通过，应用层 readiness 仍为 unknown。随后
+radix-off 单变量 R2 也完成：仅追加 `--disable-radix-cache`，输出同样为 49,152-token
+长度上限，输出 SHA 与 R1/历史完全一致，lag 2,032（起点 33,131、覆盖 16,021、
+7 个完整周期），缓存 token 0、回收计数 0。R2 的固定案例结果表明 radix cache 未
+改变 token 序列，且不是该循环的必要条件；不证明所有内部状态路径无因果作用或 MSE 已修复。
+r2 队列过期未启动的记录保留；source-control 09:48 UTC 观察时 GLM 已恢复运行，
+10:01 UTC 独立复核时已退出，身份仍匹配且部署哈希未变。日志显示 NCCL 远端进程或网络错误，非 OOM；
+同容器恢复重试尚未成功；后续审计确认原服务跨节点运行 TP2。
+两端维护获授权后，历史 262k/radix-on 条件重放于 15:57:27 UTC 启动，并于约
+17:03 UTC 完成；实验后成对进程恢复于 17:05 UTC 验证关闭。应用层 readiness 未知。
+R2 于 17:15:42 UTC 启动；18:23:29 UTC 只读观察确认已完成。实验后清理、成对恢复及连续约 121 秒
+稳定性验证通过，应用层 readiness 仍为 unknown。历史 source capture 共捕获十个允许文件；
+相关归档文件与旧归档键哈希一致，归档相关 GDN 文件无 `TRACK_STATE`，当前 fork 的 snapshot 实现
+不适用于 R1/R2。详情及脱敏快照见上述原始源码对照报告。
+R3 于 19:18:59.637587 UTC 启动，19:23:00.606688 UTC 只读观察仍为 `request_streaming`
+（elapsed 218.747 秒、events/stream lines 各 32）；这是 SSE 行数，不能换算 token，GPU
+数值统计尚未取回。R3 保留 R1 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；
+源码身份与 microprobe 门禁已通过，单个冷请求仍在生成，结果未完成。两端原 GLM 已按授权暂停，
+实验后成对恢复 pending，不能声称恢复已完成。
+[当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

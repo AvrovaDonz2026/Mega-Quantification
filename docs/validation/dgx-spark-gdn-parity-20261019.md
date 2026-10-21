@@ -105,8 +105,11 @@ exact，cold cache 为 0，重复稳定；四次均因 `length` 结束，没有 
 这是明确的 negative result：beta 补丁没有打破该固定前缀的 512-token 窗口。它不等同
 自然生成轨迹已修复，也不能判断更长预算是否最终停止。native IDs 和原始响应不发布，
 只保留相邻 JSON 中的摘要与 SHA；四个服务/client cleanup 均已移除且无残留容器。
+10 月 20 日审计发现此冻结控制器检查了非标准的 `retraction_count` 并将缺失值当作零，
+未保留实际 API 的 `num_retractions`；因此这四次请求没有直接的零回收计数证据。
+新控制器改为严格校验并保留标准字段；原 continuation 哈希和上述限制保持记录。
 
-## MLP-only BF16 recovery pilot（运行中）
+## MLP-only BF16 recovery pilot（r3 已完成）
 
 MLP 变体从真正的 MSE 导出恢复 192 个语言 MLP 投影，移除 576 个 scale tensor，
 输出共 2,180 个 tensors 和 327 个 NVFP4 量化层；视觉 110 个投影和 MTP 8 个投影
@@ -126,11 +129,19 @@ control 耗时 289.24 / 288.87 秒，MLP 耗时 699.05 / 696.29 秒；MLP 本次
 LCP 为 7 / 12。两臂都未检出确认的 2,032-token 周期，但该短预算无法覆盖历史循环
 起点，因此不构成停止恢复或循环修复。短阶段两个容器均已清理。
 
-监督进程于 04:05:30 UTC 接上 long 阶段。最新 progress-10（05:41:55 UTC）显示
-control 两次均在 34,189 tokens 后返回 `stop`，耗时 2,503.58 / 2,505.88 秒，
-各出现一次 thinking-end（index 33,901），两次输出 SHA 一致、repeat stable=true，
-未检出确认的 2,032-token 周期。MLP long trial 1 于 05:40:43 UTC 开始，尚无完成
-结果。control 的历史循环尚未复现，不能预设这次对照会循环。
+监督进程于 04:05:30 UTC 接上 long 阶段。r3 于 08:04:06 UTC 完成，观察记录时间为
+08:04:11 UTC。control 两次均在 34,189 tokens 后返回 `stop`，耗时
+2,503.58 / 2,505.88 秒；两次输出 SHA 一致、repeat stable=true，
+各出现一次 thinking-end（index 33,901），未检出确认的 2,032-token 周期。MLP 两次均在
+25,000 tokens 后返回服务 `stop`，耗时 4,300.50 / 4,299.41 秒；
+两次输出 SHA 一致、repeat stable=true，各出现一次 thinking-end（index 24,735），
+同样未检出确认周期。所有 long 容器均已 removed；监督单元为 inactive/success，
+supervisor 为 completed。观察点记录 GLM running=true；随后新的 source-control
+supervisor 于 08:04:38 UTC 启动，临时暂停同一 GLM 后于 08:08:59 UTC 发起请求。
+
+control 没有复现历史自然循环，因此这组结果不能提供 MLP 修复的对照意义；两臂均为
+服务 `stop`，不能据此宣称自然停止恢复或答案正确。[原始源码对照](dgx-spark-natural-source-control-20261020.md)
+已独立启动。
 
 两条 control 记录的 `contains_eos=false`、`terminal_eos=false`、`natural_termination=false`
 仅使用了运行中诊断器从 config 读取的 EOS 集合。只读元数据核对发现，control、MLP
@@ -145,15 +156,32 @@ additional stops，并保存脱敏的 matched-stop 摘要，22 项相关回归�
 
 两臂均从原题的 288-token prompt 起点运行，65,536 context、temperature 0、
 seed 20261020、TP1、无 MTP、FP8 KV、FP32 SSM，关闭 radix cache 和 CUDA graphs。
-两臂短阶段完成稳定重复并清理后，监督进程已接上每臂两次、最多 49,152 tokens
-的 long 阶段。历史周期后缀起点为 33,131，因此 4,096-token 短阶段无法检验该晚期
-循环。long 报告分别记录自然停止与已知 2,032-token 周期，只探测这一固定周期。
+两臂短阶段完成稳定重复并清理后，监督进程接上每臂两次、最多 49,152 tokens
+的 long 阶段。历史周期后缀起点为 33,131；本次 control 在 34,189 tokens、MLP
+在 25,000 tokens 均未检出确认周期。long 报告只探测这一固定的 2,032-token 周期，
+并不把服务 `stop` 解释为自然停止。
 
 远端由 systemd 托管，Python `finally` 与 `ExecStopPost` 负责清理本次诊断容器并
-启动原 GLM 容器；当前 GLM 仍处于获准的临时暂停状态，恢复尚未发生。early 5 小时、
-long 18 小时是 watchdog 上限。相关离线测试共 27 项通过，包括控制器失败和停止命令
-超时后仍尝试恢复服务。复现脚本与配置见
+启动原 GLM 容器；r3 结束时恢复已完成，观察点为 running=true。随后新的 source-control
+supervisor 于 08:04:38 UTC 启动，临时暂停同一 GLM 后于 08:08:59 UTC 发起请求。
+early 5 小时、long 18 小时是 watchdog
+上限。相关离线测试共 27 项通过，包括控制器失败和停止命令超时后仍尝试恢复服务。
+复现脚本与配置见
 [`mlp-pilot`](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/)。
+
+## R3 beta-store 单变量对照：已完成
+
+R3 保留 R1 的 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；原分配
+已为 FP32。单个冷请求输出 `49,152` tokens，以 `length` 结束，输出 SHA-256
+`57ab62e0676d083e05f154b399cefe4d70e5633d2a3e4cecdc5b921afa128cfa`，与 R1/R2 不同。
+lag `2,032` 的最大匹配计数为 `10`，起点 `10,959`、覆盖 `2,042` tokens；匹配不足
+完整周期确认门槛，只能说未检出原已确认的长期 lag-2032 循环，不能排除其他 period，
+也不能声称正常停止、答案正确或 MSE 修复。speculative verify 计数未观测，缓存 token
+和 retractions 均为 0；容量摘要 `1,728,271` 只保留容量差异边界。microprobe 的
+legacy-to-candidate maxabs/RMS 为 `0.0005898475646972656` / `0.0002853343030437827`，
+g delta 为 0，candidate sigmoid maxerr 为 `5.960464477539063e-08`；literal
+first-logits 未测量。实验后双端原 GLM exact/running，连续稳定约 120 秒；有限应用
+元数据响应不等于 readiness，readiness 仍为 `unknown`，未作端到端推理结论。
 
 当前不建立 MLP 修复、自然停止恢复、GPQA 或视觉/MTP 功能通过的结论。停止也不代表
 回答正确；只有在同协议 control 复现相关退化后，才有对应的修复对照意义。
