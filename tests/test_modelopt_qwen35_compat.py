@@ -47,7 +47,10 @@ def test_quantization_installs_bound_transformers_to_supported_gdn_api() -> None
             assert transformers[0].specifier == SpecifierSet("==5.12.1")
             assert "5.12.1" in supported
         else:
-            assert transformers[0].specifier == supported
+            # The x86 CUDA PTQ lock may freeze the known compatible release
+            # while the project-level HF extra remains a supported range.
+            assert transformers[0].specifier in (supported, SpecifierSet("==5.14.1"))
+            assert "5.14.1" in supported
 
 
 def _install_fake_transformers(monkeypatch: pytest.MonkeyPatch, *, missing: str | None = None):
