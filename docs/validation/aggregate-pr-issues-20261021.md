@@ -13,8 +13,8 @@
 | #61 | x86 CUDA 12.8 / Python 3.12 依赖解析锁 | 依赖解析和安装检查 | 不是 27B GPU PTQ 成功或历史 5090 环境复现证明 |
 | #62 / [PR #68](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/68) | Docker digest 固定，SGLang patch manifest 缺失或漂移时 fail-closed | 容器静态门禁与 CPU 测试 | 不替代 Spark 上的完整模型启动、视觉/MTP 或 TP2 验证 |
 | 当前分支 | vision shard key 缺失或索引不一致时 fail-closed | Python 单元测试覆盖索引校验和拒绝路径 | 不证明真实视觉权重已在 GPU 上加载或生成 |
-| 当前分支 | MTP 2D attention mask 诊断与兼容性边界 | 形状/类型诊断和明确错误路径 | 不把不支持的 packed 2D mask 转换成可用实现，也不证明 MTP 质量 |
-| [聚合 PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70) | GPQA continuation 高置信重复前缀保护；新 journal 的 `prompt_sha256` 与 CSV prompt 交叉校验，旧行缺字段兼容并单次告警；repetition row 保留实际 token usage；vision restore 按源 shard 名恢复 BF16 缺键 | CPU 测试覆盖 continuation/checker/resume 和 vision shard 恢复路径 | 重复 chunk 不追加文本但 usage 计数；checker 接受 `repetition` + `truncated=true` 并计错。此评测保护及 CPU 权重文件检查均不证明 GPU MSE 根因已修复或整模视觉已验证 |
+| 当前分支 | MTP 4D packed/cached attention mask 诊断与兼容性边界 | 形状/类型诊断和明确错误路径 | 不把不支持的 4D packed/cached mask 转换成可用实现，也不证明 MTP 质量 |
+| [聚合 PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70) | GPQA continuation 高置信重复前缀保护；新 journal 的 `prompt_sha256` 与 CSV prompt 交叉校验，旧行缺字段兼容并单次告警；服务返回 usage 时 repetition row 保留该次实际 usage；vision restore 按源 shard 名恢复 BF16 缺键 | CPU 测试覆盖 continuation/checker/resume 和 vision shard 恢复路径 | 重复 chunk 不追加文本；checker 接受 `repetition` + `truncated=true` 并计错。此评测保护及 CPU 权重文件检查均不证明 GPU MSE 根因已修复或整模视觉已验证 |
 
 ## 合并前门槛
 
@@ -28,7 +28,6 @@
 
 ## Pull request 状态
 
-聚合入口为 [PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70)。根据最近
-核对，PR #65–#69 仍为 open；PR #69 的 CI 成功，其余这些 PR 当前没有 check 记录。PR #70
-首轮 CI 成功，但本文所述最新补强尚待 push 并在更新后的 head 上重新运行 CI。状态可能变化，
-合并前请以各 PR 页面当前 head 和 checks 为准，不能把旧 head 的成功结果转移给新提交。
+聚合入口为 [PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70)。PR #65–#69
+及 PR #70 的状态可能变化；合并前请以各 PR 页面当前 head 和 checks 为准，不能把旧 head
+的成功结果转移给新提交。
