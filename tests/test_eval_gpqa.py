@@ -295,6 +295,22 @@ def test_extract_choice_keeps_plain_answer_without_thinking_tags() -> None:
     assert extract_choice("Answer: D") == "D"
 
 
+def test_extract_choice_accepts_inline_code_answer_line_with_following_note() -> None:
+    assert extract_choice("`Answer: B`\nNote: see figure C") == "B"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Option A is plausible, while Option C is stronger.",
+        "I considered A and C before choosing.",
+        "The candidates are A, B, C, and D.",
+    ],
+)
+def test_extract_choice_requires_an_explicit_answer(text: str) -> None:
+    assert extract_choice(text) is None
+
+
 def test_extract_choice_treats_unmatched_thinking_close_as_implicit_open() -> None:
     text = "Answer: A\n</think>\nAnswer: C"
     assert visible_answer_span(text).strip() == "Answer: C"
@@ -316,7 +332,7 @@ def test_prompt_asks_for_untruncated_reasoning() -> None:
     )
     prompt = format_gpqa_prompt(item)
     assert "Do not stop until the reasoning is complete" in prompt
-    assert "Answer: $LETTER" in prompt
+    assert "The last line of your response must be exactly: Answer: $LETTER" in prompt
     assert "A. up" in prompt
 
 
@@ -430,6 +446,53 @@ def test_continue_on_length_reserves_continuation_message_templates(tmp_path: Pa
             0,
         ),
     ]
+
+
+def test_continuation_uses_explicit_answer_format_and_parses_inline_code(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000},
+        },
+    )
+    item = GPQAItem(
+        item_id="t1",
+        question="Which particle?",
+        choices={"A": "up", "B": "down", "C": "strange", "D": "charm"},
+        gold="B",
+    )
+    continuation_messages: list[dict[str, str]] = []
+
+    def complete(**kwargs):
+        if len(kwargs["messages"]) == 1:
+            return GenerationResult(
+                text="<think>long trace",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=200,
+                truncated=True,
+            )
+        continuation_messages.extend(kwargs["messages"])
+        return GenerationResult(
+            text="</think>\n`Answer: B`\nNote: see figure C",
+            finish_reason="stop",
+            prompt_tokens=0,
+            completion_tokens=10,
+        )
+
+    results = run_gpqa(
+        recipe,
+        items=[item],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 100,
+    )
+    continuation_prompt = continuation_messages[-1]["content"]
+    assert "last line of your response must be exactly: Answer: $LETTER" in continuation_prompt
+    assert "`Answer: $LETTER`" not in continuation_prompt
+    assert results["scores"]["correct"] == 1
+    assert results["scores"]["unparsed"] == 0
 
 
 def test_continue_on_length_zero_usage_makes_progress(tmp_path: Path) -> None:

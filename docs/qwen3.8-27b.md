@@ -60,7 +60,7 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 ## SGLang inference and GPQA
 
-推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。答案解析要求显式 `Answer: A` 至 `Answer: D`、等价 boxed 答案或单独答案字母；选项讨论中的字母不作为答案，整行反引号包裹的 Answer 格式也可解析。解析规则更新不重写既有 journal 或历史成绩。截断和解析失败算错。
 
 ### 当前 Spark 完整结果
 

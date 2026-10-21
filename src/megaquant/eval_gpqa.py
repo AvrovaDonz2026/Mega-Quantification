@@ -885,7 +885,7 @@ _THINK_TAG = re.compile(
     flags=re.IGNORECASE,
 )
 _ANSWER_LINE = re.compile(
-    r"(?im)^\s*(?:final\s+)?answer\s*[:：]\s*\(?([A-D])\)?\s*[.\s]*$",
+    r"(?im)^\s*`?\s*(?:final\s+)?answer\s*[:：]\s*\(?([A-D])\)?\s*[.\s]*`?\s*$",
 )
 _BOXED = re.compile(r"\\boxed\{\s*\(?([A-D])\)?\s*\}", flags=re.IGNORECASE)
 _SOLE_LETTER = re.compile(r"(?im)^\s*\(?([A-D])\)?\s*[.\s]*$")
@@ -920,9 +920,6 @@ def extract_choice(text: str) -> str | None:
         matches = list(pattern.finditer(span))
         if matches:
             return matches[-1].group(1).upper()
-    loose = list(re.finditer(r"\b([A-D])\b", span))
-    if loose:
-        return loose[-1].group(1).upper()
     return None
 
 
@@ -1078,7 +1075,8 @@ def generate_untruncated(
                     {
                         "role": "user",
                         "content": "Continue from where you left off. Do not restart. "
-                        "Finish the reasoning and end with `Answer: $LETTER`.",
+                        "Finish the reasoning. The last line of your response must be "
+                        "exactly: Answer: $LETTER where LETTER is one of A, B, C, or D.",
                     },
                 ],
                 sampling=recipe.sampling,
