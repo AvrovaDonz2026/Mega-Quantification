@@ -106,6 +106,24 @@ def test_describe_w4a8_is_sglang_mixed() -> None:
     assert "w4a8_nvfp4_fp8" not in summary["notes"]
 
 
+@pytest.mark.parametrize(
+    ("scheme", "qformat"),
+    [
+        ("nvfp4_w4a8", "mixed_nvfp4_fp8"),
+        ("nvfp4_mixed", "mixed_nvfp4_fp8"),
+        ("nvfp4_w4a4", "nvfp4"),
+        ("nvfp4_w4a16", "w4a16_nvfp4"),
+        ("nvfp4_w4a16_mixed", "mixed_w4a16_nvfp4"),
+        ("fp8_w8a8", "fp8"),
+    ],
+)
+def test_describe_cfg_supports_each_canonical_scheme(scheme: str, qformat: str) -> None:
+    summary = describe_cfg(scheme)
+    assert summary["supported"] is True
+    assert summary["scheme"] == scheme
+    assert summary["qformat"] == qformat
+
+
 def test_describe_trtllm_uniform_w4a8_is_unsupported() -> None:
     summary = describe_cfg("w4a8_nvfp4_fp8")
     assert summary["supported"] is False
