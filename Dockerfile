@@ -9,7 +9,10 @@
 # NGC PyTorch (often the most reliable RTX 5090 / sm_120 path):
 #   BASE_IMAGE=nvcr.io/nvidia/pytorch:25.08-py3 INSTALL_TORCH=0 docker compose build
 
-ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+# Pinned to the amd64 digest (2026-10-21); the tag alone is mutable and would
+# let rebuilds drift. Re-pin with:
+#   docker buildx imagetools inspect nvidia/cuda:12.8.1-devel-ubuntu24.04 --format '{{json .Manifest}}'
+ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:4b9ed5fa8361736996499f64ecebf25d4ec37ff56e4d11323ccde10aa36e0c43
 FROM ${BASE_IMAGE}
 
 ARG INSTALL_TORCH=1
