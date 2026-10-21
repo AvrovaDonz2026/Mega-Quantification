@@ -297,7 +297,7 @@ def _git_sha() -> str | None:
         record = json.loads(manifest.read_text())
         revision = record.get("git_revision") if isinstance(record, dict) else None
         if isinstance(revision, str) and re.fullmatch(r"[0-9a-fA-F]{40}", revision):
-            return revision
+            return revision.lower()
     except (OSError, UnicodeError, ValueError):
         pass
     try:

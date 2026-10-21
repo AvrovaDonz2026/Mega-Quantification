@@ -343,40 +343,6 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
                 "notes": "FP8_DEFAULT_CFG: per-tensor FP8 E4M3 W8A8.",
             }
         )
-    else:
-        summary.update(
-            {
-                "weight_format": "nvfp4+fp8",
-                "activation_format": "nvfp4+fp8",
-                "mlp_weight_format": "nvfp4",
-                "mlp_activation_format": "nvfp4",
-                "mlp_group_size": 16,
-                "attn_weight_format": "fp8",
-                "attn_activation_format": "fp8",
-                "targets": {
-                    "nvfp4": list(_MIXED_NVFP4_PATTERNS),
-                    "fp8": list(_MIXED_ATTN_PATTERNS),
-                    "disabled": [
-                        "*visual*",
-                        "*vision*",
-                        "*embed*",
-                        "*linear_attn.conv1d*",
-                        "*linear_attn.in_proj_a*",
-                        "*linear_attn.in_proj_b*",
-                        "*mtp*",
-                    ],
-                },
-                "notes": (
-                    "Deepcopy NVFP4_DEFAULT_CFG (fallback W4A8_NVFP4_FP8_CFG). "
-                    "Always force NVFP4 group_size 16 on *mlp* and *lm_head* "
-                    "(weights+inputs); FP8 on *self_attn* and *linear_attn*. "
-                    "nvidia/Qwen3.8-27B-NVFP4 uses NVFP4 group_size 16 on "
-                    "MLP+lm_head and FP8 on attention. Later disable "
-                    "vision/mtp/conv1d/in_proj_a/in_proj_b/embed. lm_head is "
-                    "re-enabled after ModelOpt's default disable."
-                ),
-            }
-        )
     return summary
 
 
