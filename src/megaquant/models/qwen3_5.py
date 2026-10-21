@@ -63,7 +63,6 @@ class Qwen35Family(BaseFamily):
 
     def load_kwargs(self, recipe: Any) -> dict[str, Any]:
         kwargs = super().load_kwargs(recipe)
-        kwargs["trust_remote_code"] = True
         # Transformers 5.8 (required by Qwen3.8) prefers ``dtype``; keep both.
         # Honor recipe.model.dtype via BaseFamily (default remains bfloat16).
         kwargs.setdefault("dtype", kwargs.get("torch_dtype", "bfloat16"))
