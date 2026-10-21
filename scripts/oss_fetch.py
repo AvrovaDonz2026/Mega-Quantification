@@ -18,6 +18,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import urllib.request
 from pathlib import Path
@@ -68,7 +69,7 @@ def fetch(
         return [sums_url]
     with urllib.request.urlopen(sums_url, timeout=60) as resp:
         body = resp.read().decode("utf-8")
-    names: list[str] = []
+    entries: list[tuple[str, str]] = []  # (sha256, name)
     for line in body.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -76,15 +77,27 @@ def fetch(
         parts = line.split()
         if len(parts) < 2:
             continue
-        names.append(parts[-1])
-    if not names:
+        digest, name = parts[0], parts[-1]
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError(f"bad sha256 entry in SHA256SUMS: {line!r}")
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            raise ValueError(f"unsafe file name in SHA256SUMS: {name!r}")
+        entries.append((digest, name))
+    if not entries:
         raise FileNotFoundError(f"empty SHA256SUMS at {sums_url}")
     (dest / "SHA256SUMS.txt").write_text(body, encoding="utf-8")
-    for name in names:
+    names: list[str] = []
+    for digest, name in entries:
         url = f"{base}/{name}"
         out = dest / name
         print(f"[oss-fetch] GET {url}", flush=True)
         urllib.request.urlretrieve(url, out)
+        actual = hashlib.sha256(out.read_bytes()).hexdigest()
+        if actual != digest:
+            raise ValueError(
+                f"sha256 mismatch for {name}: expected {digest}, got {actual}"
+            )
+        names.append(name)
     extra = "oss_manifest.json"
     try:
         urllib.request.urlretrieve(f"{base}/{extra}", dest / extra)

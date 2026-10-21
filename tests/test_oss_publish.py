@@ -46,10 +46,11 @@ def test_canonical_scheme_from_name_and_alias() -> None:
     assert oss.canonical_scheme(None, fake) == "w4a8"
 
 
-def test_dry_run_writes_sidecars(tmp_path: Path) -> None:
+def test_dry_run_writes_nothing(tmp_path: Path) -> None:
     oss = _load()
     (tmp_path / "model.safetensors").write_bytes(b"weights")
     (tmp_path / "config.json").write_text("{}\n")
+    before = set(tmp_path.iterdir())
     manifest = oss.publish(
         tmp_path,
         scheme="w4a4",
@@ -59,10 +60,13 @@ def test_dry_run_writes_sidecars(tmp_path: Path) -> None:
     )
     assert manifest["scheme"] == "w4a4"
     assert manifest["bucket"] == "example-bucket"
-    assert (tmp_path / "SHA256SUMS.txt").is_file()
-    assert (tmp_path / "oss_manifest.json").is_file()
+    assert set(tmp_path.iterdir()) == before  # dry-run must not write sidecars
     assert "Mega-Quantification/w4a4/" in manifest["prefix"]
     assert manifest["content_hash"] in manifest["prefix"]
+    # ...but the manifest still previews every file that would be uploaded.
+    names = [entry["name"] for entry in manifest["files"]]
+    assert "model.safetensors" in names
+    assert "SHA256SUMS.txt" in names
     with pytest.raises(ValueError):
         oss.canonical_scheme("fp16", tmp_path)
 

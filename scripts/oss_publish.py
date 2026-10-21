@@ -154,10 +154,13 @@ def list_upload_files(export_dir: Path) -> list[Path]:
     return files
 
 
+def sha256sums_text(files: list[Path], hashes: dict[str, str]) -> str:
+    return "".join(f"{hashes[path.name]}  {path.name}\n" for path in files)
+
+
 def write_sha256sums(export_dir: Path, files: list[Path], hashes: dict[str, str]) -> Path:
-    lines = [f"{hashes[path.name]}  {path.name}\n" for path in files]
     dest = export_dir / "SHA256SUMS.txt"
-    dest.write_text("".join(lines), encoding="utf-8")
+    dest.write_text(sha256sums_text(files, hashes), encoding="utf-8")
     return dest
 
 
@@ -256,9 +259,6 @@ def publish(
     st_lines = [f"{path.name} {hashes[path.name]}\n" for path in st_files]
     digest = hashlib.sha256("".join(st_lines).encode("utf-8")).hexdigest()
     key_prefix = f"{prefix.rstrip('/')}/{mapped}/{digest}"
-    sha_path = write_sha256sums(export_dir, files, hashes)
-    hashes[sha_path.name] = sha256_file(sha_path)
-    upload_list = files + [sha_path]
     base = public_base_url(bucket_name, endpoint, key_prefix)
 
     def file_entry(path: Path) -> dict[str, Any]:
@@ -269,6 +269,15 @@ def publish(
             "url": f"{base}/{path.name}",
         }
 
+    # SHA256SUMS content is derived in memory so --dry-run writes nothing.
+    sums_text = sha256sums_text(files, hashes)
+    sums_entry = {
+        "name": "SHA256SUMS.txt",
+        "size": len(sums_text.encode("utf-8")),
+        "sha256": hashlib.sha256(sums_text.encode("utf-8")).hexdigest(),
+        "url": f"{base}/SHA256SUMS.txt",
+    }
+
     manifest: dict[str, Any] = {
         "bucket": bucket_name,
         "endpoint": endpoint,
@@ -278,18 +287,20 @@ def publish(
         "base_url": base,
         "source_dir": str(export_dir),
         "safetensors": [line.strip() for line in st_lines],
-        "files": [file_entry(path) for path in upload_list],
+        # NOTE: oss_manifest.json is intentionally not listed in its own
+        # "files": a file cannot contain its own hash, so any self entry
+        # would always be stale.
+        "files": [file_entry(path) for path in files] + [sums_entry],
         "published_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    man_path = export_dir / "oss_manifest.json"
-    man_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    hashes[man_path.name] = sha256_file(man_path)
-    upload_list = upload_list + [man_path]
-    manifest["files"].append(file_entry(man_path))
-    man_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     if dry_run:
         return manifest
+
+    sha_path = write_sha256sums(export_dir, files, hashes)
+    man_path = export_dir / "oss_manifest.json"
+    man_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    upload_list = files + [sha_path, man_path]
 
     bucket = _bucket(endpoint, bucket_name)
     results: list[dict[str, str]] = []
