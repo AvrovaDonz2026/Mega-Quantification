@@ -23,6 +23,23 @@ def test_dockerfile_does_not_copy_weights(repo_root: Path) -> None:
         assert not line.lower().startswith("copy models")
 
 
+def test_x86_ptq_lock_is_explicit_and_does_not_touch_spark_or_ngc(repo_root: Path) -> None:
+    lock = (repo_root / "docker/constraints-x86-cuda128-py312.txt").read_text()
+    assert "torch==2.7.1+cu128" in lock
+    assert "torchvision==0.22.1+cu128" in lock
+    assert "nvidia-modelopt==0.46.1" in lock
+    assert "llmcompressor==0.8.1" in lock
+    assert "transformers==5.14.1" in lock
+    assert "not proof of a successful 27B GPU PTQ run" in lock
+    dockerfile = (repo_root / "Dockerfile").read_text()
+    assert "INSTALL_TORCH" in dockerfile and "constraints-x86-cuda128-py312.txt" in dockerfile
+    assert 'pip install -r /tmp/requirements-gpu.txt' in dockerfile
+    spark = (repo_root / "Dockerfile.spark").read_text()
+    assert "constraints-x86-cuda128-py312.txt" not in spark
+    ngc = (repo_root / "docker-compose.ngc.yml").read_text()
+    assert 'INSTALL_TORCH: "0"' in ngc
+
+
 def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     compose_path = repo_root / "docker-compose.yml"
     text = compose_path.read_text()

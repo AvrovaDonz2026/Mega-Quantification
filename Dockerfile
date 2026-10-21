@@ -17,6 +17,8 @@ FROM ${BASE_IMAGE}
 
 ARG INSTALL_TORCH=1
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
+ARG TORCH_VERSION=2.7.1+cu128
+ARG TORCHVISION_VERSION=0.22.1+cu128
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -72,14 +74,18 @@ WORKDIR /opt/megaquant
 RUN --mount=type=cache,target=/root/.cache/pip \
     if [ "${INSTALL_TORCH}" = "1" ]; then \
       pip install --upgrade pip setuptools wheel \
-      && pip install torch torchvision --index-url "${TORCH_INDEX}"; \
+      && pip install "torch==${TORCH_VERSION}" "torchvision==${TORCHVISION_VERSION}" --index-url "${TORCH_INDEX}"; \
     else \
       pip install --upgrade pip setuptools wheel; \
     fi
 
-COPY docker/requirements-gpu.txt /tmp/requirements-gpu.txt
+COPY docker/requirements-gpu.txt docker/constraints-x86-cuda128-py312.txt /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r /tmp/requirements-gpu.txt
+    if [ "${INSTALL_TORCH}" = "1" ]; then \
+      pip install -c /tmp/constraints-x86-cuda128-py312.txt -r /tmp/requirements-gpu.txt; \
+    else \
+      pip install -r /tmp/requirements-gpu.txt; \
+    fi
 
 COPY pyproject.toml README.md ./
 COPY src ./src

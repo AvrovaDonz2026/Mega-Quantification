@@ -2,9 +2,9 @@
 # The 5090 production PTQ used ModelOpt 0.46.1. 0.48 is not on PyPI.
 # Other entries remain ranges; this file is not a historical environment lock.
 nvidia-modelopt[hf]==0.46.1
-llmcompressor>=0.8.0
-compressed-tensors>=0.10.0
-transformers>=5.8,<5.15
+llmcompressor==0.8.1
+compressed-tensors==0.10.2
+transformers==5.14.1
 datasets>=3.0.0
 accelerate>=1.0.0
 safetensors>=0.5.0
