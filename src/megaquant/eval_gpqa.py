@@ -1066,7 +1066,10 @@ def generate_untruncated(
                 # Without usage, account for the single appended assistant /
                 # user pair. Subsequent requests replace that pair's content;
                 # the wrapper reserve must not accumulate once per round.
-                prompt_tokens = spent + CONTINUATION_MESSAGE_TOKEN_RESERVE
+                # (continued was already incremented: == 1 on the first one.)
+                prompt_tokens = spent + (
+                    CONTINUATION_MESSAGE_TOKEN_RESERVE if continued == 1 else 0
+                )
             first_completion_tokens = follow_completion_tokens
             if continued >= 8:
                 break
@@ -1142,7 +1145,14 @@ def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
         kwargs = {key: payload[key] for key in fields if key in payload}
         try:
             row = ItemResult(**kwargs)
-        except TypeError:
+        except TypeError as exc:
+            line_no = data.count(b"\n", 0, start) + 1
+            print(
+                f"[gpqa] warning: dropping journal line {line_no} with "
+                f"missing fields in {path}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
             continue
         # Older clients could mark a matching letter as correct even when its
         # reasoning was truncated. Normalize replayed rows without rewriting
@@ -1224,6 +1234,20 @@ def run_gpqa(
     out_dir.mkdir(parents=True, exist_ok=True)
     journal_path = out_dir / "gpqa_diamond.jsonl"
     prior = load_gpqa_journal(journal_path)
+    if prior:
+        # A resume must replay the same seed/shuffle: silently mixing rows
+        # from two different shuffles would corrupt the summary.
+        by_id = {item.item_id: item for item in items}
+        for iid, row in prior.items():
+            item = by_id.get(iid)
+            if item is None:
+                continue
+            if row.choices != item.choices or row.gold != item.gold:
+                raise EvalError(
+                    f"Journal {journal_path} was written with a different "
+                    f"seed/shuffle (item {iid}: choices/gold mismatch). "
+                    "Delete it or resume with the original seed."
+                )
     rows: list[ItemResult] = []
     lock = threading.Lock()
     mode = "a" if prior else "w"
