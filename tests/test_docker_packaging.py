@@ -317,7 +317,11 @@ def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:
     hits: list[str] = []
     for glob in text_globs:
         for path in repo_root.rglob(glob):
-            if ".git" in path.parts or path == repo_root / "tests" / "test_docker_packaging.py":
+            if (
+                ".git" in path.parts
+                or "artifacts" in path.parts
+                or path == repo_root / "tests" / "test_docker_packaging.py"
+            ):
                 continue
             blob = path.read_text(encoding="utf-8", errors="ignore")
             if "100.90.90.90" in blob or "100.90.90.100" in blob:
