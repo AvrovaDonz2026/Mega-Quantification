@@ -276,6 +276,26 @@ def is_truncated_finish_reason(value: Any) -> bool:
     return normalize_finish_reason(value) in TRUNCATED_FINISH_REASONS
 
 
+def _repeated_continuation(previous_text: str, continuation: str) -> bool:
+    """Return true when a continuation clearly restarts text already emitted.
+
+    This deliberately only catches high-confidence cases: an identical
+    non-empty chunk, or a long prefix of the new chunk already occurring in
+    the accumulated response. Natural overlap at a sentence boundary is not
+    treated as repetition.
+    """
+    old = " ".join(previous_text.split())
+    new = " ".join(continuation.split())
+    if not new:
+        return False
+    if new == old or new in {old[-len(new) :]}:
+        return True
+    if len(new) < 64:
+        return False
+    prefix = new[:64]
+    return prefix in old
+
+
 # Chat-template / special-token headroom. The eval client estimates prompt
 # tokens before the first HTTP round trip; Qwen3.8 templates add tens of
 # tokens, and SGLang 400s if prompt + max_tokens exceeds context_length.
@@ -1084,6 +1104,10 @@ def generate_untruncated(
                 max_tokens=leftover,
                 seed=recipe.generation.seed + continued,
             )
+            if _repeated_continuation(text, follow.text):
+                finish = "repetition"
+                truncated = True
+                break
             text = text + follow.text
             completion_tokens += follow.completion_tokens
             finish = follow.finish_reason

@@ -596,6 +596,32 @@ def test_continue_on_length_does_not_double_count_round_templates(tmp_path: Path
     ]
 
 
+def test_continue_on_length_stops_restarted_prefix(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000, "max_new_tokens": 500},
+        },
+    )
+    item = GPQAItem("repeat", "Q?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    calls: list[int] = []
+    prefix = "The model starts reasoning from the beginning with a long repeated prefix."
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        if len(calls) == 1:
+            return GenerationResult(prefix, "length", 100, 200, truncated=True)
+        return GenerationResult(prefix + " and continues", "length", 0, 200, truncated=True)
+
+    run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
+    assert len(calls) == 2
+    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")[0]
+    assert row.truncated is True
+    assert row.finish_reason == "repetition"
+
+
 @pytest.mark.parametrize("with_usage", [False, True])
 def test_continue_on_length_three_rounds_reserve_once_without_usage(
     tmp_path: Path, with_usage: bool
