@@ -375,7 +375,8 @@ def test_sglang_default_base_is_cuda_128_optional_129_rebuild(repo_root: Path) -
     assert (services["serve-sglang"].get("build") or {}).get("dockerfile") == "Dockerfile.sglang"
     assert (services["quantize"].get("build") or {}).get("dockerfile") in (None, "Dockerfile")
     ptq_dockerfile = (repo_root / "Dockerfile").read_text()
-    assert "nvidia/cuda:12.8.1-devel-ubuntu24.04" in ptq_dockerfile
+    assert "ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:" in ptq_dockerfile
+    assert "${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:" in compose_text
 
     documented = f"{dockerfile}\n{compose_text}\n{readme}\n{env_example}"
     assert "nvidia/cuda:12.9.1-devel-ubuntu24.04" in documented

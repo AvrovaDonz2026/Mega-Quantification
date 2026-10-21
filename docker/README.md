@@ -310,6 +310,15 @@ CUDA_VISIBLE_DEVICES=0 docker compose --profile gpu run --rm quantize
 
 ## 镜像里有什么
 
+PTQ `Dockerfile` 默认底包固定到 Docker Hub 上
+`nvidia/cuda:12.8.1-devel-ubuntu24.04` 的 linux/amd64 manifest digest。
+这固定了操作系统/CUDA 底包；`docker/requirements-gpu.txt` 中除
+`nvidia-modelopt[hf]==0.46.1` 外仍有开放版本范围，且 `torch`、
+`torchvision` 从 CUDA wheel index 安装。因此该 digest 不是完整 Python
+依赖锁，也不能单独保证两次 clean build 得到相同镜像。历史生产版本以
+对应日期验证记录为准；在没有构建 wheelhouse 或 lock 证据前，不应把当前
+解析出的版本追认为历史生产版本。
+
 以下是通用 5090 量化镜像；Spark 两套镜像的固定依赖与内容见
 [Spark 容器手册](../docs/DGX_SPARK.md#what-the-images-contain)。
 
