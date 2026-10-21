@@ -95,7 +95,9 @@ def test_qwen35_vision_and_mtp_flags() -> None:
 
 
 def test_qwen35_load_kwargs_no_torch() -> None:
-    kwargs = Qwen35Family().load_kwargs({"model": {"device_map": "cpu", "dtype": "bfloat16"}})
+    kwargs = Qwen35Family().load_kwargs(
+        {"model": {"device_map": "cpu", "dtype": "bfloat16", "trust_remote_code": True}}
+    )
     assert kwargs["trust_remote_code"] is True
     assert kwargs["device_map"] == "cpu"
     assert "bfloat16" in str(kwargs["torch_dtype"]).lower()
@@ -103,6 +105,65 @@ def test_qwen35_load_kwargs_no_torch() -> None:
     assert kwargs["language_model_only"] is True
     assert "visual" in kwargs["pin_to_cpu"]
     assert "mtp" in kwargs["pin_to_cpu"]
+
+
+@pytest.mark.parametrize("trust_remote_code", [False, True])
+def test_qwen35_model_and_tokenizer_honor_recipe_trust_remote_code(
+    trust_remote_code: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+    import types
+
+    import megaquant.pipeline as pipeline
+    from megaquant.config import Recipe
+
+    recipe = Recipe.model_validate(
+        {
+            "name": "qwen-trust-remote-code",
+            "scheme": "nvfp4_w4a8",
+            "family": "qwen3_5",
+            "model": {
+                "source": "Qwen/Qwen3.8-27B",
+                "device_map": "cpu",
+                "trust_remote_code": trust_remote_code,
+            },
+            "calibration": {},
+            "export": {"output_dir": "outputs/x"},
+        }
+    )
+
+    captured: dict[str, dict[str, Any]] = {}
+
+    class FakeTokenizer:
+        @staticmethod
+        def from_pretrained(_source: str, **kwargs: Any) -> object:
+            captured["tokenizer"] = kwargs
+            return object()
+
+    class FakeModel:
+        pass
+
+    transformers = types.ModuleType("transformers")
+    transformers.AutoModelForCausalLM = FakeModel
+    transformers.AutoModelForImageTextToText = FakeModel
+    transformers.AutoTokenizer = FakeTokenizer
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+    monkeypatch.setattr(pipeline.importlib.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(pipeline, "_torch_dtype", lambda _dtype: "bfloat16")
+    monkeypatch.setattr(pipeline, "get_family", lambda _name: Qwen35Family())
+    monkeypatch.setattr(pipeline, "_apply_device_map_pins", lambda _cls, _source, kwargs: kwargs)
+
+    def capture_model(_model_cls: Any, _source: str, kwargs: dict[str, Any]) -> object:
+        captured["model"] = kwargs
+        return object()
+
+    monkeypatch.setattr(pipeline, "_from_pretrained", capture_model)
+    monkeypatch.setattr(pipeline, "pin_cpu_parameters", lambda _model: 0)
+
+    pipeline._load_model_and_tokenizer(recipe, "qwen3_5")
+
+    assert captured["model"]["trust_remote_code"] is trust_remote_code
+    assert captured["tokenizer"]["trust_remote_code"] is trust_remote_code
 
 
 def test_qwen35_load_kwargs_honors_recipe_dtype() -> None:
