@@ -40,6 +40,29 @@ def test_existing_export_directory_with_dot_keeps_own_provenance(tmp_path, plan)
     assert not (tmp_path / "provenance.json").exists()
 
 
+def test_static_max_provenance_separates_selector_and_runtime(tmp_path, plan) -> None:
+    plan.recipe.algorithm = "static_max"
+    export = tmp_path / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["algorithm"] == "static_max"
+    assert report["recipe_selector"] == "static_max"
+    assert report["runtime_algorithm"] == "max"
+
+
+def test_non_modelopt_provenance_does_not_fabricate_runtime_algorithm(tmp_path, plan) -> None:
+    plan.backend_name = "llmcompressor"
+    plan.recipe.algorithm = "mse"
+    export = tmp_path / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["algorithm"] == "mse"
+    assert report["recipe_selector"] == "mse"
+    assert report["runtime_algorithm"] is None
+
+
 @pytest.mark.parametrize("filename", ["model.safetensors", "model"])
 def test_actual_file_exports_write_provenance_in_parent(tmp_path, plan, filename) -> None:
     export = tmp_path / filename

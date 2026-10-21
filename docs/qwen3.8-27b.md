@@ -279,6 +279,20 @@ megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
   --algorithm local_hessian --num-samples 2048
 ```
 
+`static_max` 是仅限 NVFP4 的控制臂 selector：它保持 NVFP4 **weight block
+scale 为 static**、**input scale 为 dynamic**，但运行 ModelOpt 的 `max` 校准。
+因此它与默认 `max` 的 dynamic weight 语义不同，也不是新的搜索算法。可在
+NVFP4 配方上临时启用：
+
+```bash
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml \
+  --algorithm static_max
+```
+
+当前只有 CPU 和配置层验证；尚无 GPU PTQ 或同 source、同 calibration、同
+ModelOpt 的 matched export 结论。该控制臂不代表质量或性能改善，也没有修复
+已知的 MSE 重复输出行为。
+
 Spark 的可选 W4A4 MSE / Local-Hessian 实验使用同一份 256 条图文校准集，
 只改变权重 scale 搜索与导出目录。搜索要求静态 NVFP4 权重 block scale 和
 `fp8_scale_sweep=true`；输入 scale 仍为动态，激活校准仍是 max，

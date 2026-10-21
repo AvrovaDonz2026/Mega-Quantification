@@ -16,6 +16,10 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
+from megaquant.backends.modelopt import (
+    _runtime_algorithm_spec,
+    canonicalize_scheme,
+)
 from megaquant.calibration import build_calibration_iter
 from megaquant.config import LayerGroup, PrecisionSpec, Recipe
 from megaquant.exceptions import BackendError, FamilyError, MegaQuantError, RecipeError
@@ -69,12 +73,15 @@ def format_plan(plan: ResolvedPlan) -> str:
         if group.ignore:
             item["ignore"] = group.ignore
         groups.append(item)
+    selector, runtime_algorithm = _algorithm_metadata(plan)
     payload: dict[str, Any] = {
         "model": recipe.model.source,
         "device_map": recipe.model.device_map,
         "scheme": recipe.scheme,
         "backend": plan.backend_name,
         "algorithm": recipe.algorithm,
+        "recipe_selector": selector,
+        "runtime_algorithm": runtime_algorithm,
         "kv_cache": recipe.kv_cache,
         "family": plan.family_name,
         "groups": groups,
@@ -100,6 +107,22 @@ def _unique(items: list[str]) -> list[str]:
             seen.add(item)
             out.append(item)
     return out
+
+
+def _algorithm_metadata(plan: ResolvedPlan) -> tuple[str, Any | None]:
+    """Separate the recipe selector from backend-specific runtime semantics."""
+    selector = plan.recipe.algorithm.strip().lower().replace("-", "_") or "max"
+    backend = plan.backend_name.strip().lower()
+    if backend not in {"modelopt", "auto/modelopt"}:
+        return selector, None
+    return (
+        selector,
+        _runtime_algorithm_spec(
+            selector,
+            plan.recipe.algorithm,
+            canonicalize_scheme(plan.recipe.scheme),
+        ),
+    )
 
 
 def _placeholder_group(scheme: str) -> LayerGroup:
@@ -535,6 +558,8 @@ def _write_provenance(plan: ResolvedPlan, export_path: Path) -> None:
         "scheme": plan.recipe.scheme,
         "backend": plan.backend_name,
         "algorithm": plan.recipe.algorithm,
+        "recipe_selector": _algorithm_metadata(plan)[0],
+        "runtime_algorithm": _algorithm_metadata(plan)[1],
         "kv_cache": plan.recipe.kv_cache,
         "family": plan.family_name,
         "calibration": plan.recipe.calibration.model_dump(),
@@ -597,6 +622,17 @@ class QuantPipeline:
 
         ignore = _unique(_family_ignore(family_name, recipe, notes) + list(recipe.extra_ignore))
         backend_name = _pick_backend(recipe, notes)
+        selector = recipe.algorithm.strip().lower().replace("-", "_")
+        if selector == "static_max":
+            canonical = canonicalize_scheme(recipe.scheme)
+            if backend_name not in {"modelopt", "auto/modelopt"}:
+                raise RecipeError(
+                    "algorithm 'static_max' requires the ModelOpt backend"
+                )
+            if not canonical.startswith("nvfp4"):
+                raise RecipeError(
+                    "algorithm 'static_max' is only supported for NVFP4 schemes"
+                )
         try:
             family_obj = _instantiate(get_family(family_name))
         except FamilyError:

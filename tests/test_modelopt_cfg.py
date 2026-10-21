@@ -22,6 +22,7 @@ from megaquant.backends.modelopt import (
     describe_cfg,
 )
 from megaquant.config import load_recipe
+from megaquant.exceptions import RecipeError
 from megaquant.pipeline import QuantPipeline
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -170,6 +171,59 @@ def test_w4a8_local_hessian_uses_block_size_16() -> None:
     assert isinstance(algo, dict)
     assert algo["method"] == "local_hessian"
     assert algo["block_size"] == 16
+
+
+def test_static_max_selects_static_nvfp4_weights_with_max_runtime() -> None:
+    recipe = load_recipe(
+        REPO_ROOT / "recipes" / "qwen3.8-27b-nvfp4-w4a4.spark.yaml"
+    ).model_copy(update={"algorithm": "static_max"})
+    cfg = ModelOptBackend().build_quant_cfg(QuantPipeline(recipe).resolve())
+    mse_recipe = recipe.model_copy(update={"algorithm": "mse"})
+    mse_cfg = ModelOptBackend().build_quant_cfg(QuantPipeline(mse_recipe).resolve())
+
+    assert cfg["algorithm"] == "max"
+    assert mse_cfg["algorithm"] == {"method": "mse", "fp8_scale_sweep": True}
+    for module in (
+        "model.language_model.layers.0.mlp.gate_proj",
+        "model.visual.blocks.0.attn.qkv",
+        "mtp.fc",
+        "lm_head",
+    ):
+        weight_enabled, weight_attrs = _effective_quantizer_cfg(
+            cfg, f"{module}.weight_quantizer"
+        )
+        input_enabled, input_attrs = _effective_quantizer_cfg(
+            cfg, f"{module}.input_quantizer"
+        )
+        assert weight_enabled is input_enabled is True
+        assert weight_attrs["block_sizes"]["type"] == "static"
+        assert input_attrs["block_sizes"]["type"] == "dynamic"
+        mse_weight = _effective_quantizer_cfg(
+            mse_cfg, f"{module}.weight_quantizer"
+        )[1]
+        mse_input = _effective_quantizer_cfg(
+            mse_cfg, f"{module}.input_quantizer"
+        )[1]
+        for attrs, mse_attrs in ((weight_attrs, mse_weight), (input_attrs, mse_input)):
+            assert attrs == mse_attrs
+
+
+def test_static_max_rejects_non_nvfp4_scheme() -> None:
+    recipe = load_recipe(W4A4).model_copy(
+        update={"scheme": "fp8_w8a8", "algorithm": "static_max"}
+    )
+    with pytest.raises(RecipeError, match="static_max.*NVFP4"):
+        QuantPipeline(recipe).resolve()
+
+
+def test_describe_static_max_separates_selector_and_runtime() -> None:
+    summary = describe_cfg("nvfp4_w4a4", algorithm="static_max")
+    assert summary["algorithm"] == "static_max"
+    assert summary["recipe_selector"] == "static_max"
+    assert summary["runtime_algorithm"] == "max"
+    unsupported = describe_cfg("fp8_w8a8", algorithm="static_max")
+    assert unsupported["supported"] is False
+    assert "only supported for NVFP4" in unsupported["error"]
 
 
 def test_rewrite_sglang_export_helper(tmp_path: Path) -> None:

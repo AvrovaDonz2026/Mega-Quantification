@@ -237,6 +237,16 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
 
     group_size: int | None = None if canonical == "fp8_w8a8" else 16
 
+    selector = (algorithm or "max").strip().lower().replace("-", "_")
+    if selector == "static_max" and not canonical.startswith("nvfp4"):
+        return {
+            "scheme": canonical,
+            "supported": False,
+            "error": "ModelOpt recipe selector 'static_max' is only supported for NVFP4 schemes",
+            "recipe_selector": selector,
+            "runtime_algorithm": "max",
+        }
+    runtime_algorithm = _runtime_algorithm_spec(selector, algorithm, canonical)
     summary: dict[str, Any] = {
         "scheme": canonical,
         "alias_of": scheme_name if canonicalize_scheme(scheme_name) != scheme_name else None,
@@ -245,6 +255,8 @@ def describe_cfg(scheme_name: str, algorithm: str = "max") -> dict[str, Any]:
         "qformat": _SCHEME_QFORMAT[canonical],
         "group_size": group_size,
         "algorithm": algorithm or "max",
+        "recipe_selector": selector,
+        "runtime_algorithm": runtime_algorithm,
         "requires_modelopt": True,
     }
     if canonical in _SGLANG_W4A16_MIXED:
@@ -370,6 +382,23 @@ def _scheme_of(plan: Any, recipe: Any) -> str:
 def _algorithm_of(plan: Any, recipe: Any) -> str:
     raw = _attr(recipe, "algorithm", None) or _attr(plan, "algorithm", None) or "max"
     return str(raw)
+
+
+def _runtime_algorithm_spec(
+    selector: str, original: str | None = None, canonical: str = ""
+) -> Any:
+    """Return the ModelOpt algorithm value for a normalized recipe selector."""
+    key = (selector or "max").strip().lower().replace("-", "_")
+    if key in {"", "max", "max_calib", "static_max"}:
+        return "max"
+    if key == "local_hessian":
+        return {"method": "local_hessian", "fp8_scale_sweep": True, "block_size": 16}
+    if key == "mse":
+        spec: dict[str, Any] = {"method": "mse"}
+        if canonical.startswith("nvfp4"):
+            spec["fp8_scale_sweep"] = True
+        return spec
+    return original or selector
 
 
 def _import_mtq() -> Any | None:
@@ -580,20 +609,26 @@ def _use_static_nvfp4_weight_scales(cfg: dict[str, Any]) -> None:
 
 def _apply_algorithm(cfg: dict[str, Any], algorithm: str, canonical: str = "") -> None:
     key = algorithm.strip().lower().replace("-", "_")
-    if key in {"", "max", "max_calib"}:
+    if key == "static_max":
+        if not canonical.startswith("nvfp4"):
+            raise BackendError(
+                "ModelOpt recipe selector 'static_max' is only supported for NVFP4 schemes"
+            )
+        _use_static_nvfp4_weight_scales(cfg)
         cfg["algorithm"] = "max"
+        return
+    if key in {"", "max", "max_calib"}:
+        cfg["algorithm"] = _runtime_algorithm_spec(key, algorithm)
         return
     if key == "local_hessian":
         if canonical.startswith("nvfp4"):
             _use_static_nvfp4_weight_scales(cfg)
-        cfg["algorithm"] = {
-            "method": "local_hessian",
-            "fp8_scale_sweep": True,
-            "block_size": _hessian_block_size(canonical),
-        }
+        spec = _runtime_algorithm_spec(key, algorithm, canonical)
+        spec["block_size"] = _hessian_block_size(canonical)
+        cfg["algorithm"] = spec
         return
     if key == "mse":
-        cfg["algorithm"] = {"method": "mse"}
+        cfg["algorithm"] = _runtime_algorithm_spec(key, algorithm, canonical)
         if canonical.startswith("nvfp4"):
             # Use NVIDIA's NVFP4 MSE preset's FP8 block-scale sweep instead of
             # generic amax multiplier search; leave other formats' MSE intact.
@@ -1259,6 +1294,13 @@ class ModelOptBackend:
             "backend": self.name,
             "qformat": _SCHEME_QFORMAT.get(canonical, canonical),
             "algorithm": _algorithm_of(None, recipe),
+            "recipe_selector": _algorithm_of(None, recipe).strip().lower().replace("-", "_")
+            or "max",
+            "runtime_algorithm": _runtime_algorithm_spec(
+                _algorithm_of(None, recipe),
+                _algorithm_of(None, recipe),
+                canonical,
+            ),
             "modelopt_cfg": _SCHEME_CFG_NAME.get(canonical, canonical),
             "scheme": canonical or _attr(recipe, "scheme", None),
             "model_source": _attr(_attr(recipe, "model", None), "source", None),
