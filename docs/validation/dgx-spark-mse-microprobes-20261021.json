@@ -1,0 +1,88 @@
+{
+  "title": "DGX Spark MSE and BF16 numeric microprobes",
+  "date": "2026-10-21",
+  "status": "completed_limited_numeric_probes",
+  "visibility": "public_redacted_summary",
+  "provenance": {
+    "static_max_mse": {
+      "evidence_class": "synthetic_recipe_native_counterfactual",
+      "modelopt_version": "0.47.0",
+      "seed": 42,
+      "runtime": {
+        "serving_image_relation": "historical_serving_image",
+        "torch": "2.13.0+cu130",
+        "cuda": "13.0",
+        "overlay": "offline"
+      },
+      "replication_note": "Not a complete reproduction of the original PTQ environment (Torch 2.14 / nv26.8).",
+      "arms": {
+        "dynamic-max": {
+          "weight_scale_mode": "dynamic",
+          "weight_mse": 1.3609777852252591e-05,
+          "heldout_output_relative_mse": 0.019379304721951485
+        },
+        "static-max": {
+          "weight_scale_mode": "static",
+          "weight_mse": 1.3609777852252591e-05,
+          "heldout_output_relative_mse": 0.019379304721951485
+        },
+        "static-MSE": {
+          "weight_scale_mode": "static",
+          "weight_mse": 1.0266852768836543e-05,
+          "heldout_output_relative_mse": 0.01700882986187935
+        }
+      },
+      "activation_amax_hashes_equal_across_arms": true,
+      "static_mse_vs_static_max_relative_reduction_percent": {
+        "weight_mse": 24.56,
+        "heldout_output_relative_mse": 12.23
+      },
+      "interpretation": "Supports objective separation for this synthetic fixture only; not whole-model causality or repair evidence."
+    },
+    "beta_bf16_decode": {
+      "evidence_class": "single_step_numeric_probe",
+      "image_sha256": "ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25",
+      "historical_source_sha256": "b90bb5b144e4815ebc3fbba074b06aecac4c6db8b27bef8e43c74e7ddfd6d2cd",
+      "candidate_source_sha256": "1090b1b624dd0606ac1c1aabb0ec2e0c2001ac4df5a2002ccddf5c9ae6aa8976",
+      "candidate_change_scope": "beta BF16 roundtrip only",
+      "input_dtype": "bfloat16",
+      "sample_points": 8,
+      "triton_roundtrip_vs_fp32_max_abs": 0.0011681914329528809,
+      "single_step_output_delta": {
+        "finite": true,
+        "max_abs": 0.0078125,
+        "rms": 0.001035800902172923
+      },
+      "single_step_state_delta": {
+        "finite": true,
+        "max_abs": 0.0028519630432128906,
+        "rms": 0.00030674514709971845
+      },
+      "interpretation": "Agreement is limited to 8 beta points; it does not establish global or whole-HF-kernel equivalence. Single-step output and state deltas are finite and nonzero.",
+      "triton_candidate_vs_torch_bf16_sigmoid_max_abs": 0.0
+    }
+  },
+  "limitations": [
+    "The MSE experiment uses synthetic tensors and does not establish whole-model causality, deployment effect, quality improvement, or repair.",
+    "The ModelOpt 0.47.0 recipe-native experiment used a historical serving image with Torch 2.13.0+cu130 and an offline overlay; it is not a complete reproduction of the original PTQ Torch 2.14 / nv26.8 environment.",
+    "The beta comparison is a single-step numeric probe; the 8-point roundtrip check is not a domain-wide or whole Hugging Face kernel equivalence claim.",
+    "Earlier failed probes were affected by diagnostic-code and cache-environment issues that have since been fixed; those failures are not evidence of a weight fault."
+  ],
+  "redaction": {
+    "excluded": [
+      "host aliases",
+      "IP addresses",
+      "ports",
+      "internal paths",
+      "prompts and responses",
+      "token IDs",
+      "raw tensors",
+      "credentials"
+    ],
+    "publicly_disclosable": [
+      "image SHA-256",
+      "source SHA-256",
+      "aggregate numeric results"
+    ]
+  }
+}

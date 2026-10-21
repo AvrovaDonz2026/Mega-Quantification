@@ -205,3 +205,7 @@ fork 的 `TRACK_STATE` 观察必须分开解释。
 
 当前不建立循环修复、答案正确性、GPQA、视觉/MTP 质量、TP2、吞吐或 release 结论。
 运行方法见[控制器说明](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/README.md)。
+
+下一步的量化目标与 beta 边界数值验证见
+[2026-10-21 微型探针报告](dgx-spark-mse-microprobes-20261021.md)。两个受限探针均通过，
+尚未构成整模根因或循环修复证据。
