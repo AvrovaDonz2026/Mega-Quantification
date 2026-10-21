@@ -123,7 +123,7 @@ def restore_vision(
     else:
         missing.update(
             {
-                key: exported.get(key, shard)
+                key: exported[key]
                 for key in _missing_export_tensors(
                     root,
                     {key: exported[key] for key in expected if key in exported},

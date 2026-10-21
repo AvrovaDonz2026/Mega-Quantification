@@ -617,7 +617,7 @@ def test_continue_on_length_stops_restarted_prefix(tmp_path: Path) -> None:
 
     run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
     assert len(calls) == 2
-    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")[0]
+    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")["repeat"]
     assert row.truncated is True
     assert row.finish_reason == "repetition"
 
