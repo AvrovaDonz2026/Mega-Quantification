@@ -107,6 +107,19 @@ def test_no_usable_pairs_fails_and_removes_hook(target):
     assert not target.language_model._forward_hooks
 
 
+def test_four_dimensional_packed_mask_is_rejected_with_supported_protocol(target):
+    ids = torch.tensor([[2, 7, 3, 8]])
+    # A 4D block mask carries attention connectivity, not per-token padding.
+    packed_mask = torch.zeros(1, 1, 4, 4)
+    with torch.no_grad(), pytest.raises(
+        BackendError,
+        match=r"2D padding mask aligned with the full input sequence.*4D packed or cached",
+    ):
+        with mtp_calibration(target):
+            target(input_ids=ids, attention_mask=packed_mask)
+    assert not target.language_model._forward_hooks
+
+
 def test_context_removes_hook_when_target_fails(target):
     with pytest.raises(RuntimeError, match="target failed"):
         with mtp_calibration(target):

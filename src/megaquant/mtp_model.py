@@ -194,7 +194,11 @@ def mtp_calibration(model: Any):
         embeddings = embeddings.detach().to(device=hidden.device, dtype=hidden.dtype)
         mask = inputs.get("attention_mask")
         if mask is not None and (not torch.is_tensor(mask) or mask.ndim != 2):
-            raise BackendError("MTP calibration requires a 2D padding mask")
+            shape = tuple(mask.shape) if torch.is_tensor(mask) else type(mask).__name__
+            raise BackendError(
+                "MTP calibration requires a 2D padding mask aligned with the full input sequence; "
+                f"got attention_mask {shape}. 4D packed or cached attention masks are unsupported"
+            )
         positions = inputs.get("position_ids")
         if positions is None:
             positions = torch.arange(hidden.shape[1], device=hidden.device)[None]
