@@ -120,6 +120,22 @@ def test_four_dimensional_packed_mask_is_rejected_with_supported_protocol(target
     assert not target.language_model._forward_hooks
 
 
+@pytest.mark.parametrize(
+    ("mask", "expected"),
+    [
+        (torch.ones(1, 3, dtype=torch.long), r"expected \(1, 4\), got \(1, 3\)"),
+        (torch.ones(2, 4, dtype=torch.long), r"expected \(1, 4\), got \(2, 4\)"),
+    ],
+)
+def test_mismatched_two_dimensional_mask_is_backend_error(target, mask, expected):
+    ids = torch.tensor([[2, 7, 3, 8]])
+    with torch.no_grad(), pytest.raises(BackendError, match=expected):
+        with mtp_calibration(target):
+            target(input_ids=ids, attention_mask=mask)
+    assert not target.language_model._forward_pre_hooks
+    assert not target.language_model._forward_hooks
+
+
 def test_context_removes_hook_when_target_fails(target):
     with pytest.raises(RuntimeError, match="target failed"):
         with mtp_calibration(target):

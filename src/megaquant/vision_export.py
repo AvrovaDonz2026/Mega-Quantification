@@ -161,6 +161,7 @@ def restore_vision(
             root,
             VISION_SHARD_NAME,
             {key: tensor.numel() * tensor.element_size() for key, tensor in tensors.items()},
+            replace_existing={key for key in tensors if key in exported},
         )
 
     # The PTQ loader intentionally creates Qwen3.5 with the vision tower

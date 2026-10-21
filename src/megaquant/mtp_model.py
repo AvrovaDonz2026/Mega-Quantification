@@ -177,14 +177,100 @@ def mtp_calibration(model: Any):
     text_model = _text_model(model)
     calls_before = mtp.calibration_batches
 
+    def collect_inputs(args: Any, kwargs: Any) -> dict[str, Any]:
+        inputs = dict(zip(("input_ids", "attention_mask", "position_ids"), args, strict=False))
+        inputs.update(kwargs)
+        return inputs
+
+    def validate_inputs(inputs: dict[str, Any], hidden: Any | None = None) -> None:
+        """Reject malformed calibration shapes before indexing or concatenation."""
+        input_ids = inputs.get("input_ids")
+        embeddings = inputs.get("inputs_embeds")
+        expected_batch = expected_seq = None
+        if input_ids is not None:
+            if not torch.is_tensor(input_ids) or input_ids.ndim != 2:
+                shape = (
+                    tuple(input_ids.shape)
+                    if torch.is_tensor(input_ids)
+                    else type(input_ids).__name__
+                )
+                raise BackendError(f"MTP calibration requires 2D input_ids, got {shape}")
+            expected_batch, expected_seq = input_ids.shape
+        if embeddings is not None:
+            if not torch.is_tensor(embeddings) or embeddings.ndim != 3:
+                shape = (
+                    tuple(embeddings.shape)
+                    if torch.is_tensor(embeddings)
+                    else type(embeddings).__name__
+                )
+                raise BackendError(f"MTP calibration requires 3D inputs_embeds, got {shape}")
+            embed_batch, embed_seq = embeddings.shape[:2]
+            if expected_batch is not None and (embed_batch, embed_seq) != (
+                expected_batch,
+                expected_seq,
+            ):
+                raise BackendError(
+                    "MTP calibration input_ids and inputs_embeds batch/sequence dimensions differ: "
+                    f"input_ids {(expected_batch, expected_seq)}, "
+                    f"inputs_embeds {(embed_batch, embed_seq)}"
+                )
+            expected_batch, expected_seq = embed_batch, embed_seq
+
+        mask = inputs.get("attention_mask")
+        if mask is not None:
+            if not torch.is_tensor(mask) or mask.ndim != 2:
+                shape = tuple(mask.shape) if torch.is_tensor(mask) else type(mask).__name__
+                raise BackendError(
+                    "MTP calibration requires a 2D padding mask aligned with the full "
+                    "input sequence; "
+                    f"got attention_mask {shape}. 4D packed or cached attention masks are "
+                    "unsupported"
+                )
+            if expected_batch is not None and tuple(mask.shape) != (expected_batch, expected_seq):
+                raise BackendError(
+                    "MTP calibration attention_mask batch/sequence dimensions must match inputs: "
+                    f"expected {(expected_batch, expected_seq)}, got {tuple(mask.shape)}"
+                )
+
+        positions = inputs.get("position_ids")
+        if positions is not None and torch.is_tensor(positions):
+            if positions.ndim == 2:
+                position_shape = tuple(positions.shape)
+            elif positions.ndim == 3:
+                position_shape = tuple(positions.shape[-2:])
+            else:
+                raise BackendError(
+                    "MTP calibration requires 2D or 3D position_ids aligned with the full "
+                    "input sequence; "
+                    f"got position_ids {tuple(positions.shape)}"
+                )
+            if expected_batch is not None and position_shape != (expected_batch, expected_seq):
+                raise BackendError(
+                    "MTP calibration position_ids batch/sequence dimensions must match inputs: "
+                    f"expected {(expected_batch, expected_seq)}, got {position_shape}"
+                )
+        elif positions is not None:
+            raise BackendError("MTP calibration requires tensor position_ids when provided")
+
+        if hidden is not None:
+            if not torch.is_tensor(hidden) or hidden.ndim != 3:
+                shape = tuple(hidden.shape) if torch.is_tensor(hidden) else type(hidden).__name__
+                raise BackendError(
+                    f"MTP calibration requires batched sequence hidden states, got {shape}"
+                )
+            hidden_shape = tuple(hidden.shape[:2])
+            if expected_batch is not None and hidden_shape != (expected_batch, expected_seq):
+                raise BackendError(
+                    "MTP calibration hidden states batch/sequence dimensions must match inputs: "
+                    f"expected {(expected_batch, expected_seq)}, got {hidden_shape}"
+                )
+
     def calibrate(module: Any, args: Any, kwargs: Any, output: Any) -> None:
         hidden = getattr(output, "last_hidden_state", None)
         if hidden is None:
             hidden = output[0]
-        if hidden.ndim != 3:
-            raise BackendError("MTP calibration requires batched sequence hidden states")
-        inputs = dict(zip(("input_ids", "attention_mask", "position_ids"), args, strict=False))
-        inputs.update(kwargs)
+        inputs = collect_inputs(args, kwargs)
+        validate_inputs(inputs, hidden)
         embeddings = inputs.get("inputs_embeds")
         if embeddings is None:
             ids = inputs.get("input_ids")
@@ -193,12 +279,6 @@ def mtp_calibration(model: Any):
             embeddings = module.embed_tokens(ids)
         embeddings = embeddings.detach().to(device=hidden.device, dtype=hidden.dtype)
         mask = inputs.get("attention_mask")
-        if mask is not None and (not torch.is_tensor(mask) or mask.ndim != 2):
-            shape = tuple(mask.shape) if torch.is_tensor(mask) else type(mask).__name__
-            raise BackendError(
-                "MTP calibration requires a 2D padding mask aligned with the full input sequence; "
-                f"got attention_mask {shape}. 4D packed or cached attention masks are unsupported"
-            )
         positions = inputs.get("position_ids")
         if positions is None:
             positions = torch.arange(hidden.shape[1], device=hidden.device)[None]
@@ -229,10 +309,15 @@ def mtp_calibration(model: Any):
             mtp.calibration_batches += 1
             mtp.calibration_tokens += int(valid.sum())
 
+    pre_handle = text_model.register_forward_pre_hook(
+        lambda module, args, kwargs: validate_inputs(collect_inputs(args, kwargs)),
+        with_kwargs=True,
+    )
     handle = text_model.register_forward_hook(calibrate, with_kwargs=True)
     try:
         yield
         if mtp.calibration_batches == calls_before:
             raise BackendError("MTP calibration saw no usable next-token pairs; export is unsafe")
     finally:
+        pre_handle.remove()
         handle.remove()

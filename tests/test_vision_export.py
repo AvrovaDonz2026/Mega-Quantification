@@ -105,6 +105,9 @@ def test_restores_missing_indexed_tensor_from_source_shard(
         str(export / VISION_SHARD_NAME), framework="pt"
     ) as shard:
         assert torch.equal(shard.get_tensor(key), original)
+    index = json.loads((export / "model.safetensors.index.json").read_text())
+    expected_size = original.numel() * original.element_size()
+    assert index["metadata"]["total_size"] == expected_size
 
 
 def test_missing_vision_in_source_fails(tmp_path: Path) -> None:
