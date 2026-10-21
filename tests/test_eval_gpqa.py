@@ -596,6 +596,83 @@ def test_continue_on_length_does_not_double_count_round_templates(tmp_path: Path
     ]
 
 
+@pytest.mark.parametrize("with_usage", [False, True])
+def test_continue_on_length_three_rounds_reserve_once_without_usage(
+    tmp_path: Path, with_usage: bool
+) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "generation": {"max_model_len": 2500, "max_new_tokens": 700},
+        },
+    )
+    item = GPQAItem("three", "Q?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    calls: list[int] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        index = len(calls)
+        return GenerationResult(
+            text="Answer: A" if index == 3 else f"part{index}",
+            finish_reason="stop" if index == 3 else "length",
+            prompt_tokens=(100 if index == 1 else 100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE)
+            if with_usage else 0,
+            completion_tokens=200 if with_usage else 0,
+            truncated=index != 3,
+        )
+
+    run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
+    assert len(calls) == 3
+    if with_usage:
+        assert calls == [700, 700, 700]
+    else:
+        assert calls == [
+            700,
+            remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE + 700 +
+                                 CONTINUATION_MESSAGE_TOKEN_RESERVE, 2500, 700),
+            remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE + 700 +
+                                 CONTINUATION_MESSAGE_TOKEN_RESERVE + 700, 2500, 700),
+        ]
+
+
+@pytest.mark.parametrize("mismatch", ["seed", "gold", "choices"])
+def test_run_gpqa_rejects_resume_with_changed_item_protocol(
+    tmp_path: Path, mismatch: str
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    source_row = {
+        "Question": "Q?",
+        "Correct Answer": "a",
+        "Incorrect Answer 1": "b",
+        "Incorrect Answer 2": "c",
+        "Incorrect Answer 3": "d",
+        "Record ID": "same",
+    }
+    first = build_gpqa_item(source_row, index=0, seed=0, shuffle=True)
+    second_row = {**source_row, "Question": "Q2?", "Record ID": "later"}
+    original = build_gpqa_item(second_row, index=1, seed=0, shuffle=True)
+    changed = original
+    if mismatch == "seed":
+        changed = build_gpqa_item(source_row, index=0, seed=1, shuffle=True)
+    elif mismatch == "gold":
+        changed = GPQAItem("later", "Q2?", original.choices, "A")
+    else:
+        changed = GPQAItem("later", "Q2?", {**original.choices, "D": "different"}, original.gold)
+    run_gpqa(
+        recipe,
+        items=[first, original],
+        complete=lambda **_k: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _t: 8,
+    )
+    with pytest.raises(EvalError, match="choices/gold mismatch"):
+        run_gpqa(
+            recipe,
+            items=[changed, original] if mismatch == "seed" else [first, changed],
+            complete=lambda **_k: pytest.fail("must reject"),
+        )
+
+
 def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> None:
     recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
     done = GPQAItem(
@@ -1314,6 +1391,22 @@ def test_load_gpqa_journal_skips_truncated_last_line(tmp_path: Path, capsys) -> 
     assert "warning" in err
     assert "dropping truncated journal line" in err
     assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+def test_load_gpqa_journal_missing_fields_warning_hides_row_contents(
+    tmp_path: Path, capsys
+) -> None:
+    secret_text = "PRIVATE_RESPONSE_SHOULD_NOT_APPEAR"
+    path = tmp_path / "gpqa_diamond.jsonl"
+    path.write_text(
+        json.dumps({"item_id": "legacy", "text": secret_text}) + "\n" +
+        json.dumps({"item_id": "legacy2", "text": secret_text}) + "\n",
+        encoding="utf-8",
+    )
+    assert load_gpqa_journal(path) == {}
+    err = capsys.readouterr().err
+    assert err.count("missing fields") == 2
+    assert secret_text not in err
 
 
 @pytest.mark.parametrize("truncated,predicted", [(True, "A"), (False, None)])
