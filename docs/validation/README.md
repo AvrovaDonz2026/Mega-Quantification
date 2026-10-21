@@ -41,12 +41,20 @@ R2 于 17:15:42 UTC 启动；18:23:29 UTC 只读观察确认已完成。实验�
 稳定性验证通过，应用层 readiness 仍为 unknown。历史 source capture 共捕获十个允许文件；
 相关归档文件与旧归档键哈希一致，归档相关 GDN 文件无 `TRACK_STATE`，当前 fork 的 snapshot 实现
 不适用于 R1/R2。详情及脱敏快照见上述原始源码对照报告。
-R3 于 19:18:59.637587 UTC 启动，19:23:00.606688 UTC 只读观察仍为 `request_streaming`
-（elapsed 218.747 秒、events/stream lines 各 32）；这是 SSE 行数，不能换算 token，GPU
-数值统计尚未取回。R3 保留 R1 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；
-源码身份与 microprobe 门禁已通过，单个冷请求仍在生成，结果未完成。两端原 GLM 已按授权暂停，
-实验后成对恢复 pending，不能声称恢复已完成。
+R3 于 19:18:59.637587 UTC 启动，随后完成单变量 beta-store 对照：保留 R1 radix-on
+协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`。请求生成 49,152 tokens 后以
+`length` 结束；输出 SHA 与 R1/R2 不同，lag 2,032 的匹配数不足完整周期门槛，因此只能
+说未检出原已确认的长期循环，不能排除其他周期或声称自然停止、答案正确、MSE 修复。
+缓存 token 与 retractions 为 0，speculative verify 计数未观测。实验后双端原 GLM 已恢复，
+精确身份检查及连续约 120 秒进程稳定性检查通过；应用层 readiness 仍为 `unknown`。
+微探针和容量差异等边界见 parity 报告末尾。
 [当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
+
+2026-10-21 的 [MSE scale 审计与 matched-runner 记录](dgx-spark-mse-root-cause-20261021.md)
+确认当前磁盘上的 max/MSE 导出 scale 均完整且有限，但覆盖范围不匹配；MSE 的整模量化
+根因仍未确定。R5 因维护 heartbeat 错误中止，没有有效模型结果；恢复后的 runner 仅通过
+CPU 预检与故障注入测试，尚未用于冻结 R5 重跑。报告中的 scale 结论、GPU serving 诊断和
+整模因果判断不可混为一谈。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
