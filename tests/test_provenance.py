@@ -88,6 +88,26 @@ def test_valid_manifest_revision_takes_precedence_over_checkout(image_root, monk
     assert pipeline._git_sha() == IMAGE_SHA
 
 
+def test_uppercase_manifest_revision_is_normalized_in_written_provenance(
+    image_root, monkeypatch, plan
+) -> None:
+    uppercase_sha = IMAGE_SHA.upper()
+    (image_root / "container-manifest.json").write_text(
+        json.dumps({"git_revision": uppercase_sha})
+    )
+
+    def unexpected_git(*args, **kwargs):
+        pytest.fail("Git must not override the revision baked into the image")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", unexpected_git)
+    export = image_root / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["git_sha"] == IMAGE_SHA
+
+
 @pytest.mark.parametrize(
     "manifest_bytes",
     [
@@ -101,6 +121,7 @@ def test_valid_manifest_revision_takes_precedence_over_checkout(image_root, monk
         b'{"git_revision": 123}',
         b'{"git_revision": "1ae52c7"}',
         json.dumps({"git_revision": "g" * 40}).encode(),
+        json.dumps({"git_revision": "A" * 39 + "G"}).encode(),
     ],
 )
 def test_missing_or_invalid_manifest_falls_back_to_git(
