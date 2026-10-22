@@ -50,8 +50,10 @@ Agent entry. Humans start at [README.md](README.md) and the
   auxiliary weights packed as U8 (110 vision plus 8 MTP); serving, vision/MTP
   functionality and repetition repair remain pending. A later combined serving
   attempt failed its RuntimeGate with checker details unavailable; both GLM
-  services were subsequently restored and the API arithmetic smoke returned 2
-  with native `stop`. See
+  services were subsequently restored, with 121.684 seconds of stable-process
+  observation and an API arithmetic smoke returning 2 with native `stop`. All
+  five pinned-image dependency imports passed; model serving remains unvalidated.
+  See
   `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
   contract check with `scripts/check_modelopt_streaming_export.py`; its default
   mode plans without downloads and `--execute` requires the pinned ModelOpt

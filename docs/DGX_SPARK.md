@@ -217,6 +217,12 @@ replay and trajectory metrics remain unvalidated. This establishes paired
 export and header scope only. Repetition behavior, GPQA and release or fix
 claims remain pending.
 
+A subsequent reviewed recovery passed a 121.684-second process-stability
+observation. Its fixed arithmetic API smoke passed in 0.221 seconds with answer
+`2` and native `stop`. The pinned-image dependency preflight passed all five
+imports with writable, stage-matching cache configuration. These checks do not
+establish model loading or serving; those validations remain pending.
+
 To reproduce the small contract check, use an image that already contains the
 pinned Spark CUDA stack (`nvidia-modelopt==0.47.0`, `accelerate==1.14.0`, the
 image's CUDA PyTorch and Transformers 5.12.1). The checker never downloads a

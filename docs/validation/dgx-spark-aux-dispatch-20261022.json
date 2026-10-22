@@ -1,7 +1,7 @@
 {
   "schema": "aux-dispatch-probe-public-v1",
   "date": "2026-10-22",
-  "status": "paired_incomplete_small_cuda_contract_passed",
+  "status": "paired_export_complete_serving_unvalidated",
   "seeded_public_cuda_regression": {
     "status": "passed",
     "source_revision": "e11b673523815e874416a3fca9fba0e59526d4fe",
@@ -76,7 +76,9 @@
       "static-MSE": {"returncode": 0, "elapsed_seconds": 1526.581, "export_sha256": "0062cb9948822244e6083f0abbc95b9fb5ab28fd01fb1f7cd3bb938529e2a0c5", "export_index_valid": true, "export_index_keys": 2756, "shards": 2, "files": 16, "quantizer_scope": {"core": 401, "vision": 110, "mtp": 8}, "eligible_auxiliary_packed_u8": 118, "vision_packed_u8": 110, "mtp_packed_u8": 8, "expected_non_linear_vision_bf16_exclusions": true}
     },
     "comparison": {"returncode": 0, "ptq_comparable": true, "matched_protocol": true},
-    "restoration": {"coordinator_process_stable": true, "services_running": true, "oom_killed": false, "restarting": false, "api_readiness": "passed", "fixed_arithmetic_answer": 2, "finish_reason": "stop"},
+    "restoration": {"coordinator_process_stable": true, "services_running": true, "oom_killed": false, "restarting": false, "api_readiness": "passed", "fixed_arithmetic_answer": 2, "finish_reason": "stop", "observation_scope": "point_in_time_at_pair_completion"},
+    "latest_recovery": {"date": "2026-10-23", "status": "observation_passed", "stable_seconds": 121.68356083298568, "api_arithmetic_smoke": {"status": "passed", "elapsed_seconds": 0.221, "answer_is_two": true, "native_stop": true, "finish_reason": "stop"}},
+    "pinned_image_dependency_preflight": {"date": "2026-10-23", "status": "passed", "imports_passed": 5, "cache_configuration": "writable_and_stage_matching"},
     "scope": "paired export and auxiliary header scope only",
     "export_reload_validated": false,
     "trajectory_metrics_present": false,
@@ -157,11 +159,11 @@
   "interpretation": {
     "mse_aux_dispatch_missing": true,
     "candidate": "ModelOpt streaming resident non-decoder path",
-    "patched_gpu_validated": "small_synthetic_contract_only",
+    "patched_gpu_validated": "small_contract_and_full_27b_paired_export",
     "full_27b_patched_gpu_validated": "paired_export_only",
     "repetition_fixed": false,
     "new_gpqa_or_serving_or_tp2": false,
     "vision_mtp_functionality_validated": false,
-    "no_new_matched_fingerprint": true
+    "no_new_matched_fingerprint": false
   }
 }

@@ -94,3 +94,11 @@ vision/MTP functionality, replay and trajectory metrics remain unvalidated.
 This is paired export evidence only: no serving or vision/MTP functionality,
 replay or repetition result, GPQA score, TP2 result, or release/fix claim is
 established here.
+
+A subsequent reviewed recovery completed with `observation_passed` after
+121.684 seconds of stable-process observation. Its fixed arithmetic API smoke
+passed in 0.221 seconds with answer `2` and native `stop`. The pinned-image
+dependency preflight then passed all five imports with writable, stage-matching
+cache configuration. These checks establish service recovery and dependency
+availability only; model loading, multimodal serving and MTP functionality are
+still pending. Earlier restoration entries above are point-in-time records.
