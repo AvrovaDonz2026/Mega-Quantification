@@ -22,6 +22,9 @@ MLP-only BF16 recovery pilot 已在 2026-10-20 完成：control / MLP 各两次
 长响应各臂内输出稳定，四条均未检出确认的 2,032-token 周期。
 运行中诊断器漏读部分 EOS 元数据，不能用其 `natural_termination=false` 认定没有
 EOS 停止。历史循环未在 control 复现，当前无修复结论。
+当前[MLP 诊断工具](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/README.md)
+可按投影和层段选择 BF16 recovery，并核对选择记录及张量；该工具变更仅通过 CPU 门禁，
+尚无新增子集 GPU 实验结果。
 [原始 GDN 源码对照](dgx-spark-natural-source-control-20261020.md)先完成两次 39,846-token
 control：均以匹配 EOS 停止且输出完全一致，未检出确认的 2,032-token 周期。随后独立的
 历史条件重放输出 49,152 tokens 达长度上限，输出 SHA 与历史完全一致，并精确复现
@@ -68,12 +71,14 @@ bootstrap plan、受约束的本地生命周期监督、配对 evidence 校验�
 preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是完整模型 GPU PTQ/export
 证据。CPU preflight 不代表完整模型 serving/GPU 推理已验证；MSE 根因仍未确定。
 
-当前 R6 两组 27B 整模 PTQ 已完成并通过配对可比性检查：256 个校准 batch 顺序一致，519 个权重 amax 两臂不同、global amax 一致，574 个 activation 哈希一致；固定 arithmetic probe 通过。新导出 serving、replay 与跨臂 token 比较尚未完成，MSE 根因未定。
+当前 R6 两组 27B 整模 PTQ 已完成并通过导出前的 quantizer/calibration 配对检查：256 个校准 batch 顺序一致，519 个权重 amax 两臂不同、global amax 一致，574 个 activation 哈希一致；固定 arithmetic probe 通过。实际导出范围不一致，见下方勘误。static-max replay 已完成，但 static-MSE 未 ready/generate，故无 paired replay 或跨臂 token 比较；MSE 根因仍未定。
 详见[脱敏完成记录](dgx-spark-matched-ptq-completed-20261022.json)。旧 [stage 预检](dgx-spark-matched-ptq-stage-preflight-20261022.json) 和 [GPU microprobe](dgx-spark-matched-ptq-gpu-microprobe-20261022.json) 仅作辅助记录；固定 probe 不代表 GLM 整体健康。
 
-Fresh serving 首组 `static-max` 在 6.018 秒因只读文件系统启动失败，题目请求与 MSE 未开始；两轮均成对恢复并通过 120 秒进程稳定检查。可写路径修复和测试已通过，新 stage 两端预检通过，真实重跑待进行；MSE 根因仍未定。
+Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` 完成真实冷启动回放，49,152 tokens 后以 `length` 结束，末尾出现 1,229-token 周期（suffix match 20,988 tokens）。`static-MSE` 在服务 identity/readiness 前退出，未发送题目请求，跨臂 token 比较尚未完成。成对恢复后通过 120 秒进程稳定检查和固定算术 probe。详见[回放尝试记录](dgx-spark-matched-replay-attempt-20261022.json)。该例说明没有 MSE 搜索也会循环；MSE 对循环的影响及根因仍未确定。
 
-视觉/MTP 新导出已完成并通过量化导出审计；完整模型 serving、256k MTP 质量、TP2 和广泛视觉质量仍待验证。无 healthcheck 时，process stable 不等于应用 ready，application readiness 仍为 unknown。
+2026-10-22 的启动 probe 记录了一个必须单独标注的导出证据勘误：`static-MSE` 在 142.042 秒、生成前因 `AssertionError` 退出（`param_data=[1152,576]`、`loaded=[1152,1152]`）。header 审计显示 max 为 519 U8 + 519 F8，110 个 vision 与 8 个 MTP 均 packed；MSE 为 401 U8 + 401 F8，而 110 个 vision 与 8 个 MTP 为 BF16。MSE 配置声明 `uniformNVFP4` 且没有 aux `quantized_layers`，因此 loader 预期 packed vision；`visionqkv` 也呈现 MSE `3456x1152 BF16` 对 max `3456x576 U8`，未发现重复 key。此前 matched PTQ 的 comparable 结论仅适用于导出前 quantizer/calibration 证据，不能声称两份导出的 aux scope 相同。[脱敏启动 probe JSON](dgx-spark-mse-startup-probe-20261022.json)。该 probe 无题目请求、token 或质量结果；GLM 成对恢复、120 秒稳定检查及固定 arithmetic probe（answer 2、`stop`）通过，MSE 重复根因仍未确定。历史 dated 报告保留原表述，不据此补写质量结论。
+
+本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

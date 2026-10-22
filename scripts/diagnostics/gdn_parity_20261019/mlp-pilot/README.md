@@ -49,6 +49,22 @@ python3 scripts/prepare_precision_ablation.py \
   --write
 ```
 
+For a diagnostic subset, pass the same selectors to the MLP build and to the
+controller invocation. Projection names are canonicalized in the recorded
+selection order; layer ranges are inclusive at `--layer-start` and exclusive
+at `--layer-end`.
+
+```bash
+python3 scripts/prepare_precision_ablation.py \
+  --export /path/to/scored-mse-export \
+  --bf16 /path/to/original-bf16-checkpoint \
+  --variant mlp \
+  --mlp-projection down_proj \
+  --layer-start 16 --layer-end 32 \
+  --output /path/to/new/mlp-pilot-mlp-subset \
+  --write
+```
+
 The original export's `provenance.json` is locked by `model_gate.py` to
 SHA-256
 `66edb2373a176d330c70a8445c52e33b9caa0c8b05378a9cafd57a97ce19b55c`.
@@ -58,6 +74,9 @@ new directory; the controller then runs the full model gate again for both
 arms. MLP recovery restores the selected language MLP projections while
 preserving the quantized vision and MTP inventory. The control arm uses the
 same loader and metadata path with no MLP modules restored.
+The gate reads the `selection` record from `precision_ablation.json` and
+requires controller selectors to match it. Subset runs report the actual
+restored module count and do not claim the full 192-module MLP recovery.
 
 ## 2. Prepare the remote root
 

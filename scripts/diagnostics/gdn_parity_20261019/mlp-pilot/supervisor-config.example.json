@@ -30,6 +30,9 @@
     "/path/to/private/native-case3.json"
   ],
   "source_variant": "all-beta",
+  "mlp_projections": null,
+  "layer_start": null,
+  "layer_end": null,
   "arms": "both",
   "phases": [
     "early",

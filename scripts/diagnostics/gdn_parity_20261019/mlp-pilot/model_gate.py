@@ -86,6 +86,10 @@ def verify_model(
     model: Path,
     variant: str,
     ablation_tool: Path,
+    *,
+    mlp_projections: list[str] | tuple[str, ...] | None = None,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
 ) -> dict[str, Any]:
     """Verify a derived control/MLP export and return scalar proof fields only."""
     if variant not in {"control", "mlp"}:
@@ -96,8 +100,23 @@ def verify_model(
         Path(model).resolve(),
         Path(ablation_tool).resolve(),
     )
+    explicit_selection = any(
+        value is not None for value in (mlp_projections, layer_start, layer_end)
+    )
+    if variant == "control" and explicit_selection:
+        raise RuntimeError("MLP selectors require the mlp verification arm")
     tool = _load_tool(ablation_tool)
-    plan = tool.prepare_plan(export, bf16, variant)
+    if variant == "mlp":
+        plan = tool.prepare_plan(
+            export,
+            bf16,
+            variant,
+            mlp_projections=mlp_projections,
+            layer_start=layer_start,
+            layer_end=layer_end,
+        )
+    else:
+        plan = tool.prepare_plan(export, bf16, variant)
     original = plan["original"]
     expected = plan["result"]
     actual, actual_index = tool.read_checkpoint(model)
@@ -131,13 +150,27 @@ def verify_model(
             _json(model / "hf_quant_config.json") == _json(Path(staging) / "hf_quant_config.json"),
             "HF config transform mismatch",
         )
-    selected_modules = [name for name in layers if tool.selected(name, variant)]
+    selected_modules = [
+        name
+        for name in layers
+        if tool.selected(
+            name,
+            variant,
+            mlp_projections=mlp_projections,
+            layer_start=layer_start,
+            layer_end=layer_end,
+        )
+    ]
     _assert(len(selected_modules) == 0, "selected layers remain quantized")
 
     visual = [name for name in layers if name.startswith(("visual.", "model.visual."))]
     mtp = [name for name in layers if name.startswith("mtp.")]
     _assert(len(visual) == 110 and len(mtp) == 8, "auxiliary quantized projection count mismatch")
-    expected_restored = 0 if variant == "control" else 192
+    expected_restored = (
+        0
+        if variant == "control"
+        else plan["summary"]["restored_modules"] if explicit_selection else 192
+    )
     _assert(
         plan["summary"].get("restored_modules") == expected_restored,
         "restored module count mismatch",
@@ -209,6 +242,11 @@ def verify_model(
         record.get("quantized_layer_counts") == summary.get("quantized_layer_counts"),
         "quantized layer statistics mismatch",
     )
+    recorded_selection = record.get("selection")
+    if explicit_selection:
+        _assert(recorded_selection == summary.get("selection"), "ablation selection mismatch")
+    elif recorded_selection is not None:
+        _assert(recorded_selection == summary.get("selection"), "ablation selection mismatch")
     _assert(
         record.get("requires_quantization") == "modelopt_mixed", "quantization requirement mismatch"
     )
@@ -216,6 +254,7 @@ def verify_model(
         "passed": True,
         "variant_mlp": variant == "mlp",
         "restored_modules": int(summary["restored_modules"]),
+        "selection": summary["selection"],
         "tensor_count": len(actual),
         "visual_quantized_layers": len(visual),
         "mtp_quantized_layers": len(mtp),

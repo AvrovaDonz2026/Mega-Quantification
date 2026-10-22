@@ -1,0 +1,62 @@
+{
+  "schema": "matched-ptq-r6-mse-startup-probe-public-v1",
+  "status": "invalid_before_generation",
+  "timestamp_utc": "2026-10-22",
+  "probe": {
+    "arm": "static-MSE",
+    "elapsed_seconds": 142.042,
+    "stage": "startup",
+    "generation_started": false,
+    "request_started": false,
+    "exception_class": "AssertionError",
+    "error_shapes": {
+      "param_data": [1152, 576],
+      "loaded": [1152, 1152]
+    }
+  },
+  "export_header_audit": {
+    "static-max": {
+      "quantized_u8_tensors": 519,
+      "quantized_f8_tensors": 519,
+      "vision_tensors": 110,
+      "mtp_tensors": 8,
+      "vision_mtp_encoding": "packed"
+    },
+    "static-MSE": {
+      "quantized_u8_tensors": 401,
+      "quantized_f8_tensors": 401,
+      "vision_tensors": 110,
+      "mtp_tensors": 8,
+      "vision_mtp_encoding": "BF16"
+    },
+    "vision_qkv_shape_comparison": {
+      "static-MSE": {"dtype": "BF16", "shape": [3456, 1152]},
+      "static-max": {"dtype": "U8", "shape": [3456, 576]},
+      "duplicate_keys": false
+    },
+    "mse_quant_config": {
+      "scheme": "uniformNVFP4",
+      "aux_quantized_layers_declared": false,
+      "expected_vision_encoding": "packed"
+    }
+  },
+  "restoration": {
+    "paired_process_stability": "passed",
+    "stable_seconds": 120,
+    "fixed_arithmetic_probe": "passed",
+    "fixed_arithmetic_finish_reason": "stop",
+    "arithmetic_answer": 2
+  },
+  "pre_export_evidence_scope": {
+    "matched_ptq_comparable": true,
+    "applies_to": "quantizer_and_calibration_evidence_before_export",
+    "exported_auxiliary_scopes_match": false
+  },
+  "mse_root_cause_established": false,
+  "repetition_fix_established": false,
+  "limitations": [
+    "This probe failed before model generation and contains no prompt, token, or quality result.",
+    "Header counts are sanitized audit facts; raw logs and deployment identifiers are intentionally omitted.",
+    "The shape assertion and encoding mismatch do not by themselves establish the MSE repetition root cause."
+  ]
+}
