@@ -1,6 +1,18 @@
 # Auxiliary Dispatch Probe
 
-## Small CUDA regression
+## Seeded public CUDA regression
+
+The public checker passed on the distinct small-test image with source revision
+`e11b673`, ModelOpt 0.47.0, seed `19031`, input fingerprint
+`f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a`, and
+14.939 seconds elapsed. Vendor and compatibility exports both detected
+Accelerate offload and matched the input fingerprint. Vendor auxiliary weights
+were BF16 `[32,32]`; the compatibility export produced U8 `[32,16]`, block FP8
+`[32,2]` scales and scalar FP32 scales for both auxiliary modules. Cleanup
+completed and raw tensor values were not retained. This validates the packing
+contract only; it does not establish numeric parity or full-model behavior.
+
+## Earlier small CUDA regression
 
 After the original paired probe, the exact-source-gated compatibility path was
 run on a small fresh Llama fixture with ModelOpt 0.47.0. Two auxiliary modules
@@ -18,6 +30,18 @@ This is a CUDA packing-contract regression only. The fresh fixture did not use
 fixed seeded weights, so it does not establish numeric parity, full-27B export
 success, vision/MTP functionality, serving behavior, GPQA quality, or a
 repetition repair. The test image was distinct from the full-27B PTQ image.
+
+The reproducible public checker is
+[`scripts/check_modelopt_streaming_export.py`](../../scripts/check_modelopt_streaming_export.py).
+Run `python scripts/check_modelopt_streaming_export.py` for its dependency-free
+plan. For execution, use the pinned Spark CUDA image with ModelOpt 0.47.0,
+Accelerate 1.14.0, the image's CUDA PyTorch and Transformers 5.12.1; verify the
+container manifest, set the Hugging Face and pip offline flags, and run
+`--execute`. The checker performs both vendor and compatibility exports on the
+same fresh fixture, compares input fingerprints, audits headers and full file
+hashes, removes temporary outputs, and returns `unsupported` nonzero when CUDA,
+the pinned dependencies, or required free memory are unavailable. It never
+downloads a model or retains raw tensor values.
 
 The fresh paired probe used 256 calibration batches at max sequence length 1024,
 batch size 1, with vision and MTP enabled under the same recipe and ModelOpt

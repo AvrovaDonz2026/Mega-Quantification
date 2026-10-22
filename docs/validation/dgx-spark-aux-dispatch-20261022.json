@@ -2,6 +2,33 @@
   "schema": "aux-dispatch-probe-public-v1",
   "date": "2026-10-22",
   "status": "paired_incomplete_small_cuda_contract_passed",
+  "seeded_public_cuda_regression": {
+    "status": "passed",
+    "source_revision": "e11b673523815e874416a3fca9fba0e59526d4fe",
+    "checker_sha256": "7c077f17d0db6fc55a320ec6214df58d67bf29716f9e506764fcda38c08fdb30",
+    "modelopt": "0.47.0",
+    "seed": 19031,
+    "input_sha256": "f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a",
+    "image_id": "sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be",
+    "archive_sha256": "434fdbf47d222f17a3980f7958f672d9491291450426dd0a267c9f129bf8de41",
+    "manifest_sha256": "03134533653445d66f96705be2236a451faad99fcc931142ff59770d1b5362a5",
+    "elapsed_seconds": 14.939,
+    "input_match": true,
+    "vendor_auxiliary": {"dtype": "BF16", "shape": [32, 32], "modules": 2, "packed": false},
+    "patched_auxiliary": {
+      "weight_dtype": "U8",
+      "weight_shape": [32, 16],
+      "block_scale_dtype": "F8_E4M3",
+      "block_scale_shape": [32, 2],
+      "global_scale_dtype": "F32",
+      "modules": 2,
+      "packed": true
+    },
+    "raw_tensor_output": false,
+    "cleanup": "complete",
+    "scope": "CUDA packing-contract regression only",
+    "numeric_parity": "not_assessed"
+  },
   "small_cuda_regression": {
     "status": "passed",
     "source_revision": "acdc7238e2b328c9435f3d6c6731a695e970e216",

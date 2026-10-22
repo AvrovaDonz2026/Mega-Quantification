@@ -38,15 +38,19 @@ Agent entry. Humans start at [README.md](README.md) and the
   `src/megaquant/modelopt_streaming.py`: it accepts one exact vendor source,
   dispatches each eligible resident module once, and leaves vendor
   materialization/writeback unchanged. The auxiliary precision guard remains
-  authoritative. Focused local CPU tests pass, and a small CUDA regression with
-  a fresh Llama fixture plus two resident auxiliary modules and decoder modules packed
-  both auxiliary weights as U8 `[32,16]` with block FP8 `[32,2]` and scalar
-  FP32 scales. The fixture does not use fixed seeded weights, so this is a
-  packing-contract check rather than numeric parity. The unpatched full-256
+  authoritative. Focused local CPU tests pass. The public checker has a seeded
+  small CUDA contract pass: both arms matched input fingerprint
+  `f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a`, and the
+  compatibility arm packed both auxiliary weights as U8 `[32,16]` with block
+  FP8 `[32,2]` and scalar FP32 scales. The earlier unseeded private regression
+  remains historical evidence; neither is numeric parity. The unpatched full-256
   diagnostic still recorded max with 118 auxiliary U8 tensors, while MSE had
   zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. Full 27B
   GPU export, serving and repetition repair remain unvalidated. See
-  `docs/validation/dgx-spark-aux-dispatch-20261022.md`.
+  `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
+  contract check with `scripts/check_modelopt_streaming_export.py`; its default
+  mode plans without downloads and `--execute` requires the pinned ModelOpt
+  0.47.0 CUDA/Accelerate image, failing closed when unsupported.
 - License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
 - The pipeline has been industrially validated. The concrete runs are the 5090 production PTQ and the finished GPQA journals in `docs/qwen3.8-27b.md`. Do not invent customers, certifications, or extra scores.
 

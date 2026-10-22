@@ -176,14 +176,16 @@ dispatched once through the vendor registry. Vendor materialization and
 writeback remain unchanged, and the auxiliary precision guard above still
 checks the serialized headers and `quantized_layers` contract.
 
-Focused local CPU tests passed for this path. A separate small CUDA regression
-also passed with ModelOpt 0.47.0 on a fresh Llama fixture containing two
-resident auxiliary modules plus decoder modules under Accelerate offload: the vendor
+Focused local CPU tests passed for this path. The public checker also passed a
+seeded small CUDA contract regression with ModelOpt 0.47.0 on a fresh Llama
+fixture containing two resident auxiliary modules plus decoder modules under
+Accelerate offload. Both arms matched input fingerprint
+`f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a`; the vendor
 export left both auxiliary weights BF16 `[32,32]`, while the compatibility path
 produced U8 `[32,16]`, block FP8 `[32,2]` and scalar FP32 scales for both. The
-fresh models were not fixed seeded weights, so this validates the packing
-contract only and provides no numeric parity result. The probe ran in 14.178 s
-on a distinct small-test image; raw tensors were removed and cleanup completed.
+probe ran in 14.939 s on the distinct small-test image; raw tensors were removed
+and cleanup completed. This remains a packing-contract check, not numeric parity.
+The earlier unseeded private regression remains historical evidence.
 
 The completed unpatched full-256 diagnostic remains separate evidence: max
 ended with 118 auxiliary U8 tensors, while MSE recorded zero auxiliary dispatch
@@ -193,6 +195,35 @@ full-27B patched export, vision/MTP serving result, GPQA result, or repetition
 repair is established by the small regression. Preserve the diagnostic and its
 limits in
 [`validation/dgx-spark-aux-dispatch-20261022.md`](validation/dgx-spark-aux-dispatch-20261022.md).
+
+To reproduce the small contract check, use an image that already contains the
+pinned Spark CUDA stack (`nvidia-modelopt==0.47.0`, `accelerate==1.14.0`, the
+image's CUDA PyTorch and Transformers 5.12.1). The checker never downloads a
+model or writes raw tensor values. Its default mode is dependency-free planning:
+
+```bash
+python scripts/check_modelopt_streaming_export.py
+```
+
+On the Spark PTQ image, verify the baked manifest before overriding the
+entrypoint, then run the real CUDA check with offline package/model settings:
+
+```bash
+docker compose --profile spark-ptq run --rm --entrypoint python quantize-spark-w4a8 \
+  scripts/container_manifest.py verify
+docker compose --profile spark-ptq run --rm --entrypoint env quantize-spark-w4a8 \
+  HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 PIP_NO_INDEX=1 \
+  python scripts/check_modelopt_streaming_export.py --execute
+```
+
+The execute path runs vendor and compatibility exports on the same fresh tiny
+fixture, compares their input fingerprints, audits safetensors headers and
+full file hashes, and removes its temporary output. It exits nonzero with an
+`unsupported` result when the pinned ModelOpt version, CUDA, Accelerate, or the
+required free CUDA memory is unavailable; that result is not a pass. The probe
+is a packing-contract regression and does not validate full-27B PTQ, serving,
+vision/MTP functionality, numeric parity, GPQA quality or repetition.
+The public implementation is [`scripts/check_modelopt_streaming_export.py`](../scripts/check_modelopt_streaming_export.py).
 
 ### Guard maintenance runbook
 
