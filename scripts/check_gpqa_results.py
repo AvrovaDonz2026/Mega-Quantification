@@ -14,15 +14,23 @@ import hashlib
 import io
 import json
 import math
+import re
 import sys
 from collections import Counter
+from dataclasses import MISSING, fields
 from pathlib import Path
 from typing import Any
 
-from megaquant.eval_gpqa import ItemResult, build_gpqa_item, extract_choice
+from megaquant.eval_gpqa import (
+    ItemResult,
+    build_gpqa_item,
+    extract_choice,
+    format_gpqa_prompt,
+    is_truncated_finish_reason,
+    normalize_finish_reason,
+)
 
 DIAMOND_ITEMS = 198
-TRUNCATED_FINISH_REASONS = {"length", "max_tokens"}
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -145,7 +153,11 @@ def verify_results(
     recomputed_correct = 0
     truncated = 0
     unparsed = 0
-    required = set(ItemResult.__dataclass_fields__)
+    required = {
+        field.name
+        for field in fields(ItemResult)
+        if field.default is MISSING and field.default_factory is MISSING
+    }
     lines = [raw for raw in blobs["journal"].splitlines() if raw.strip()]
     for line_no, raw in enumerate(lines, start=1):
         prefix = f"journal row {line_no}"
@@ -176,8 +188,25 @@ def verify_results(
             continue
         if not isinstance(row["finish_reason"], str) or not row["finish_reason"]:
             errors.append(f"{prefix}: invalid finish reason")
-        elif row["truncated"] != (row["finish_reason"] in TRUNCATED_FINISH_REASONS):
+            continue
+        finish_reason = normalize_finish_reason(row["finish_reason"])
+        expected_truncated = is_truncated_finish_reason(finish_reason)
+        if finish_reason == "repetition":
+            expected_truncated = True
+        if row["truncated"] != expected_truncated:
             errors.append(f"{prefix}: truncation flag disagrees with finish reason")
+        prompt_sha256 = row.get("prompt_sha256")
+        if prompt_sha256 is not None:
+            if not isinstance(prompt_sha256, str) or not re.fullmatch(
+                r"[0-9a-f]{64}", prompt_sha256
+            ):
+                errors.append(f"{prefix}: invalid prompt fingerprint")
+            else:
+                expected_prompt_sha256 = hashlib.sha256(
+                    format_gpqa_prompt(item).encode("utf-8")
+                ).hexdigest()
+                if prompt_sha256 != expected_prompt_sha256:
+                    errors.append(f"{prefix}: prompt fingerprint does not match the CSV")
         if any(
             not _integer(row[field])
             for field in ("prompt_tokens", "completion_tokens", "continued")
@@ -186,7 +215,11 @@ def verify_results(
         predicted = extract_choice(row["text"])
         if row["predicted"] != predicted:
             errors.append(f"{prefix}: saved prediction disagrees with response extraction")
-        correct = predicted == item.gold and not row["truncated"]
+        correct = (
+            finish_reason == "stop"
+            and predicted == item.gold
+            and not row["truncated"]
+        )
         if row["correct"] != correct:
             errors.append(f"{prefix}: saved correctness violates strict scoring")
         recomputed_correct += int(correct)

@@ -24,6 +24,10 @@ MLP_PROJECTIONS = tuple(
     f"model.language_model.layers.0.mlp.{projection}"
     for projection in ("gate_proj", "up_proj", "down_proj")
 )
+MLP_LAYER1_PROJECTIONS = tuple(
+    f"model.language_model.layers.1.mlp.{projection}"
+    for projection in ("gate_proj", "up_proj", "down_proj")
+)
 VISION = "model.visual.blocks.0.attn.qkv"
 MTP = "mtp.layers.0.self_attn.q_proj"
 
@@ -176,6 +180,184 @@ def test_mlp_export_restores_only_language_mlp_and_updates_metadata(checkpoints,
     assert all(module not in quant["quantized_layers"] for module in MLP_PROJECTIONS)
     assert VISION in quant["quantized_layers"] and MTP in quant["quantized_layers"]
     assert summary["restored_modules"] == 3
+
+
+@pytest.mark.parametrize("projection", ("gate_proj", "up_proj", "down_proj"))
+def test_mlp_projection_selector_restores_only_one_family(checkpoints, tmp_path, projection):
+    export, source = checkpoints
+    output = tmp_path / projection
+    summary = ablation.write_ablation(
+        export, source, output, "mlp", mlp_projections=[projection]
+    )
+    tensors, _ = ablation.read_checkpoint(output)
+    for candidate in ("gate_proj", "up_proj", "down_proj"):
+        module = f"model.language_model.layers.0.mlp.{candidate}"
+        if candidate == projection:
+            assert tensors[module + ".weight"].dtype == "BF16"
+            assert module + ".weight_scale" not in tensors
+        else:
+            assert tensors[module + ".weight"].dtype == "U8"
+            assert module + ".weight_scale" in tensors
+    assert summary["restored_modules"] == 1
+    assert summary["selection"] == {
+        "mlp_projections": [projection], "layer_start": None, "layer_end": None,
+    }
+
+
+def test_mlp_layer_interval_is_half_open_and_rejects_empty_selection(checkpoints, tmp_path):
+    export, source = checkpoints
+    output = tmp_path / "band"
+    summary = ablation.write_ablation(
+        export, source, output, "mlp", layer_start=0, layer_end=1
+    )
+    assert summary["restored_modules"] == 3
+    with pytest.raises(ValueError, match="matched no packed"):
+        ablation.prepare_plan(export, source, "mlp", layer_start=1, layer_end=2)
+
+
+@pytest.fixture
+def multi_layer_checkpoints(tmp_path):
+    export, source = tmp_path / "multi-mse", tmp_path / "multi-bf16"
+    export.mkdir()
+    source.mkdir()
+    mlp = MLP_PROJECTIONS + MLP_LAYER1_PROJECTIONS + tuple(
+        f"model.language_model.layers.2.mlp.{projection}"
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    )
+    edited = {
+        name + suffix: value
+        for name in mlp
+        for suffix, value in (
+            (".weight", ("U8", [2, 8])),
+            (".weight_scale", ("F8_E4M3", [2, 1])),
+            (".weight_scale_2", ("F32", [])),
+            (".input_scale", ("F32", [])),
+        )
+    }
+    preserved = _packed(VISION)
+    _shard(export, "edited.safetensors", edited)
+    _shard(export, "preserved.safetensors", preserved)
+    _json(export / ablation.INDEX_NAME, {"weight_map": {
+        **dict.fromkeys(edited, "edited.safetensors"),
+        **dict.fromkeys(preserved, "preserved.safetensors"),
+    }})
+    _shard(source, "model.safetensors", {
+        **{name + ".weight": ("BF16", [2, 16]) for name in mlp},
+    })
+    quant = {"quant_algo": "NVFP4", "group_size": 16,
+             "quantized_layers": {VISION: {"quant_algo": "NVFP4"}}}
+    _json(export / "config.json", {"model_type": "qwen3_5",
+                                   "quantization_config": {**quant, "quant_method": "modelopt"}})
+    _json(export / "hf_quant_config.json", {"producer": {"name": "modelopt"},
+                                            "quantization": quant})
+    _json(export / "provenance.json", {"git_sha": "1" * 40})
+    return export, source
+
+
+def test_mlp_layer_band_preserves_outside_and_unselected_projection_payloads(
+    multi_layer_checkpoints, tmp_path
+):
+    export, source = multi_layer_checkpoints
+    before = _payloads(export)
+    source_before = _payloads(source)
+    output = tmp_path / "band-write"
+    plan = ablation.prepare_plan(
+        export, source, "mlp", mlp_projections=["down_proj", "gate_proj"],
+        layer_start=1, layer_end=2,
+    )
+    summary = ablation.write_ablation(
+        export, source, output, "mlp", mlp_projections=["down_proj", "gate_proj"],
+        layer_start=1, layer_end=2,
+    )
+    after = _payloads(output)
+    selected_modules = {
+        "model.language_model.layers.1.mlp.down_proj",
+        "model.language_model.layers.1.mlp.gate_proj",
+    }
+    for name, info in before.items():
+        module, suffix = name.rsplit(".", 1)
+        if module in selected_modules and suffix == "weight":
+            assert after[name] == source_before[name]
+        elif module in selected_modules and suffix in ablation.SCALE_SUFFIXES:
+            assert name not in after
+        else:
+            assert after[name] == info
+    assert summary["restored_modules"] == 2
+    assert summary["selection"] == {
+        "mlp_projections": ["gate_proj", "down_proj"], "layer_start": 1, "layer_end": 2,
+    }
+    record = json.loads((output / "precision_ablation.json").read_text())
+    assert record["selection"] == summary["selection"]
+    assert plan["summary"]["selection"] == summary["selection"]
+    assert _payloads(export) == before
+    assert _payloads(source) == source_before
+
+
+def test_mlp_layer_band_boundaries_and_canonical_projection_order(multi_layer_checkpoints):
+    export, source = multi_layer_checkpoints
+    summary = ablation.prepare_plan(
+        export, source, "mlp", mlp_projections=["down_proj", "gate_proj"],
+        layer_start=0, layer_end=1,
+    )["summary"]
+    assert summary["restored_modules"] == 2
+    assert summary["selection"]["mlp_projections"] == ["gate_proj", "down_proj"]
+    with pytest.raises(ValueError, match="matched no packed"):
+        ablation.prepare_plan(export, source, "mlp", layer_start=3, layer_end=4)
+
+
+@pytest.mark.parametrize("kwargs, message", [
+    ({"layer_start": 0}, "supplied together"),
+    ({"layer_start": 1, "layer_end": 1}, "0 <= start < end"),
+    ({"layer_start": -1, "layer_end": 1}, "0 <= start < end"),
+    ({"mlp_projections": ["gate_proj", "gate_proj"]}, "duplicates"),
+    ({"mlp_projections": ["gate_proj", "other_proj"]}, "Unknown MLP projection"),
+    ({"mlp_projections": [], "layer_start": 0, "layer_end": 1}, "cannot be empty"),
+])
+def test_mlp_selector_rejects_invalid_conditions(checkpoints, kwargs, message):
+    export, source = checkpoints
+    with pytest.raises(ValueError, match=message):
+        ablation.prepare_plan(export, source, "mlp", **kwargs)
+
+
+def test_mlp_selector_is_rejected_for_non_mlp_variant(checkpoints):
+    export, source = checkpoints
+    with pytest.raises(ValueError, match="require --variant mlp"):
+        ablation.prepare_plan(export, source, "control", layer_start=0, layer_end=1)
+
+
+@pytest.mark.parametrize("variant", ("control", "attention", "both", "lm-head"))
+def test_selected_rejects_mlp_selectors_for_non_mlp_variant(variant):
+    with pytest.raises(ValueError, match="require --variant mlp"):
+        ablation.selected(ATTN, variant, mlp_projections=["gate_proj"])
+
+
+def test_cli_passes_mlp_selector_to_dry_run(checkpoints, tmp_path, capsys):
+    export, source = checkpoints
+    assert ablation.main([
+        "--export", str(export), "--bf16", str(source), "--variant", "mlp",
+        "--mlp-projection", "up_proj", "--layer-start", "0", "--layer-end", "1",
+    ]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["restored_modules"] == 1
+    assert summary["selection"] == {
+        "mlp_projections": ["up_proj"], "layer_start": 0, "layer_end": 1,
+    }
+
+
+def test_cli_write_preserves_selected_plan(multi_layer_checkpoints, tmp_path, capsys):
+    export, source = multi_layer_checkpoints
+    output = tmp_path / "cli-band"
+    args = [
+        "--export", str(export), "--bf16", str(source), "--variant", "mlp",
+        "--mlp-projection", "down_proj", "--layer-start", "1", "--layer-end", "2",
+    ]
+    assert ablation.main(args) == 0
+    planned = json.loads(capsys.readouterr().out)
+    assert ablation.main([*args, "--write", "--output", str(output)]) == 0
+    written = json.loads(capsys.readouterr().out)
+    record = json.loads((output / "precision_ablation.json").read_text())
+    assert planned["restored_modules"] == written["restored_modules"] == 1
+    assert planned["selection"] == written["selection"] == record["selection"]
 
 
 def test_dry_run_reads_headers_without_creating_output(checkpoints, tmp_path, capsys):

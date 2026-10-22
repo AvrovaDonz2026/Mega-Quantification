@@ -51,6 +51,8 @@ fi
 
 if [[ "${MEGAQUANT_VERIFY_CONTAINER:-0}" == "1" ]]; then
   python scripts/container_manifest.py verify
+  # The numerical patch is mandatory for images recorded as SGLang serving.
+  python scripts/verify_sglang_patch.py
 fi
 
 # SGLang FP8 JIT on sm_120 needs host g++/cc1plus on PATH.

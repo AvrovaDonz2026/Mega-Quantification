@@ -22,6 +22,9 @@ MLP-only BF16 recovery pilot 已在 2026-10-20 完成：control / MLP 各两次
 长响应各臂内输出稳定，四条均未检出确认的 2,032-token 周期。
 运行中诊断器漏读部分 EOS 元数据，不能用其 `natural_termination=false` 认定没有
 EOS 停止。历史循环未在 control 复现，当前无修复结论。
+当前[MLP 诊断工具](../../scripts/diagnostics/gdn_parity_20261019/mlp-pilot/README.md)
+可按投影和层段选择 BF16 recovery，并核对选择记录及张量；该工具变更仅通过 CPU 门禁，
+尚无新增子集 GPU 实验结果。
 [原始 GDN 源码对照](dgx-spark-natural-source-control-20261020.md)先完成两次 39,846-token
 control：均以匹配 EOS 停止且输出完全一致，未检出确认的 2,032-token 周期。随后独立的
 历史条件重放输出 49,152 tokens 达长度上限，输出 SHA 与历史完全一致，并精确复现
@@ -41,12 +44,41 @@ R2 于 17:15:42 UTC 启动；18:23:29 UTC 只读观察确认已完成。实验�
 稳定性验证通过，应用层 readiness 仍为 unknown。历史 source capture 共捕获十个允许文件；
 相关归档文件与旧归档键哈希一致，归档相关 GDN 文件无 `TRACK_STATE`，当前 fork 的 snapshot 实现
 不适用于 R1/R2。详情及脱敏快照见上述原始源码对照报告。
-R3 于 19:18:59.637587 UTC 启动，19:23:00.606688 UTC 只读观察仍为 `request_streaming`
-（elapsed 218.747 秒、events/stream lines 各 32）；这是 SSE 行数，不能换算 token，GPU
-数值统计尚未取回。R3 保留 R1 radix-on 协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`；
-源码身份与 microprobe 门禁已通过，单个冷请求仍在生成，结果未完成。两端原 GLM 已按授权暂停，
-实验后成对恢复 pending，不能声称恢复已完成。
+R3 于 19:18:59.637587 UTC 启动，随后完成单变量 beta-store 对照：保留 R1 radix-on
+协议，仅移除 beta store 的 `.to(b.dtype.element_ty)`。请求生成 49,152 tokens 后以
+`length` 结束；输出 SHA 与 R1/R2 不同，lag 2,032 的匹配数不足完整周期门槛，因此只能
+说未检出原已确认的长期循环，不能排除其他周期或声称自然停止、答案正确、MSE 修复。
+缓存 token 与 retractions 为 0，speculative verify 计数未观测。实验后双端原 GLM 已恢复，
+精确身份检查及连续约 120 秒进程稳定性检查通过；应用层 readiness 仍为 `unknown`。
+微探针和容量差异等边界见 parity 报告末尾。
 [当前状态与范围](dgx-spark-gdn-parity-20261019.md)。
+
+2026-10-21 的 [MSE scale 审计与 matched-runner 记录](dgx-spark-mse-root-cause-20261021.md)
+确认当前磁盘上的 max/MSE 导出 scale 均完整且有限，但覆盖范围不匹配；MSE 的整模量化
+根因仍未确定。第一次 R5 因维护 heartbeat 错误中止且无有效模型结果；独立 retry 已完成
+49,152-token 单次纯文本生成（MTP 关闭），源码门禁及双端恢复/超过 120 秒进程稳定性验证通过。
+retry 以 `length`
+结束，候选检测到周期 1,375；对历史 lag 2,032 只有 1 个完整周期的匹配，不能称为历史长循环
+复现。beta 单变量改动改变了输出轨迹，但没有解决重复或停止退化，也没有定位或修复 MSE 根因。
+覆盖范围不匹配是总体比较中的已知 confounder；不能把 vision/MTP 覆盖差异直接归因于该纯文本
+循环。报告中的 scale 审计、GPU serving 诊断和整模因果判断不可混为一谈。
+
+[Matched PTQ R6 离线工具](../../scripts/diagnostics/matched-ptq-r6/README.md)提供确定性
+bootstrap plan、受约束的本地生命周期监督、配对 evidence 校验与 replay 比较；离线套件
+167 项通过（此 wrapper 在全量 CPU 门禁中占 1 项，其隔离子进程测试不另计入全量）。
+私有部署 glue 未公开，公共工具不内置部署器或提供远程部署命令；完成证据见下方记录。
+固定 Spark 镜像上的最终公共 payload CPU smoke 通过，实验容器已清理；见[脱敏
+preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是完整模型 GPU PTQ/export
+证据。CPU preflight 不代表完整模型 serving/GPU 推理已验证；MSE 根因仍未确定。
+
+当前 R6 两组 27B 整模 PTQ 已完成并通过导出前的 quantizer/calibration 配对检查：256 个校准 batch 顺序一致，519 个权重 amax 两臂不同、global amax 一致，574 个 activation 哈希一致；固定 arithmetic probe 通过。实际导出范围不一致，见下方勘误。static-max replay 已完成，但 static-MSE 未 ready/generate，故无 paired replay 或跨臂 token 比较；MSE 根因仍未定。
+详见[脱敏完成记录](dgx-spark-matched-ptq-completed-20261022.json)。旧 [stage 预检](dgx-spark-matched-ptq-stage-preflight-20261022.json) 和 [GPU microprobe](dgx-spark-matched-ptq-gpu-microprobe-20261022.json) 仅作辅助记录；固定 probe 不代表 GLM 整体健康。
+
+Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` 完成真实冷启动回放，49,152 tokens 后以 `length` 结束，末尾出现 1,229-token 周期（suffix match 20,988 tokens）。`static-MSE` 在服务 identity/readiness 前退出，未发送题目请求，跨臂 token 比较尚未完成。成对恢复后通过 120 秒进程稳定检查和固定算术 probe。详见[回放尝试记录](dgx-spark-matched-replay-attempt-20261022.json)。该例说明没有 MSE 搜索也会循环；MSE 对循环的影响及根因仍未确定。
+
+2026-10-22 的启动 probe 记录了一个必须单独标注的导出证据勘误：`static-MSE` 在 142.042 秒、生成前因 `AssertionError` 退出（`param_data=[1152,576]`、`loaded=[1152,1152]`）。header 审计显示 max 为 519 U8 + 519 F8，110 个 vision 与 8 个 MTP 均 packed；MSE 为 401 U8 + 401 F8，而 110 个 vision 与 8 个 MTP 为 BF16。MSE 配置声明 `uniformNVFP4` 且没有 aux `quantized_layers`，因此 loader 预期 packed vision；`visionqkv` 也呈现 MSE `3456x1152 BF16` 对 max `3456x576 U8`，未发现重复 key。此前 matched PTQ 的 comparable 结论仅适用于导出前 quantizer/calibration 证据，不能声称两份导出的 aux scope 相同。[脱敏启动 probe JSON](dgx-spark-mse-startup-probe-20261022.json)。该 probe 无题目请求、token 或质量结果；GLM 成对恢复、120 秒稳定检查及固定 arithmetic probe（answer 2、`stop`）通过，MSE 重复根因仍未确定。历史 dated 报告保留原表述，不据此补写质量结论。
+
+本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

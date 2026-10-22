@@ -60,7 +60,9 @@ Qwen3.5/3.8 量化使用 `transformers>=5.8,<5.15`，CPU 回归测试固定在
 
 ## SGLang inference and GPQA
 
-推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。截断和解析失败算错。
+推理和 GPQA 都走 SGLang。评测客户端打 `http://127.0.0.1:30000/v1` 的 OpenAI chat。仓库里的 YAML 现在发 temperature 0，其余仍是 Qwen thinking 卡：`top_p=0.95`，`top_k=20`，`min_p=0`，`presence_penalty=0`，`repetition_penalty=1`，`enable_thinking` 与 `preserve_thinking`，`reasoning_effort=xhigh`。默认、5090、6000D 和 Spark 完整 GPQA 配方的上下文都是 262144；Spark 的独立视觉/MTP 功能验证配方保留 32768。`max_new_tokens: 0` 使用各自剩余窗口。`continue_on_length` 在窗口还有预算时续写，最多 8 次，不会扩大上下文；如果续写以高置信度重复已输出的前缀重新开始，客户端会停止追加该片段，将 `finish_reason` 设为 `repetition` 并保留 `truncated=true`；服务返回 usage 元数据时仍记录该次实际 usage。正式 checker 接受这种诊断组合后按严格规则计错：只有显式、非截断的 `stop` 才能答对。该门禁只防止重复内容继续放大评测轨迹，不代表已找到或修复 GPU MSE 根因。新 journal 行包含 `prompt_sha256`，恢复含该字段的 journal 时会用 CSV 重建题干指纹；旧 journal 缺字段仍兼容，但只发一次告警且无法进行题干一致性校验。`generation.http_timeout_seconds` 默认 86400 秒，每次 HTTP 请求（含各次续写）最多等待 24 小时，不是整套评测的总时限。完整轨迹默认在 `<model>/gpqa_diamond/gpqa_diamond.jsonl`，旁边有 `summary.json`，用 `--output` 可指定独立目录，按 `item_id` 续写。`summary.json` 存在、198 个唯一题目齐全并通过独立校验后，分数才是 `correct/198`。答案解析要求显式 `Answer: A` 至 `Answer: D`、等价 boxed 答案或单独答案字母；选项讨论中的字母不作为答案，整行反引号包裹的 Answer 格式也可解析。解析规则更新不重写既有 journal 或历史成绩。截断和解析失败算错。
+
+GPQA journal 只应在相同的权重、CSV、seed、选项打乱策略、上下文和服务参数下续跑；修改任一输入或评测协议时使用新的 `--output` 目录。程序会按 `item_id` 复用已有行，并在追加前截掉最后一个不完整的 JSONL 行；中间损坏的行会使评测失败，避免静默跳过证据。新行的 `prompt_sha256` 必须匹配当前 CSV 题干；旧行缺少该字段时保留兼容性并发出一次告警。
 
 ### 当前 Spark 完整结果
 
@@ -276,6 +278,20 @@ acceptance rate; those still need inference evaluation.
 megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a8.yaml \
   --algorithm local_hessian --num-samples 2048
 ```
+
+`static_max` 是仅限 NVFP4 的控制臂 selector：它保持 NVFP4 **weight block
+scale 为 static**、**input scale 为 dynamic**，但运行 ModelOpt 的 `max` 校准。
+因此它与默认 `max` 的 dynamic weight 语义不同，也不是新的搜索算法。可在
+NVFP4 配方上临时启用：
+
+```bash
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml \
+  --algorithm static_max
+```
+
+当前只有 CPU 和配置层验证；尚无 GPU PTQ 或同 source、同 calibration、同
+ModelOpt 的 matched export 结论。该控制臂不代表质量或性能改善，也没有修复
+已知的 MSE 重复输出行为。
 
 Spark 的可选 W4A4 MSE / Local-Hessian 实验使用同一份 256 条图文校准集，
 只改变权重 scale 搜索与导出目录。搜索要求静态 NVFP4 权重 block scale 和
@@ -503,6 +519,24 @@ bash scripts/gpu-pod.sh publish w4a8
 
 Local-Hessian `mixed.yaml` still writes `outputs/Qwen3.8-27B-NVFP4-mixed`. Publish that directory the same way if that is the export you ran.
 
+To fetch a published export, use the same scheme and 64-character content hash:
+
+```bash
+python scripts/oss_fetch.py --scheme w4a4 --hash <content-hash> \
+  --dest outputs/Qwen3.8-27B-NVFP4-W4A4
+```
+
+The fetcher writes `SHA256SUMS.txt` and, when present, `oss_manifest.json` beside
+the downloaded files. Verify the payload before serving or republishing it:
+
+```bash
+(cd outputs/Qwen3.8-27B-NVFP4-W4A4 && sha256sum -c SHA256SUMS.txt)
+```
+
+Keep the content hash and the checksum result with the run metadata. Bucket and
+endpoint are supplied by flags or the gitignored `.oss.env`; no bucket name or
+credential belongs in a recipe or commit.
+
 ## Serve (SGLang / vLLM / TensorRT-LLM)
 
 Default inference is **SGLang**. `megaquant serve --dry-run` prints the
@@ -598,7 +632,7 @@ vLLM support for that combo is limited.
 | Sampling | `temperature=0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1.0 do_sample=true`. Published Qwen / NVIDIA cards use temperature 1.0. |
 | Thinking | `enable_thinking=true preserve_thinking=true reasoning_effort=xhigh` |
 | Context | Full GPQA recipes, including Spark: `context-length=262144`. Spark vision/MTP checks remain at `32768`. `max_new_tokens=0` means the remaining window of the selected recipe. |
-| Truncation | Fill remaining context; `continue_on_length` continues while budget remains, up to 8 continuations. A final length finish counts as wrong. |
+| Truncation | Fill remaining context; `continue_on_length` continues while budget remains, up to 8 continuations. A high-confidence restarted prefix stops further appending and is recorded as `repetition` with truncation retained; when the service returns usage metadata, that rejected response's actual usage is recorded. The checker accepts this diagnostic row and marks it wrong because it is not a non-truncated `stop`. This guard protects evaluation accounting and does not establish an MSE fix. |
 | KV on 32 GB | SGLang `--enable-hierarchical-cache` + `--hicache-size`. Cookbook ~58 GiB on a 64 GB box. This 5090 VM (94 GiB) pins **64 GiB** HiCache (`eval-gpqa-diamond.5090.yaml`). SGLang `_split_hicache_size` splits that host pool by the **GPU** Mamba vs KV pool sizes — a fat GPU mamba cache also steals host KV. |
 | Concurrency | default recipe 1; 5090 recipe **24** (`max_running_requests: 24`, `max_mamba_cache_size: 96` bf16 GDN slots so 24×4); 80 GB recipe **64** (`max_mamba_cache_size: 256`). float32 64-slot mamba used ~9.3 GB HBM and left ~0.88 GB GPU KV, so 16 HTTP workers queued behind 3–4 decode slots. |
 | Mamba / GDN | 5090 and 80 GB: `mamba_ssm_dtype: bfloat16`, `mamba_radix_cache_strategy: extra_buffer_lazy`. NVIDIA SGLang cookbook: `extra_buffer` + float32. |

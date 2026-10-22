@@ -40,6 +40,29 @@ def test_existing_export_directory_with_dot_keeps_own_provenance(tmp_path, plan)
     assert not (tmp_path / "provenance.json").exists()
 
 
+def test_static_max_provenance_separates_selector_and_runtime(tmp_path, plan) -> None:
+    plan.recipe.algorithm = "static_max"
+    export = tmp_path / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["algorithm"] == "static_max"
+    assert report["recipe_selector"] == "static_max"
+    assert report["runtime_algorithm"] == "max"
+
+
+def test_non_modelopt_provenance_does_not_fabricate_runtime_algorithm(tmp_path, plan) -> None:
+    plan.backend_name = "llmcompressor"
+    plan.recipe.algorithm = "mse"
+    export = tmp_path / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["algorithm"] == "mse"
+    assert report["recipe_selector"] == "mse"
+    assert report["runtime_algorithm"] is None
+
+
 @pytest.mark.parametrize("filename", ["model.safetensors", "model"])
 def test_actual_file_exports_write_provenance_in_parent(tmp_path, plan, filename) -> None:
     export = tmp_path / filename
@@ -88,6 +111,26 @@ def test_valid_manifest_revision_takes_precedence_over_checkout(image_root, monk
     assert pipeline._git_sha() == IMAGE_SHA
 
 
+def test_uppercase_manifest_revision_is_normalized_in_written_provenance(
+    image_root, monkeypatch, plan
+) -> None:
+    uppercase_sha = IMAGE_SHA.upper()
+    (image_root / "container-manifest.json").write_text(
+        json.dumps({"git_revision": uppercase_sha})
+    )
+
+    def unexpected_git(*args, **kwargs):
+        pytest.fail("Git must not override the revision baked into the image")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", unexpected_git)
+    export = image_root / "export"
+    export.mkdir()
+    pipeline._write_provenance(plan, export)
+
+    report = json.loads((export / "provenance.json").read_text())
+    assert report["git_sha"] == IMAGE_SHA
+
+
 @pytest.mark.parametrize(
     "manifest_bytes",
     [
@@ -101,6 +144,7 @@ def test_valid_manifest_revision_takes_precedence_over_checkout(image_root, monk
         b'{"git_revision": 123}',
         b'{"git_revision": "1ae52c7"}',
         json.dumps({"git_revision": "g" * 40}).encode(),
+        json.dumps({"git_revision": "A" * 39 + "G"}).encode(),
     ],
 )
 def test_missing_or_invalid_manifest_falls_back_to_git(

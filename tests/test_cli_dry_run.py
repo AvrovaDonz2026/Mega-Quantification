@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import os
@@ -20,14 +19,7 @@ HUB_BF16 = "Qwen/Qwen3.8-27B"
 LOCAL_EXPORT = "outputs/Qwen3.8-27B-NVFP4-W4A8"
 
 
-def _cli_available() -> bool:
-    return importlib.util.find_spec("megaquant.cli") is not None
-
-
 def test_cli_plan_subprocess(repo_root: Path, tmp_path: Path) -> None:
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     env = os.environ.copy()
     src = str(repo_root / "src")
     env["PYTHONPATH"] = src + os.pathsep + env.get("PYTHONPATH", "")
@@ -77,9 +69,6 @@ def test_cli_plan_monkeypatched_hf_config(
     repo_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """If resolve() fetches config.json, serve a tiny fake instead of 27B weights."""
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     fake = {
         "model_type": "qwen3_5",
         "architectures": ["Qwen3_5ForConditionalGeneration"],
@@ -192,9 +181,6 @@ def test_cli_eval_and_serve_dry_run_uses_local_export_not_hub(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch, recipe: str
 ) -> None:
     """eval/serve --dry-run must not treat Qwen/Qwen3.8-27B as a download target."""
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     try:
         import huggingface_hub
 
@@ -230,9 +216,6 @@ def test_cli_eval_and_serve_dry_run_uses_local_export_not_hub(
 def test_cli_eval_serve_dry_run_subprocess_offline(
     repo_root: Path, tmp_path: Path, recipe: str
 ) -> None:
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     env = _offline_env(repo_root, tmp_path)
     for command in ("eval", "serve"):
         proc = subprocess.run(
@@ -256,9 +239,6 @@ def test_cli_eval_serve_dry_run_subprocess_offline(
 def test_cli_eval_serve_missing_recipe_is_clean_error(
     repo_root: Path, tmp_path: Path
 ) -> None:
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     env = _offline_env(repo_root, tmp_path)
     missing = str(tmp_path / "no-such-eval.yaml")
     for command in ("eval", "serve"):
@@ -288,9 +268,6 @@ def test_cli_eval_serve_missing_recipe_is_clean_error(
 
 
 def test_cli_eval_default_recipe_from_other_cwd(repo_root: Path, tmp_path: Path) -> None:
-    if not _cli_available():
-        pytest.skip("megaquant.cli not implemented yet")
-
     env = _offline_env(repo_root, tmp_path)
     proc = subprocess.run(
         [sys.executable, "-m", "megaquant.cli", "eval", "--dry-run"],

@@ -23,6 +23,23 @@ def test_dockerfile_does_not_copy_weights(repo_root: Path) -> None:
         assert not line.lower().startswith("copy models")
 
 
+def test_x86_ptq_lock_is_explicit_and_does_not_touch_spark_or_ngc(repo_root: Path) -> None:
+    lock = (repo_root / "docker/constraints-x86-cuda128-py312.txt").read_text()
+    assert "torch==2.7.1+cu128" in lock
+    assert "torchvision==0.22.1+cu128" in lock
+    assert "nvidia-modelopt==0.46.1" in lock
+    assert "llmcompressor==0.8.1" in lock
+    assert "transformers==5.14.1" in lock
+    assert "not proof of a successful 27B GPU PTQ run" in lock
+    dockerfile = (repo_root / "Dockerfile").read_text()
+    assert "INSTALL_TORCH" in dockerfile and "constraints-x86-cuda128-py312.txt" in dockerfile
+    assert 'pip install -r /tmp/requirements-gpu.txt' in dockerfile
+    spark = (repo_root / "Dockerfile.spark").read_text()
+    assert "constraints-x86-cuda128-py312.txt" not in spark
+    ngc = (repo_root / "docker-compose.ngc.yml").read_text()
+    assert 'INSTALL_TORCH: "0"' in ngc
+
+
 def test_compose_services_profiles_and_volumes(repo_root: Path) -> None:
     compose_path = repo_root / "docker-compose.yml"
     text = compose_path.read_text()
@@ -300,7 +317,11 @@ def test_install_host_does_not_bake_tenant_dns(repo_root: Path) -> None:
     hits: list[str] = []
     for glob in text_globs:
         for path in repo_root.rglob(glob):
-            if ".git" in path.parts or path == repo_root / "tests" / "test_docker_packaging.py":
+            if (
+                ".git" in path.parts
+                or "artifacts" in path.parts
+                or path == repo_root / "tests" / "test_docker_packaging.py"
+            ):
                 continue
             blob = path.read_text(encoding="utf-8", errors="ignore")
             if "100.90.90.90" in blob or "100.90.90.100" in blob:
@@ -375,7 +396,8 @@ def test_sglang_default_base_is_cuda_128_optional_129_rebuild(repo_root: Path) -
     assert (services["serve-sglang"].get("build") or {}).get("dockerfile") == "Dockerfile.sglang"
     assert (services["quantize"].get("build") or {}).get("dockerfile") in (None, "Dockerfile")
     ptq_dockerfile = (repo_root / "Dockerfile").read_text()
-    assert "nvidia/cuda:12.8.1-devel-ubuntu24.04" in ptq_dockerfile
+    assert "ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:" in ptq_dockerfile
+    assert "${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:" in compose_text
 
     documented = f"{dockerfile}\n{compose_text}\n{readme}\n{env_example}"
     assert "nvidia/cuda:12.9.1-devel-ubuntu24.04" in documented

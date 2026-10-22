@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
+import struct
 import sys
 import types
 from pathlib import Path
@@ -18,6 +20,12 @@ SPEC = importlib.util.spec_from_file_location("mlp_pilot_controller", CONTROLLER
 assert SPEC is not None and SPEC.loader is not None
 CONTROLLER_MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONTROLLER_MODULE)
+
+MODEL_GATE = CONTROLLER.parent / "model_gate.py"
+GATE_SPEC = importlib.util.spec_from_file_location("mlp_pilot_model_gate", MODEL_GATE)
+assert GATE_SPEC is not None and GATE_SPEC.loader is not None
+MODEL_GATE_MODULE = importlib.util.module_from_spec(GATE_SPEC)
+GATE_SPEC.loader.exec_module(MODEL_GATE_MODULE)
 
 
 def test_known_period_stats_matches_historical_long_suffix_scalars() -> None:
@@ -38,6 +46,151 @@ def test_known_period_stats_matches_historical_long_suffix_scalars() -> None:
         "periodic_complete_periods": 7,
         "periodic_confirmed": True,
     }
+
+
+def _gate_shard(root: Path, filename: str, tensors: dict[str, tuple[str, list[int]]]) -> None:
+    header: dict[str, object] = {}
+    payload = bytearray()
+    for index, (name, (dtype, shape)) in enumerate(tensors.items(), 1):
+        start = len(payload)
+        payload.extend(
+            bytes([index % 251 or 1])
+            * (math.prod(shape) * {"U8": 1, "F8_E4M3": 1, "F32": 4, "BF16": 2}[dtype])
+        )
+        header[name] = {"dtype": dtype, "shape": shape, "data_offsets": [start, len(payload)]}
+    encoded = json.dumps(header).encode()
+    encoded += b" " * (-len(encoded) % 8)
+    (root / filename).write_bytes(struct.pack("<Q", len(encoded)) + encoded + payload)
+
+
+def test_model_gate_real_full_control_subset_and_selection_mismatch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    tool_path = Path(__file__).resolve().parents[1] / "scripts/prepare_precision_ablation.py"
+    export, source = tmp_path / "export", tmp_path / "source"
+    export.mkdir()
+    source.mkdir()
+    packed: dict[str, tuple[str, list[int]]] = {}
+    bf16: dict[str, tuple[str, list[int]]] = {}
+
+    def add_packed(module: str) -> None:
+        packed.update(
+            {
+                f"{module}.weight": ("U8", [2, 8]),
+                f"{module}.weight_scale": ("F8_E4M3", [2, 1]),
+                f"{module}.weight_scale_2": ("F32", []),
+                f"{module}.input_scale": ("F32", []),
+            }
+        )
+
+    for layer in range(64):
+        for projection in ("gate_proj", "up_proj", "down_proj"):
+            module = f"model.language_model.layers.{layer}.mlp.{projection}"
+            add_packed(module)
+            bf16[f"{module}.weight"] = ("BF16", [2, 16])
+    for index in range(110):
+        add_packed(f"visual.blocks.{index}.proj")
+    for index in range(8):
+        add_packed(f"mtp.layers.{index}.proj")
+    _gate_shard(export, "model.safetensors", packed)
+    _gate_shard(source, "model.safetensors", bf16)
+    index = {"weight_map": {name: "model.safetensors" for name in packed}}
+    (export / "model.safetensors.index.json").write_text(json.dumps(index))
+    (source / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": dict.fromkeys(bf16, "model.safetensors")})
+    )
+    quant = {"quant_algo": "NVFP4", "quantized_layers": {}, "exclude_modules": []}
+    (export / "config.json").write_text(json.dumps({"quantization_config": quant}))
+    (export / "hf_quant_config.json").write_text(json.dumps({"quantization": quant}))
+    provenance = {
+        "algorithm": "mse",
+        "backend": "modelopt",
+        "scheme": "nvfp4_w4a4",
+        "calibration": {"with_images": True},
+    }
+    (export / "provenance.json").write_text(json.dumps(provenance))
+    (export / "tokenizer.json").write_text(json.dumps({"added_tokens": []}))
+    expected_provenance = MODEL_GATE_MODULE._sha(export / "provenance.json")
+    monkeypatch.setattr(MODEL_GATE_MODULE, "EXPECTED_PROVENANCE_SHA256", expected_provenance)
+
+    full = tmp_path / "full"
+    control = tmp_path / "control"
+    subset = tmp_path / "subset"
+    tool_spec = importlib.util.spec_from_file_location("gate_ablation", tool_path)
+    assert tool_spec and tool_spec.loader
+    tool = importlib.util.module_from_spec(tool_spec)
+    tool_spec.loader.exec_module(tool)
+    tool.write_ablation(export, source, full, "mlp")
+    tool.write_ablation(export, source, control, "control")
+    tool.write_ablation(
+        export, source, subset, "mlp", mlp_projections=["gate_proj"], layer_start=16, layer_end=32
+    )
+    for path in (full, control):
+        record = json.loads((path / "precision_ablation.json").read_text())
+        record.pop("selection", None)
+        (path / "precision_ablation.json").write_text(json.dumps(record))
+    assert (
+        MODEL_GATE_MODULE.verify_model(export, source, full, "mlp", tool_path)["restored_modules"]
+        == 192
+    )
+    assert (
+        MODEL_GATE_MODULE.verify_model(export, source, control, "control", tool_path)[
+            "restored_modules"
+        ]
+        == 0
+    )
+    assert (
+        MODEL_GATE_MODULE.verify_model(
+            export,
+            source,
+            subset,
+            "mlp",
+            tool_path,
+            mlp_projections=["gate_proj"],
+            layer_start=16,
+            layer_end=32,
+        )["restored_modules"]
+        == 16
+    )
+    record = json.loads((subset / "precision_ablation.json").read_text())
+    record["selection"]["mlp_projections"] = ["up_proj"]
+    (subset / "precision_ablation.json").write_text(json.dumps(record))
+    with pytest.raises(RuntimeError, match="selection mismatch"):
+        MODEL_GATE_MODULE.verify_model(
+            export,
+            source,
+            subset,
+            "mlp",
+            tool_path,
+            mlp_projections=["gate_proj"],
+            layer_start=16,
+            layer_end=32,
+        )
+    record.pop("selection")
+    (subset / "precision_ablation.json").write_text(json.dumps(record))
+    with pytest.raises(RuntimeError, match="selection mismatch"):
+        MODEL_GATE_MODULE.verify_model(
+            export,
+            source,
+            subset,
+            "mlp",
+            tool_path,
+            mlp_projections=["gate_proj"],
+            layer_start=16,
+            layer_end=32,
+        )
+
+
+def test_model_gate_rejects_selectors_on_control_arm(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="require the mlp verification arm"):
+        MODEL_GATE_MODULE.verify_model(
+            tmp_path / "export",
+            tmp_path / "bf16",
+            tmp_path / "model",
+            "control",
+            tmp_path / "ablation.py",
+            mlp_projections=["gate_proj"],
+        )
 
 
 @pytest.mark.parametrize(

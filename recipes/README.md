@@ -46,6 +46,23 @@ Both completed full PTQ, strict export audits, fixed vision/MTP checks and
 quality or stopping recovery. Use the [experiment workflow](../docs/DGX_SPARK.md#controlled-w4a4-calibration-experiments)
 and [verified results](../docs/validation/README.md#完整-spark-gpqa-diamond).
 
+### Static-max control
+
+Use `--algorithm static_max` with an NVFP4 recipe to create a max-calibration
+control with static NVFP4 **weight** block scales and dynamic **input** scales.
+The selector is translated to ModelOpt's runtime `max` algorithm; it is not a
+new search method and is intentionally rejected for non-NVFP4 schemes.
+
+```bash
+megaquant quantize -c recipes/qwen3.8-27b-nvfp4-w4a4.spark.yaml \
+  --algorithm static_max
+```
+
+This control currently has CPU/configuration-layer coverage only. It has no
+GPU PTQ result or same-source, same-calibration matched-export comparison yet.
+It does not establish a quality or performance improvement, and it does not
+resolve the known MSE repetitive-output behavior.
+
 ## GPQA (SGLang)
 
 | File | Context / requests | Hardware and use |

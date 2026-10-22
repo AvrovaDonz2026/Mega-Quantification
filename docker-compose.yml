@@ -1,7 +1,7 @@
 name: "${COMPOSE_PROJECT_NAME:-megaquant}"
 
 x-build-args: &build-args
-  BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
+  BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:4b9ed5fa8361736996499f64ecebf25d4ec37ff56e4d11323ccde10aa36e0c43}
   INSTALL_TORCH: ${INSTALL_TORCH:-1}
   TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
 

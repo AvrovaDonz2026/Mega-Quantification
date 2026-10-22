@@ -19,6 +19,7 @@ from megaquant.mtp_export import (
     restore_bf16_mtp,
     restore_bf16_mtp_from_recipe,
     to_hf_mtp_name,
+    update_export_index,
     write_mtp_draft,
     write_safetensors,
 )
@@ -147,6 +148,37 @@ def test_restore_from_local_source_writes_shard_and_draft(tmp_path: Path) -> Non
     assert cfg["text_config"]["layer_types"] == ["full_attention"]
     draft_index = json.loads((draft / "model.safetensors.index.json").read_text())
     assert set(draft_index["weight_map"]) == {_MTP_A, _MTP_B}
+
+
+def test_update_index_rebuilds_total_size_from_headers_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    export = tmp_path / "export"
+    export.mkdir()
+    old_name = "model.weight"
+    write_safetensors(
+        export / "model.safetensors",
+        {old_name: RawTensor(dtype="U8", shape=(3,), data=bytes(3))},
+    )
+    write_safetensors(export / MTP_SHARD_NAME, {_MTP_A: _tensor()})
+    _write_index(
+        export / "model.safetensors.index.json",
+        {old_name: "model.safetensors", _MTP_A: "old-missing.safetensors"},
+        total_size=999,
+    )
+
+    def fail_if_payload_reader_used(_path: Path) -> dict:
+        raise AssertionError("full safetensors payload reader was used")
+
+    monkeypatch.setattr("megaquant.mtp_export.read_safetensors", fail_if_payload_reader_used)
+    update_export_index(
+        export,
+        MTP_SHARD_NAME,
+        {_MTP_A: _tensor().nbytes},
+        replace_existing={_MTP_A},
+    )
+    index = json.loads((export / "model.safetensors.index.json").read_text())
+    assert index["metadata"]["total_size"] == 3 + _tensor().nbytes
 
 
 def test_restore_keeps_mtp_out_of_quantized_layers(tmp_path: Path) -> None:

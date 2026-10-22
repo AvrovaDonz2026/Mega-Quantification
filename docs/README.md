@@ -14,6 +14,7 @@ Mega-Quantification 的当前版本为
 | RTX 5090 及 Qwen 模型操作 | [Qwen3.8-27B 手册](qwen3.8-27b.md) | 层布局、内存预算、校准、MTP 导出、推理、评测和 OSS |
 | 安装 Docker、配置宿主机或 GPU Pod | [Docker 指南](../docker/README.md) | x86/Spark 镜像区别、Compose 和输入挂载 |
 | 查看已验证结果 | [验证索引](validation/README.md) | 完整成绩、功能检查、容器复现与历史诊断的适用范围 |
+| 聚合 issue/PR 变更 | [聚合验证范围](validation/aggregate-pr-issues-20261021.md) | 修复映射、合并前门槛及未覆盖的 GPU 范围 |
 | 查看版本变更和附件 | [发布索引](releases/README.md) | Release 说明、安装包及校验记录 |
 | 扩展模型或后端 | [架构](ARCHITECTURE.md) | recipe schema、family adapter、后端协议和导出流程 |
 | 开发和提交修改 | [贡献指南](../CONTRIBUTING.md) | CPU 测试依赖、Ruff、pytest 与提交约定 |

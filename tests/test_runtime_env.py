@@ -80,6 +80,26 @@ def test_device_map_env_override_on_plan(
     assert "cpu" in dumped
 
 
+def test_static_max_plan_exposes_selector_and_runtime_algorithm(
+    w4a8_recipe_path,
+) -> None:
+    recipe = load_recipe(w4a8_recipe_path).model_copy(update={"algorithm": "static_max"})
+    plan = QuantPipeline(recipe).resolve()
+    dumped = format_plan(plan)
+    assert "recipe_selector: static_max" in dumped
+    assert "runtime_algorithm: max" in dumped
+
+
+def test_non_modelopt_plan_does_not_fabricate_runtime_algorithm(w4a8_recipe_path) -> None:
+    recipe = load_recipe(w4a8_recipe_path).model_copy(
+        update={"backend": "llmcompressor", "algorithm": "mse"}
+    )
+    plan = QuantPipeline(recipe).resolve()
+    dumped = format_plan(plan)
+    assert "recipe_selector: mse" in dumped
+    assert "runtime_algorithm: null" in dumped
+
+
 def test_low_memory_note_on_plan(
     clean_runtime_env: None,
     monkeypatch: pytest.MonkeyPatch,

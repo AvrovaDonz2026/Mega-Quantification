@@ -29,6 +29,7 @@ PHASES = (("early", 4096, 5 * 60 * 60), ("long", 49152, 18 * 60 * 60))
 SOURCE_LOCK_PATH = Path(__file__).resolve().parents[1] / "source-lock.json"
 LOCKED_VARIANTS = frozenset(("original", "decode-beta", "all-beta", "shared-decode"))
 ARM_NAMES = {"control": "control", "mlp": "mlp"}
+MLP_PROJECTION_ORDER = ("gate_proj", "up_proj", "down_proj")
 PHASE_BY_NAME = {phase: (budget, timeout) for phase, budget, timeout in PHASES}
 _CHUNK = 8 * 1024 * 1024
 
@@ -237,6 +238,42 @@ def parse_run_config(config: dict[str, Any]) -> dict[str, Any]:
     selected_arms = ["control", "mlp"] if arms == "both" else [arms]
     if arms not in ("both", "control"):
         raise SupervisorError("invalid arms selector")
+    projections = config.get("mlp_projections")
+    layer_start = config.get("layer_start")
+    layer_end = config.get("layer_end")
+    if arms == "control" and any(
+        value is not None for value in (projections, layer_start, layer_end)
+    ):
+        raise SupervisorError("MLP selectors require the mlp arm")
+    if projections is not None:
+        if (
+            not isinstance(projections, list)
+            or not projections
+            or any(item not in ("gate_proj", "up_proj", "down_proj") for item in projections)
+            or len(set(projections)) != len(projections)
+        ):
+            raise SupervisorError("invalid MLP projection selectors")
+        # Keep persisted configs and controller argv deterministic regardless of
+        # the order in which selectors were supplied by the caller.
+        projections = [
+            projection for projection in MLP_PROJECTION_ORDER if projection in projections
+        ]
+    if (layer_start is None) != (layer_end is None):
+        raise SupervisorError("MLP layer-start and layer-end must be supplied together")
+    if layer_start is not None and (
+        type(layer_start) is not int
+        or type(layer_end) is not int
+        or layer_start < 0
+        or layer_end <= layer_start
+    ):
+        raise SupervisorError("invalid MLP layer interval")
+    mlp_selection = None
+    if arms == "both":
+        mlp_selection = {
+            "mlp_projections": projections or ["gate_proj", "up_proj", "down_proj"],
+            "layer_start": layer_start,
+            "layer_end": layer_end,
+        }
     phases = config.get("phases", ["early", "long"])
     if not isinstance(phases, list) or not phases or len(set(phases)) != len(phases):
         raise SupervisorError("phases must be a non-empty list without duplicates")
@@ -246,6 +283,10 @@ def parse_run_config(config: dict[str, Any]) -> dict[str, Any]:
         "source_variant": variant,
         "source_revision": source_revisions[variant],
         "selected_arms": selected_arms,
+        "mlp_projections": projections,
+        "layer_start": layer_start,
+        "layer_end": layer_end,
+        "mlp_selection": mlp_selection,
         "jobs": frozenset(f"mlp-pilot-{name}" for name in selected_arms),
         "phases": [(phase, *PHASE_BY_NAME[phase]) for phase in phases],
     }
@@ -578,6 +619,9 @@ def build_phase_argv(
     *,
     source_variant: str | None = None,
     arms: str | None = None,
+    mlp_projections: list[str] | None = None,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
     trajectory: str = "natural",
 ) -> list[str]:
     argv = [str(x) for x in base]
@@ -588,11 +632,30 @@ def build_phase_argv(
         "--arms",
         "--source-revision",
         "--trajectory",
+        "--mlp-projection",
+        "--layer-start",
+        "--layer-end",
     }
     if any(flag in argv for flag in forbidden):
         raise SupervisorError("base command must not contain phase or budget")
     if trajectory != "natural":
         raise SupervisorError("supervisor only accepts natural trajectory")
+    if mlp_projections is not None:
+        if (
+            not mlp_projections
+            or any(projection not in MLP_PROJECTION_ORDER for projection in mlp_projections)
+            or len(set(mlp_projections)) != len(mlp_projections)
+        ):
+            raise SupervisorError("invalid MLP projection selectors")
+    if (layer_start is None) != (layer_end is None):
+        raise SupervisorError("MLP layer-start and layer-end must be supplied together")
+    if layer_start is not None and (
+        type(layer_start) is not int
+        or type(layer_end) is not int
+        or layer_start < 0
+        or layer_end <= layer_start
+    ):
+        raise SupervisorError("invalid MLP layer interval")
     try:
         root_index = argv.index("--root")
     except ValueError as exc:
@@ -605,6 +668,15 @@ def build_phase_argv(
         argv.extend(["--source-variant", source_variant])
     if arms is not None:
         argv.extend(["--arms", arms])
+    if mlp_projections is not None:
+        for projection in (
+            projection
+            for projection in MLP_PROJECTION_ORDER
+            if projection in mlp_projections
+        ):
+            argv.extend(["--mlp-projection", projection])
+    if layer_start is not None:
+        argv.extend(["--layer-start", str(layer_start), "--layer-end", str(layer_end)])
     argv.extend(["--trajectory", trajectory])
     return argv
 
@@ -643,6 +715,8 @@ def valid_report(path: Path, expected: dict[str, Any] | None = None) -> bool:
         for key in ("source_variant", "source_revision"):
             if report.get(key) != expected[key]:
                 return False
+        if report.get("mlp_selection") != expected.get("mlp_selection"):
+            return False
         if report.get("selected_arms") != expected_arms:
             return False
         for key in ("phase", "max_new_tokens", "controller_sha256", "model_gate_sha256"):
@@ -706,6 +780,16 @@ def valid_report(path: Path, expected: dict[str, Any] | None = None) -> bool:
                 or arm["model_proof"].get("passed") is not True
                 or arm["termination_metadata"].get("any_present") is not True
             ):
+                return False
+            expected_selection = expected.get("mlp_selection")
+            subset_selected = isinstance(expected_selection, dict) and (
+                expected_selection.get("layer_start") is not None
+                or expected_selection.get("layer_end") is not None
+                or expected_selection.get("mlp_projections")
+                not in (None, list(MLP_PROJECTION_ORDER), MLP_PROJECTION_ORDER)
+            )
+            proof_selection = arm["model_proof"].get("selection")
+            if subset_selected and arm_name == "mlp" and proof_selection != expected_selection:
                 return False
             runtime_hash = arm.get("runtime_source_sha256")
             if (
@@ -783,6 +867,9 @@ def run_phase(
             budget,
             source_variant=run_options["source_variant"],
             arms="both" if len(run_options["selected_arms"]) == 2 else "control",
+            mlp_projections=run_options["mlp_projections"],
+            layer_start=run_options["layer_start"],
+            layer_end=run_options["layer_end"],
         )
         status.update({"state": "phase_running", "phase": phase, "pid": None, "at_utc": utc_now()})
         atomic_json(status_path, status)
@@ -823,6 +910,7 @@ def run_phase(
             "max_new_tokens": budget,
             "controller_sha256": config.get("controller_sha256"),
             "model_gate_sha256": config.get("model_gate_sha256"),
+            "mlp_selection": run_options["mlp_selection"],
         }
     )
     if not valid_report(evidence / "report.json", expected_report):
@@ -911,6 +999,9 @@ def main() -> int:
             first_budget,
             source_variant=run_options["source_variant"],
             arms="both" if len(run_options["selected_arms"]) == 2 else "control",
+            mlp_projections=run_options["mlp_projections"],
+            layer_start=run_options["layer_start"],
+            layer_end=run_options["layer_end"],
         )
         preflight_no_residuals()
         glm_id, before_row, before = verify_glm(config)

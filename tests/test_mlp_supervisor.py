@@ -70,6 +70,10 @@ arms = {name: {
     'comparison': {'both_repeat_stable': True},
     'source_variant': variant, 'source_revision': revision,
     'selected_arms': selected, 'phase': phase,
+    'mlp_selection': ({
+        'mlp_projections': ['gate_proj', 'up_proj', 'down_proj'],
+        'layer_start': None, 'layer_end': None,
+    } if len(selected) == 2 else None),
     'max_new_tokens': budget,
     'trajectory': 'natural', 'prompt_tokens': 288,
     'native_prefix_tokens': 0, 'input_tokens': 288,
@@ -206,6 +210,47 @@ def test_config_selectors_and_argv_are_strict(tmp_path: Path) -> None:
     )
     assert "--source-variant" in argv and "--arms" in argv
     assert argv[-2:] == ["--trajectory", "natural"]
+    subset = module.parse_run_config(
+        {
+            "source_variant": "all-beta",
+            "mlp_projections": ["down_proj", "gate_proj"],
+            "layer_start": 16,
+            "layer_end": 32,
+            "phases": ["long"],
+        }
+    )
+    assert subset["mlp_selection"] == {
+        "mlp_projections": ["gate_proj", "down_proj"],
+        "layer_start": 16,
+        "layer_end": 32,
+    }
+    subset_argv = module.build_phase_argv(
+        ["python3", "controller.py", "--root", "old"],
+        tmp_path / "subset",
+        "long",
+        49152,
+        source_variant="all-beta",
+        arms="both",
+        mlp_projections=["gate_proj", "down_proj"],
+        layer_start=16,
+        layer_end=32,
+    )
+    assert subset_argv[-10:] == [
+        "--mlp-projection", "gate_proj", "--mlp-projection", "down_proj",
+        "--layer-start", "16", "--layer-end", "32", "--trajectory", "natural",
+    ]
+    with pytest.raises(module.SupervisorError, match="require the mlp arm"):
+        module.parse_run_config({"arms": "control", "layer_start": 0, "layer_end": 1})
+    with pytest.raises(module.SupervisorError, match="invalid MLP layer interval"):
+        module.parse_run_config({"layer_start": 1, "layer_end": 1})
+    with pytest.raises(module.SupervisorError, match="invalid MLP projection selectors"):
+        module.build_phase_argv(
+            ["controller.py", "--root", "x"], tmp_path, "long", 1, mlp_projections=[]
+        )
+    with pytest.raises(module.SupervisorError, match="supplied together"):
+        module.build_phase_argv(
+            ["controller.py", "--root", "x"], tmp_path, "long", 1, layer_end=2
+        )
     with pytest.raises(module.SupervisorError):
         module.build_phase_argv(
             ["controller.py", "--root", "x"],
@@ -423,6 +468,30 @@ def test_valid_report_rejects_fake_hashes_and_proofs(tmp_path: Path) -> None:
     report["model_gate_sha256"] = "e" * 64
     path.write_text(json.dumps(report), encoding="utf-8")
     assert module.valid_report(path, expected)
+    subset_selection = {
+        "mlp_projections": ["gate_proj"], "layer_start": 16, "layer_end": 32
+    }
+    subset_report = copy.deepcopy(report)
+    subset_report["arms"] = {"mlp": subset_report["arms"]["control"]}
+    subset_report["selected_arms"] = ["mlp"]
+    subset_report["mlp_selection"] = subset_selection
+    subset_expected = dict(expected, selected_arms=["mlp"], mlp_selection=subset_selection)
+    path.write_text(json.dumps(subset_report), encoding="utf-8")
+    assert not module.valid_report(path, subset_expected)
+    subset_report["arms"]["mlp"]["model_proof"]["selection"] = subset_selection
+    path.write_text(json.dumps(subset_report), encoding="utf-8")
+    assert module.valid_report(path, subset_expected)
+    subset_report["arms"]["mlp"]["model_proof"]["selection"] = {
+        "mlp_projections": ["up_proj"], "layer_start": 16, "layer_end": 32
+    }
+    path.write_text(json.dumps(subset_report), encoding="utf-8")
+    assert not module.valid_report(path, subset_expected)
+    subset_report["arms"]["mlp"]["model_proof"]["selection"] = subset_selection
+    subset_report["mlp_selection"] = {
+        "mlp_projections": ["up_proj"], "layer_start": 16, "layer_end": 32
+    }
+    path.write_text(json.dumps(subset_report), encoding="utf-8")
+    assert not module.valid_report(path, subset_expected)
     report.pop("trajectory", None)
     path.write_text(json.dumps(report), encoding="utf-8")
     assert module.valid_report(path, expected)

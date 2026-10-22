@@ -70,6 +70,46 @@ def test_restores_source_vision_and_preserves_index(tmp_path: Path) -> None:
     assert main(["restore-vision", str(export), "--source", str(source)]) == 0
 
 
+@pytest.mark.parametrize("export_shard", ["export-part.safetensors", VISION_SHARD_NAME])
+def test_restores_missing_indexed_tensor_from_source_shard(
+    tmp_path: Path, export_shard: str
+) -> None:
+    torch = pytest.importorskip("torch")
+    from safetensors.torch import save_file
+
+    source = tmp_path / "source"
+    export = tmp_path / "export"
+    source.mkdir()
+    export.mkdir()
+    key = "model.visual.patch_embed.proj.weight"
+    original = torch.arange(4, dtype=torch.bfloat16)
+    save_file({key: original}, str(source / "source-vision.safetensors"))
+    (source / "preprocessor_config.json").write_text("{}")
+    (source / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {key: "source-vision.safetensors"}})
+    )
+    (export / "config.json").write_text(
+        json.dumps({"model_type": "qwen3_5", "vision_config": {}})
+    )
+    # The export index points to an existing shard, but that shard does not
+    # contain the indexed vision tensor.
+    save_file({"other.weight": torch.ones(1)}, str(export / export_shard))
+    (export / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {key: export_shard}})
+    )
+
+    note = restore_vision(export, source)
+
+    assert note == {"vision_tensors": 1, "restored_tensors": 1, "method": "hf-source"}
+    with pytest.importorskip("safetensors").safe_open(
+        str(export / VISION_SHARD_NAME), framework="pt"
+    ) as shard:
+        assert torch.equal(shard.get_tensor(key), original)
+    index = json.loads((export / "model.safetensors.index.json").read_text())
+    expected_size = original.numel() * original.element_size()
+    assert index["metadata"]["total_size"] == expected_size
+
+
 def test_missing_vision_in_source_fails(tmp_path: Path) -> None:
     source = tmp_path / "source"
     export = tmp_path / "export"
@@ -188,6 +228,36 @@ def test_quantized_vision_rejects_incomplete_export(tmp_path: Path, missing: str
         restore_vision_from_recipe(export, recipe)
     assert not (export / "vision_export.json").exists()
     assert not (export / VISION_SHARD_NAME).exists()
+
+
+def test_quantized_vision_rejects_shard_missing_indexed_tensor(tmp_path: Path) -> None:
+    _source, export, recipe = _quantized_vision_dirs(tmp_path)
+    packed = export / "packed.safetensors"
+    tensors = {
+        "model.visual.blocks.0.attn.qkv.weight": RawTensor(
+            dtype="U8", shape=(2, 8), data=bytes(16)
+        ),
+        "model.visual.blocks.0.attn.qkv.weight_scale": RawTensor(
+            dtype="F8_E4M3", shape=(2, 1), data=bytes(2)
+        ),
+        "model.visual.blocks.0.attn.qkv.weight_scale_2": RawTensor(
+            dtype="F32", shape=(), data=bytes(4)
+        ),
+    }
+    # Keep the index unchanged while removing one indexed tensor from the
+    # shard, matching a partially written or corrupted safetensors file.
+    write_safetensors(
+        packed,
+        {
+            name: tensor
+            for name, tensor in tensors.items()
+            if not name.endswith("weight_scale_2")
+        },
+    )
+
+    with pytest.raises(BackendError, match="Quantized vision export is missing"):
+        restore_vision_from_recipe(export, recipe)
+    assert not (export / "vision_export.json").exists()
 
 
 def test_quantized_vision_requires_image_preprocessor(tmp_path: Path) -> None:

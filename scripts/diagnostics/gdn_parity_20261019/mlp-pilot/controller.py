@@ -352,6 +352,15 @@ def build_parser():
     p.add_argument("--budget", type=int, default=None)
     p.add_argument("--source-variant", choices=("original", "all-beta"), default="all-beta")
     p.add_argument("--arms", choices=("both", "control"), default="both")
+    p.add_argument(
+        "--mlp-projection",
+        dest="mlp_projections",
+        action="append",
+        choices=("gate_proj", "up_proj", "down_proj"),
+        help="Diagnostic MLP projection to restore; repeat to select multiple",
+    )
+    p.add_argument("--layer-start", type=int, help="Diagnostic inclusive MLP layer start")
+    p.add_argument("--layer-end", type=int, help="Diagnostic exclusive MLP layer end")
     return p
 
 
@@ -366,6 +375,10 @@ def main():
         validate_trajectory_options(o.trajectory, o.phase, o.budget)
     except ValueError as exc:
         p.error(str(exc))
+    if o.arms == "control" and any(
+        value is not None for value in (o.mlp_projections, o.layer_start, o.layer_end)
+    ):
+        p.error("MLP selectors require the mlp arm")
     generate_timeout = 3600 if o.phase == "early" else 14400
     o.root.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(o.remote_root / "candidate-bundle-r1/parity-v7"))
@@ -448,6 +461,7 @@ def main():
             "source_variant": o.source_variant,
             "selected_arms": list(arm_names),
             "selected_arm_count": len(arm_names),
+            "mlp_selection": None,
             "image_id": IMAGE,
             "source_revision": source_revision,
             "ablation_tool_sha256": v.sha256_file(o.ablation_tool),
@@ -476,7 +490,23 @@ def main():
             arm_root = o.root / variant
             arm_root.mkdir()
             progress("model_gate", arm=variant)
-            proof = verify_model(o.export, o.bf16, model, variant, o.ablation_tool)
+            selector_kwargs = (
+                {
+                    "mlp_projections": o.mlp_projections,
+                    "layer_start": o.layer_start,
+                    "layer_end": o.layer_end,
+                }
+                if variant == "mlp"
+                and any(
+                    value is not None for value in (o.mlp_projections, o.layer_start, o.layer_end)
+                )
+                else {}
+            )
+            proof = verify_model(
+                o.export, o.bf16, model, variant, o.ablation_tool, **selector_kwargs
+            )
+            if variant == "mlp" and "selection" in proof:
+                report["mlp_selection"] = proof["selection"]
             # This is a diagnostic mixed-loader model, never a W4A8 scheme label.
             scheme_label = "mse-" + variant
             a = SimpleNamespace(

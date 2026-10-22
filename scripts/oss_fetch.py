@@ -18,7 +18,13 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
+import re
+import shutil
 import sys
+import tempfile
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -55,42 +61,114 @@ def fetch(
     mapped = oss.SCHEME_ALIASES.get(scheme, scheme)
     if mapped not in set(oss.SCHEME_ALIASES.values()):
         raise ValueError(f"unknown scheme '{scheme}'")
-    digest = content_hash.strip().lower()
-    if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+    requested_digest = content_hash.strip().lower()
+    if len(requested_digest) != 64 or any(c not in "0123456789abcdef" for c in requested_digest):
         raise ValueError("--hash must be a 64-char hex content hash")
-    key_prefix = f"{prefix.rstrip('/')}/{mapped}/{digest}"
+    key_prefix = f"{prefix.rstrip('/')}/{mapped}/{requested_digest}"
     base = oss.public_base_url(bucket_name, endpoint, key_prefix)
-    dest = dest.resolve()
-    dest.mkdir(parents=True, exist_ok=True)
+    dest = dest.absolute()
     sums_url = f"{base}/SHA256SUMS.txt"
     if dry_run:
         print(f"[oss-fetch] dry-run {sums_url} -> {dest}")
         return [sums_url]
     with urllib.request.urlopen(sums_url, timeout=60) as resp:
         body = resp.read().decode("utf-8")
-    names: list[str] = []
+    entries: list[tuple[str, str]] = []  # (sha256, name)
+    seen: set[str] = set()
     for line in body.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        names.append(parts[-1])
-    if not names:
+        match = re.fullmatch(r"([0-9a-fA-F]{64})[ \t]+(\*?)(.+)", line)
+        if match is None:
+            raise ValueError(f"malformed SHA256SUMS entry: {line!r}")
+        file_digest, name = match.group(1), match.group(3)
+        file_digest = file_digest.lower()
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            raise ValueError(f"unsafe file name in SHA256SUMS: {name!r}")
+        if name in {"SHA256SUMS.txt", "oss_manifest.json"}:
+            raise ValueError(f"reserved file name in SHA256SUMS: {name!r}")
+        if name in seen:
+            raise ValueError(f"duplicate file name in SHA256SUMS: {name!r}")
+        seen.add(name)
+        entries.append((file_digest, name))
+    if not entries:
         raise FileNotFoundError(f"empty SHA256SUMS at {sums_url}")
-    (dest / "SHA256SUMS.txt").write_text(body, encoding="utf-8")
-    for name in names:
-        url = f"{base}/{name}"
-        out = dest / name
-        print(f"[oss-fetch] GET {url}", flush=True)
-        urllib.request.urlretrieve(url, out)
     extra = "oss_manifest.json"
+    st_entries = sorted((name, digest) for digest, name in entries if name.endswith(".safetensors"))
+    if not st_entries:
+        raise ValueError("SHA256SUMS has no .safetensors entries")
+    actual_content_hash = hashlib.sha256(
+        "".join(f"{name} {digest}\n" for name, digest in st_entries).encode("utf-8")
+    ).hexdigest()
+    if actual_content_hash != requested_digest:
+        raise ValueError(
+            f"content hash mismatch: requested {requested_digest}, "
+            f"manifest describes {actual_content_hash}"
+        )
+
+    # Validate the whole destination before requesting any file bytes.
+    if dest.is_symlink():
+        raise FileExistsError(f"refusing to use symlink destination: {dest}")
+    if dest.exists() and not dest.is_dir():
+        raise NotADirectoryError(dest)
+    for _, name in entries:
+        target = dest / name
+        if target.is_symlink() or target.exists():
+            raise FileExistsError(f"refusing to overwrite existing destination: {target}")
+    sums_path = dest / "SHA256SUMS.txt"
+    if sums_path.is_symlink() or sums_path.exists():
+        raise FileExistsError(f"refusing to overwrite existing destination: {sums_path}")
+    if (dest / extra).is_symlink() or (dest / extra).exists():
+        raise FileExistsError(f"refusing to overwrite existing destination: {dest / extra}")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{dest.name}.", dir=dest.parent))
+    names: list[str] = []
+    committed: list[Path] = []
+    created_dest = False
     try:
-        urllib.request.urlretrieve(f"{base}/{extra}", dest / extra)
-        names.append(extra)
+        for expected, name in entries:
+            url = f"{base}/{urllib.parse.quote(name, safe='')}"
+            print(f"[oss-fetch] GET {url}", flush=True)
+            temporary = staging / name
+            digest = hashlib.sha256()
+            with urllib.request.urlopen(url, timeout=60) as resp, temporary.open("wb") as handle:
+                while chunk := resp.read(1024 * 1024):
+                    digest.update(chunk)
+                    handle.write(chunk)
+            actual = digest.hexdigest()
+            if actual != expected:
+                raise ValueError(f"sha256 mismatch for {name}: expected {expected}, got {actual}")
+            names.append(name)
+
+        try:
+            extra_path = staging / extra
+            with urllib.request.urlopen(f"{base}/{extra}", timeout=60) as resp, extra_path.open(
+                "wb"
+            ) as handle:
+                while chunk := resp.read(1024 * 1024):
+                    handle.write(chunk)
+            names.append(extra)
+        except Exception:
+            pass
+
+        (staging / "SHA256SUMS.txt").write_text(body, encoding="utf-8")
+        commit_names = [*names, "SHA256SUMS.txt"]
+        if not dest.exists():
+            dest.mkdir(parents=True)
+            created_dest = True
+        for name in commit_names:
+            target = dest / name
+            os.link(staging / name, target)
+            committed.append(target)
     except Exception:
-        pass
+        for target in committed:
+            target.unlink(missing_ok=True)
+        if created_dest:
+            dest.rmdir()
+        raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     print(f"[oss-fetch] wrote {len(names)} files to {dest}", flush=True)
     return names
 

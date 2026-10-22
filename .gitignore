@@ -29,4 +29,5 @@ megaquant-stack.tar
 docker-compose.override.yml
 recipes/*.pod.yaml
 *.log
+ptq-resolver-report.json
 .DS_Store

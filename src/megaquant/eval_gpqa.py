@@ -27,8 +27,10 @@ NVIDIA GB300 vLLM flags (``--kv-offloading-backend native``). Do not shrink
 
 Generation is **not** capped at a small ``max_new_tokens``. The budget is the
 remaining context (``max_model_len - prompt_tokens``). If the server still
-stops on length, the client continues until EOS. Completions are stored in
-full in the JSONL journal (stdout only prints a short status line).
+stops on length, the client continues until EOS; a continuation that clearly
+repeats already emitted text is recorded as repetition and its text is not
+appended. Completions are stored in full in the JSONL journal except for that
+rejected duplicate chunk (stdout only prints a short status line).
 """
 
 from __future__ import annotations
@@ -256,6 +258,50 @@ class ItemResult:
     continued: int
     text: str
     choices: dict[str, str]
+    prompt_sha256: str | None = None
+
+
+TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
+_PROMPT_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _valid_prompt_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _PROMPT_SHA256_RE.fullmatch(value) is not None
+
+
+def normalize_finish_reason(value: Any) -> str:
+    """Normalize OpenAI string and SGLang structured finish reasons."""
+    if isinstance(value, dict):
+        if "type" not in value:
+            return "unknown"
+        value = value["type"]
+    if not isinstance(value, str) or not value.strip():
+        return "missing" if value is None else "unknown"
+    return value.strip().lower()
+
+
+def is_truncated_finish_reason(value: Any) -> bool:
+    return normalize_finish_reason(value) in TRUNCATED_FINISH_REASONS
+
+
+def _repeated_continuation(previous_text: str, continuation: str) -> bool:
+    """Return true when a continuation clearly restarts text already emitted.
+
+    This deliberately only catches high-confidence cases: an identical
+    non-empty chunk, or a long prefix of the new chunk already occurring in
+    the accumulated response. Natural overlap at a sentence boundary is not
+    treated as repetition.
+    """
+    old = " ".join(previous_text.split())
+    new = " ".join(continuation.split())
+    if not new:
+        return False
+    if new == old or new in {old[-len(new) :]}:
+        return True
+    if len(new) < 64:
+        return False
+    prefix = new[:64]
+    return prefix in old
 
 
 # Chat-template / special-token headroom. The eval client estimates prompt
@@ -806,6 +852,11 @@ def format_gpqa_prompt(item: GPQAItem) -> str:
     return "\n".join(lines)
 
 
+def gpqa_prompt_sha256(item: GPQAItem) -> str:
+    """Return the journal fingerprint for the exact prompt sent to the model."""
+    return hashlib.sha256(format_gpqa_prompt(item).encode("utf-8")).hexdigest()
+
+
 def build_gpqa_item(
     row: dict[str, Any],
     *,
@@ -862,12 +913,12 @@ def load_gpqa_diamond(
     return items
 
 
-_THINK_SPLIT = re.compile(
-    r"</think>|</thinking>|</reasoning>",
+_THINK_TAG = re.compile(
+    r"<\s*(/?)\s*(think|thinking|reasoning)\s*>",
     flags=re.IGNORECASE,
 )
 _ANSWER_LINE = re.compile(
-    r"(?im)^\s*(?:final\s+)?answer\s*[:：]\s*\(?([A-D])\)?\s*[.\s]*$",
+    r"(?im)^\s*`?\s*(?:final\s+)?answer\s*[:：]\s*\(?([A-D])\)?\s*[.\s]*`?\s*$",
 )
 _BOXED = re.compile(r"\\boxed\{\s*\(?([A-D])\)?\s*\}", flags=re.IGNORECASE)
 _SOLE_LETTER = re.compile(r"(?im)^\s*\(?([A-D])\)?\s*[.\s]*$")
@@ -875,10 +926,25 @@ _SOLE_LETTER = re.compile(r"(?im)^\s*\(?([A-D])\)?\s*[.\s]*$")
 
 def visible_answer_span(text: str) -> str:
     """Drop thinking blocks so we do not score letters inside the trace."""
-    parts = _THINK_SPLIT.split(text)
-    if len(parts) > 1:
-        return parts[-1]
-    return text
+    visible: list[str] = []
+    thinking_depth = 0
+    cursor = 0
+    for match in _THINK_TAG.finditer(text):
+        if thinking_depth == 0:
+            if match.group(1):
+                # Some parsers strip the opening think tag but preserve its
+                # closing tag. Treat the preceding text as hidden reasoning.
+                visible.clear()
+            else:
+                visible.append(text[cursor : match.start()])
+        if match.group(1):
+            thinking_depth = max(0, thinking_depth - 1)
+        else:
+            thinking_depth += 1
+        cursor = match.end()
+    if thinking_depth == 0:
+        visible.append(text[cursor:])
+    return "".join(visible)
 
 
 def extract_choice(text: str) -> str | None:
@@ -887,9 +953,6 @@ def extract_choice(text: str) -> str | None:
         matches = list(pattern.finditer(span))
         if matches:
             return matches[-1].group(1).upper()
-    loose = list(re.finditer(r"\b([A-D])\b", span))
-    if loose:
-        return loose[-1].group(1).upper()
     return None
 
 
@@ -976,13 +1039,13 @@ def openai_chat_complete(
     else:
         text = content
     usage = data.get("usage") or {}
-    finish = str(choice.get("finish_reason") or "stop")
+    finish = normalize_finish_reason(choice.get("finish_reason"))
     return GenerationResult(
         text=text,
         finish_reason=finish,
         prompt_tokens=int(usage.get("prompt_tokens") or 0),
         completion_tokens=int(usage.get("completion_tokens") or 0),
-        truncated=finish in {"length", "max_tokens"},
+        truncated=is_truncated_finish_reason(finish),
     )
 
 
@@ -1020,7 +1083,7 @@ def generate_untruncated(
     # servers omit usage (or return zero), so use the request as a conservative
     # fallback to keep the continuation budget moving forward.
     first_completion_tokens = first.completion_tokens or budget
-    truncated = first.truncated
+    truncated = first.truncated or is_truncated_finish_reason(first.finish_reason)
     continued = 0
     text = first.text
     finish = first.finish_reason
@@ -1045,7 +1108,8 @@ def generate_untruncated(
                     {
                         "role": "user",
                         "content": "Continue from where you left off. Do not restart. "
-                        "Finish the reasoning and end with `Answer: $LETTER`.",
+                        "Finish the reasoning. The last line of your response must be "
+                        "exactly: Answer: $LETTER where LETTER is one of A, B, C, or D.",
                     },
                 ],
                 sampling=recipe.sampling,
@@ -1053,20 +1117,26 @@ def generate_untruncated(
                 max_tokens=leftover,
                 seed=recipe.generation.seed + continued,
             )
-            text = text + follow.text
+            # Settle usage and the prompt estimate for every request, including
+            # a duplicate continuation that is rejected below. The fallback
+            # mirrors the accepted-continuation path when the server omits
+            # prompt usage, while the requested budget remains the conservative
+            # completion estimate for the next round.
             completion_tokens += follow.completion_tokens
-            finish = follow.finish_reason
-            truncated = follow.truncated
             follow_completion_tokens = follow.completion_tokens or leftover
             if follow.prompt_tokens:
-                # The server's prompt usage includes the appended assistant /
-                # user messages and the prior completion, so use it directly.
                 prompt_tokens = follow.prompt_tokens
             else:
-                # Without usage, account for the single appended assistant /
-                # user pair. Subsequent requests replace that pair's content;
-                # the wrapper reserve must not accumulate once per round.
-                prompt_tokens = spent + CONTINUATION_MESSAGE_TOKEN_RESERVE
+                prompt_tokens = spent + (
+                    CONTINUATION_MESSAGE_TOKEN_RESERVE if continued == 1 else 0
+                )
+            if _repeated_continuation(text, follow.text):
+                finish = "repetition"
+                truncated = True
+                break
+            text = text + follow.text
+            finish = follow.finish_reason
+            truncated = follow.truncated or is_truncated_finish_reason(follow.finish_reason)
             first_completion_tokens = follow_completion_tokens
             if continued >= 8:
                 break
@@ -1082,7 +1152,12 @@ def generate_untruncated(
 
 def _result_is_correct(row: ItemResult) -> bool:
     """Apply the scoring rule instead of trusting a cached journal flag."""
-    return not row.truncated and row.predicted is not None and row.predicted == row.gold
+    return (
+        normalize_finish_reason(row.finish_reason) == "stop"
+        and not row.truncated
+        and row.predicted is not None
+        and row.predicted == row.gold
+    )
 
 
 def score_items(
@@ -1139,10 +1214,24 @@ def _parse_gpqa_journal(path: Path) -> tuple[dict[str, ItemResult], int | None]:
                 )
                 return rows, start
             raise EvalError(f"Corrupt GPQA journal {path} at line {line_no}: {exc}") from exc
+        if "prompt_sha256" in payload:
+            fingerprint = payload["prompt_sha256"]
+            if fingerprint is not None and not _valid_prompt_sha256(fingerprint):
+                line_no = data.count(b"\n", 0, start) + 1
+                raise EvalError(
+                    f"Invalid prompt_sha256 in GPQA journal {path} at line {line_no}"
+                )
         kwargs = {key: payload[key] for key in fields if key in payload}
         try:
             row = ItemResult(**kwargs)
-        except TypeError:
+        except TypeError as exc:
+            line_no = data.count(b"\n", 0, start) + 1
+            print(
+                f"[gpqa] warning: dropping journal line {line_no} with "
+                f"missing fields in {path}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
             continue
         # Older clients could mark a matching letter as correct even when its
         # reasoning was truncated. Normalize replayed rows without rewriting
@@ -1224,6 +1313,33 @@ def run_gpqa(
     out_dir.mkdir(parents=True, exist_ok=True)
     journal_path = out_dir / "gpqa_diamond.jsonl"
     prior = load_gpqa_journal(journal_path)
+    if prior:
+        # A resume must replay the same seed/shuffle: silently mixing rows
+        # from two different shuffles would corrupt the summary.
+        by_id = {item.item_id: item for item in items}
+        if any(row.prompt_sha256 is None for row in prior.values()):
+            print(
+                "[gpqa] warning: legacy journal rows have no prompt fingerprint; "
+                "question text consistency cannot be verified",
+                file=sys.stderr,
+                flush=True,
+            )
+        for iid, row in prior.items():
+            item = by_id.get(iid)
+            if item is None:
+                continue
+            if row.choices != item.choices or row.gold != item.gold:
+                raise EvalError(
+                    f"Journal {journal_path} was written with a different "
+                    f"seed/shuffle (item {iid}: choices/gold mismatch). "
+                    "Delete it or resume with the original seed."
+                )
+            if row.prompt_sha256 is not None and row.prompt_sha256 != gpqa_prompt_sha256(item):
+                raise EvalError(
+                    f"Journal {journal_path} has a prompt fingerprint mismatch "
+                    f"for item {iid}; the question or choices changed. "
+                    "Delete it or resume with the original prompt."
+                )
     rows: list[ItemResult] = []
     lock = threading.Lock()
     mode = "a" if prior else "w"
@@ -1239,18 +1355,26 @@ def run_gpqa(
             model=recipe.model,
         )
         predicted = extract_choice(gen.text)
+        finish_reason = normalize_finish_reason(gen.finish_reason)
+        truncated = gen.truncated or is_truncated_finish_reason(finish_reason)
         return ItemResult(
             item_id=item.item_id,
             gold=item.gold,
             predicted=predicted,
-            correct=not gen.truncated and predicted is not None and predicted == item.gold,
-            truncated=gen.truncated,
-            finish_reason=gen.finish_reason,
+            correct=(
+                finish_reason == "stop"
+                and not truncated
+                and predicted is not None
+                and predicted == item.gold
+            ),
+            truncated=truncated,
+            finish_reason=finish_reason,
             prompt_tokens=gen.prompt_tokens,
             completion_tokens=gen.completion_tokens,
             continued=gen.continued,
             text=gen.text,
             choices=item.choices,
+            prompt_sha256=gpqa_prompt_sha256(item),
         )
 
     def write_row(row: ItemResult) -> None:

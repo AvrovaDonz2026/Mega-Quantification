@@ -30,11 +30,72 @@
     "valid_model_result": false,
     "restoration": "both_original_processes_stable"
   },
+  "r5_retry": {
+    "job_id": "60348764d2634c4d68aaf486",
+    "status": "completed",
+    "started_at_cst": "2026-10-21 22:49:32",
+    "experiment_duration_seconds": 3962.954,
+    "maintenance_ended_at_cst": "2026-10-21 23:57:46",
+    "coordinator": {
+      "status": "observation_passed",
+      "restoration": "process_stable",
+      "both_sides": ["CLEANED", "STARTED", "VERIFY_CLOSE:VERIFIED_CLOSED"],
+      "observed_stable_seconds": {
+        "peer": 121.242,
+        "replay": 121.458
+      },
+      "verify_close_rpc_elapsed_seconds": {
+        "peer": 122.893,
+        "replay": 123.306
+      },
+      "armed": false,
+      "cleanup_observed_absent": true,
+      "failure": null,
+      "transport_non_success_events": 0
+    },
+    "source_gate": {
+      "beta_imported_source_sha256": "1090b1b624dd0606ac1c1aabb0ec2e0c2001ac4df5a2002ccddf5c9ae6aa8976",
+      "passed": true
+    },
+    "generation": {
+      "state": "completed",
+      "output_tokens": 49152,
+      "finish_type": "length",
+      "cached_tokens": 0,
+      "retractions": 0,
+      "terminal_stop_match_observed": false,
+      "first_divergence_index": 12,
+      "candidate_output_sha256": "a54b083657e2e72653666057764f83bb4329bbea82b4a0cf83804ded1b74b066",
+      "historical_reference_output_sha256": "075c5ca7a8fa642cc1d9086b84e21fbdf0cd8c33e0de37ddee2980ed9a265bb5"
+    },
+    "candidate_cycle": {
+      "found": true,
+      "period": 1375,
+      "onset": 38469,
+      "matching_positions": 9308,
+      "coverage_tokens": 10683,
+      "full_repeats": 6
+    },
+    "historical_reference_cycle": {
+      "period": 2032,
+      "onset": 33131,
+      "matching_positions": 13989,
+      "coverage_tokens": 16021,
+      "full_repeats": 6
+    },
+    "fixed_lag_2032_comparison": {
+      "matching_positions": 15,
+      "extent_tokens": 2047,
+      "complete_periods": 1,
+      "historical_long_cycle_reproduced": false
+    },
+    "conclusion": "beta_bf16_single_change_changed_output_trajectory_but_did_not_resolve_repetition_or_stopping; mse_root_cause_not_identified_or_fixed"
+  },
   "maintenance_patch": {
     "heartbeat_retry_budget_seconds": 20,
     "worker_lease_seconds": 45,
     "lifecycle_commands_retried": false,
     "focused_fault_injection_tests": 6
   },
-  "conclusion": "existing_max_and_mse_exports_are_not_matched_in_vision_mtp_coverage"
+  "conclusion": "existing_max_and_mse_exports_are_not_matched_in_vision_mtp_coverage; beta_bf16_single_change_changed_r5_retry_trajectory_but_did_not_resolve_repetition_or_stopping; mse_root_cause_not_identified_or_fixed"
 }

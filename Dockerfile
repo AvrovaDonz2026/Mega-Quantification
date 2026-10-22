@@ -9,11 +9,16 @@
 # NGC PyTorch (often the most reliable RTX 5090 / sm_120 path):
 #   BASE_IMAGE=nvcr.io/nvidia/pytorch:25.08-py3 INSTALL_TORCH=0 docker compose build
 
-ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+# Pinned to the amd64 digest (2026-10-21); the tag alone is mutable and would
+# let rebuilds drift. Re-pin with:
+#   docker buildx imagetools inspect nvidia/cuda:12.8.1-devel-ubuntu24.04 --format '{{json .Manifest}}'
+ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:4b9ed5fa8361736996499f64ecebf25d4ec37ff56e4d11323ccde10aa36e0c43
 FROM ${BASE_IMAGE}
 
 ARG INSTALL_TORCH=1
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
+ARG TORCH_VERSION=2.7.1+cu128
+ARG TORCHVISION_VERSION=0.22.1+cu128
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -69,14 +74,18 @@ WORKDIR /opt/megaquant
 RUN --mount=type=cache,target=/root/.cache/pip \
     if [ "${INSTALL_TORCH}" = "1" ]; then \
       pip install --upgrade pip setuptools wheel \
-      && pip install torch torchvision --index-url "${TORCH_INDEX}"; \
+      && pip install "torch==${TORCH_VERSION}" "torchvision==${TORCHVISION_VERSION}" --index-url "${TORCH_INDEX}"; \
     else \
       pip install --upgrade pip setuptools wheel; \
     fi
 
-COPY docker/requirements-gpu.txt /tmp/requirements-gpu.txt
+COPY docker/requirements-gpu.txt docker/constraints-x86-cuda128-py312.txt /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r /tmp/requirements-gpu.txt
+    if [ "${INSTALL_TORCH}" = "1" ]; then \
+      pip install -c /tmp/constraints-x86-cuda128-py312.txt -r /tmp/requirements-gpu.txt; \
+    else \
+      pip install -r /tmp/requirements-gpu.txt; \
+    fi
 
 COPY pyproject.toml README.md ./
 COPY src ./src

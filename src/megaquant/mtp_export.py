@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 import struct
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -168,6 +168,38 @@ def read_safetensors(path: Path) -> dict[str, RawTensor]:
     return out
 
 
+def _safetensors_tensor_sizes(path: Path) -> dict[str, int]:
+    """Read tensor byte sizes from a safetensors header without payload I/O."""
+    file_size = path.stat().st_size
+    with path.open("rb") as handle:
+        prefix = handle.read(8)
+        if len(prefix) != 8:
+            raise ValueError(f"{path} is not a safetensors file")
+        header_len = struct.unpack("<Q", prefix)[0]
+        header_end = 8 + header_len
+        if header_end > file_size:
+            raise ValueError(f"{path} safetensors header is truncated")
+        header = json.loads(handle.read(header_len).decode("utf-8"))
+    if not isinstance(header, dict):
+        return {}
+    payload_size = file_size - header_end
+    out: dict[str, int] = {}
+    for name, info in header.items():
+        if name == "__metadata__" or not isinstance(info, dict):
+            continue
+        offsets = info.get("data_offsets")
+        if not (isinstance(offsets, list) and len(offsets) == 2):
+            raise ValueError(f"{path} has invalid offsets for {name}")
+        try:
+            lo, hi = int(offsets[0]), int(offsets[1])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{path} has invalid offsets for {name}") from exc
+        if lo < 0 or hi < lo or hi > payload_size:
+            raise ValueError(f"{path} has out-of-bounds offsets for {name}")
+        out[name] = hi - lo
+    return out
+
+
 def _torch_dtype_to_st(dtype: Any) -> str | None:
     key = str(dtype).replace("torch.", "").lower()
     return {
@@ -301,8 +333,13 @@ def collect_mtp_from_source(source: str | Path) -> dict[str, RawTensor]:
 
 
 def update_export_index(
-    export_dir: Path, shard_name: str, tensor_sizes: Mapping[str, int]
+    export_dir: Path,
+    shard_name: str,
+    tensor_sizes: Mapping[str, int],
+    *,
+    replace_existing: Iterable[str] = (),
 ) -> None:
+    """Update the HF index, counting bytes for repaired indexed keys."""
     index_path = export_dir / INDEX_NAME
     if index_path.is_file():
         index = _read_json(index_path)
@@ -316,14 +353,43 @@ def update_export_index(
     if not isinstance(weight_map, dict):
         weight_map = {}
         index["weight_map"] = weight_map
-    added = sum(size for name, size in tensor_sizes.items() if name not in weight_map)
+    replacements = set(replace_existing)
+    added = sum(
+        size
+        for name, size in tensor_sizes.items()
+        if name not in weight_map or name in replacements
+    )
     for name in tensor_sizes:
         weight_map[name] = shard_name
     metadata = index.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
         index["metadata"] = metadata
-    if "total_size" in metadata:
+    # Rebuild from the bytes actually present in every indexed shard. This
+    # corrects stale metadata when an existing indexed key was missing from a
+    # partially written shard and is repaired into ``shard_name``.
+    total = 0
+    complete = True
+    by_shard: dict[str, list[str]] = {}
+    for name, shard in weight_map.items():
+        by_shard.setdefault(str(shard), []).append(str(name))
+    for shard, names in by_shard.items():
+        path = export_dir / shard
+        if not path.is_file():
+            complete = False
+            break
+        try:
+            header_sizes = _safetensors_tensor_sizes(path)
+            if any(name not in header_sizes for name in names):
+                complete = False
+                break
+            total += sum(header_sizes[name] for name in names)
+        except Exception:
+            complete = False
+            break
+    if complete:
+        metadata["total_size"] = total
+    elif "total_size" in metadata:
         try:
             metadata["total_size"] = int(metadata["total_size"]) + added
         except (TypeError, ValueError):
@@ -521,7 +587,12 @@ def restore_bf16_mtp(
 
     shard = root / MTP_SHARD_NAME
     write_safetensors(shard, tensors)
-    update_export_index(root, MTP_SHARD_NAME, {name: t.nbytes for name, t in tensors.items()})
+    update_export_index(
+        root,
+        MTP_SHARD_NAME,
+        {name: t.nbytes for name, t in tensors.items()},
+        replace_existing=existing,
+    )
     note["method"] = method
     note["mtp_tensors"] = len(tensors)
     note["mtp_dtype"] = next(iter(tensors.values())).dtype

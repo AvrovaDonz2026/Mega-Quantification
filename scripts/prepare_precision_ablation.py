@@ -13,6 +13,12 @@ through a private staging directory, verifies every tensor payload hash, then
 renames it into place. Original provenance is retained; precision_ablation.json
 records the derivative instead of claiming a fresh quantization. Output contains
 no input paths. A GPU serving check is still required before any quality claim.
+MLP projection and layer-band selectors are diagnostic controls only; they do not
+establish GPU serving behavior or a quantization quality result.
+
+For example, --variant mlp --mlp-projection down_proj --layer-start 16
+--layer-end 32 selects down_proj in layers 16 through 31. Repeat
+--mlp-projection to select multiple families; omit the selectors for all MLPs.
 """
 
 from __future__ import annotations
@@ -49,6 +55,7 @@ FUSED_PARTS = {
 }
 INDEX_NAME = "model.safetensors.index.json"
 CHUNK_SIZE = 8 * 1024 * 1024
+MLP_PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
 
 
 class Tensor(NamedTuple):
@@ -167,7 +174,39 @@ def canonical(name: str) -> str:
     return name
 
 
-def selected(module: str, variant: str) -> bool:
+def _mlp_selection(
+    variant: str,
+    mlp_projections: list[str] | tuple[str, ...] | None,
+    layer_start: int | None,
+    layer_end: int | None,
+) -> tuple[tuple[str, ...], int | None, int | None]:
+    if any(value is not None for value in (mlp_projections, layer_start, layer_end)):
+        if variant != "mlp":
+            raise ValueError("MLP projection and layer selectors require --variant mlp")
+    if (layer_start is None) != (layer_end is None):
+        raise ValueError("--layer-start and --layer-end must be supplied together")
+    if layer_start is not None and (layer_start < 0 or layer_end <= layer_start):
+        raise ValueError("MLP layer interval must satisfy 0 <= start < end")
+    requested = MLP_PROJECTIONS if mlp_projections is None else tuple(mlp_projections)
+    if not requested:
+        raise ValueError("MLP projection selector cannot be empty")
+    if len(set(requested)) != len(requested):
+        raise ValueError("MLP projection selector contains duplicates")
+    unknown = set(requested) - set(MLP_PROJECTIONS)
+    if unknown:
+        raise ValueError(f"Unknown MLP projection: {sorted(unknown)[0]}")
+    projections = tuple(projection for projection in MLP_PROJECTIONS if projection in requested)
+    return projections, layer_start, layer_end
+
+
+def selected(
+    module: str,
+    variant: str,
+    mlp_projections: list[str] | tuple[str, ...] | None = None,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
+) -> bool:
+    _mlp_selection(variant, mlp_projections, layer_start, layer_end)
     name = canonical(module)
     return (
         variant in {"lm-head", "both"} and name == "lm_head"
@@ -176,9 +215,22 @@ def selected(module: str, variant: str) -> bool:
         and re.fullmatch(r"layers\.\d+\.(?:self_attn|linear_attn)\.[^.]+", name) is not None
     ) or (
         variant == "mlp"
-        and re.fullmatch(r"layers\.\d+\.mlp\.(?:gate_proj|up_proj|down_proj)", name)
-        is not None
+        and _selected_mlp(name, mlp_projections, layer_start, layer_end)
     )
+
+
+def _selected_mlp(
+    name: str,
+    mlp_projections: list[str] | tuple[str, ...] | None,
+    layer_start: int | None,
+    layer_end: int | None,
+) -> bool:
+    match = re.fullmatch(r"layers\.(\d+)\.mlp\.([^.]+)", name)
+    if match is None:
+        return False
+    projections, start, end = _mlp_selection("mlp", mlp_projections, layer_start, layer_end)
+    layer, projection = int(match.group(1)), match.group(2)
+    return projection in projections and (start is None or start <= layer < end)
 
 
 def quantized_layers(tensors: dict[str, Tensor]) -> dict[str, dict[str, Any]]:
@@ -236,7 +288,18 @@ def _bf16_parts(
     return parts
 
 
-def prepare_plan(export: Path, bf16: Path, variant: str) -> dict[str, Any]:
+def prepare_plan(
+    export: Path,
+    bf16: Path,
+    variant: str,
+    *,
+    mlp_projections: list[str] | tuple[str, ...] | None = None,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
+) -> dict[str, Any]:
+    projections, layer_start, layer_end = _mlp_selection(
+        variant, mlp_projections, layer_start, layer_end
+    )
     original, index = read_checkpoint(export)
     source_tensors, _ = read_checkpoint(bf16)
     source: dict[str, Tensor] = {}
@@ -246,8 +309,14 @@ def prepare_plan(export: Path, bf16: Path, variant: str) -> dict[str, Any]:
             raise ValueError(f"Ambiguous BF16 tensor alias: {key}")
         source[key] = tensor
     original_layers = quantized_layers(original)
-    modules = sorted(module for module in original_layers if selected(module, variant))
+    modules = sorted(
+        module for module in original_layers
+        if selected(module, variant, projections if variant == "mlp" else None,
+                    layer_start, layer_end)
+    )
     if not modules and variant != "control":
+        if variant == "mlp" and (mlp_projections is not None or layer_start is not None):
+            raise ValueError("MLP selector matched no packed language modules")
         raise ValueError(f"No packed language modules selected by variant: {variant}")
     if variant in {"lm-head", "both"}:
         heads = [module for module in modules if canonical(module) == "lm_head"]
@@ -286,6 +355,11 @@ def prepare_plan(export: Path, bf16: Path, variant: str) -> dict[str, Any]:
         "quantized_layer_counts": dict(Counter(entry["quant_algo"] for entry in layers.values())),
         "output_tensor_bytes": sum(tensor.nbytes for tensor in result.values()),
         "requires_quantization": "modelopt_mixed", "gpu_serving_verified": False,
+        "selection": {
+            "mlp_projections": list(projections) if variant == "mlp" else None,
+            "layer_start": layer_start if variant == "mlp" else None,
+            "layer_end": layer_end if variant == "mlp" else None,
+        },
     }
     return {
         "original": original, "index": index, "result": result, "replacements": replacements,
@@ -365,14 +439,26 @@ def _metadata(export: Path, stage: Path, layers: dict[str, Any]) -> None:
     })
 
 
-def write_ablation(export: Path, bf16: Path, output: Path, variant: str) -> dict[str, Any]:
+def write_ablation(
+    export: Path,
+    bf16: Path,
+    output: Path,
+    variant: str,
+    *,
+    mlp_projections: list[str] | tuple[str, ...] | None = None,
+    layer_start: int | None = None,
+    layer_end: int | None = None,
+) -> dict[str, Any]:
     export, bf16, output = export.resolve(), bf16.resolve(), output.resolve()
     for source in (export, bf16):
         if output.is_relative_to(source) or source.is_relative_to(output):
             raise ValueError("Output must be disjoint from both input checkpoints")
     if output.exists():
         raise FileExistsError("Ablation output already exists; refusing to overwrite")
-    plan = prepare_plan(export, bf16, variant)
+    plan = prepare_plan(
+        export, bf16, variant, mlp_projections=mlp_projections,
+        layer_start=layer_start, layer_end=layer_end,
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=f".{output.name}.staging-", dir=output.parent))
     try:
@@ -453,6 +539,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Original local BF16 HF checkpoint")
     parser.add_argument("--variant", choices=("control", "lm-head", "attention", "mlp", "both"),
                         required=True)
+    parser.add_argument("--mlp-projection", dest="mlp_projections", action="append",
+                        choices=MLP_PROJECTIONS,
+                        help="Diagnostic MLP projection to restore; repeat to select multiple")
+    parser.add_argument("--layer-start", type=int, help="Diagnostic inclusive MLP layer start")
+    parser.add_argument("--layer-end", type=int, help="Diagnostic exclusive MLP layer end")
     parser.add_argument("--output", type=Path, help="New independent checkpoint directory")
     parser.add_argument("--write", action="store_true", help="Create and verify the derived export")
     args = parser.parse_args(argv)
@@ -460,9 +551,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--write requires --output")
     try:
         if args.write:
-            summary = write_ablation(args.export, args.bf16, args.output, args.variant)
+            summary = write_ablation(
+                args.export, args.bf16, args.output, args.variant,
+                mlp_projections=args.mlp_projections,
+                layer_start=args.layer_start, layer_end=args.layer_end,
+            )
         else:
-            summary = prepare_plan(args.export, args.bf16, args.variant)["summary"]
+            summary = prepare_plan(
+                args.export, args.bf16, args.variant,
+                mlp_projections=args.mlp_projections,
+                layer_start=args.layer_start, layer_end=args.layer_end,
+            )["summary"]
         print(json.dumps(summary, indent=2, sort_keys=True))
     except (OSError, ValueError) as exc:
         parser.exit(1, f"Precision ablation failed: {exc}\n")

@@ -30,9 +30,11 @@ from megaquant.eval_gpqa import (
     eval_base_url_from_env,
     extract_choice,
     format_gpqa_prompt,
+    gpqa_prompt_sha256,
     gpqa_trace_dir,
     load_eval_recipe,
     load_gpqa_journal,
+    normalize_finish_reason,
     openai_chat_complete,
     remaining_new_tokens,
     resolve_eval_recipe_path,
@@ -276,6 +278,52 @@ def test_extract_choice_ignores_letters_inside_thinking() -> None:
     assert extract_choice(boxed) == "B"
 
 
+@pytest.mark.parametrize("tag", ["think", "thinking", "reasoning"])
+def test_extract_choice_ignores_unclosed_thinking(tag: str) -> None:
+    text = f"<{tag}>The answer is A, but the trace never closes."
+    assert visible_answer_span(text) == ""
+    assert extract_choice(text) is None
+
+
+def test_extract_choice_ignores_reopened_unclosed_thinking() -> None:
+    text = "<think>trace A</think>\nAnswer: C\n<thinking>trace B\nAnswer: B"
+    assert visible_answer_span(text).strip() == "Answer: C"
+    assert extract_choice(text) == "C"
+
+
+def test_extract_choice_keeps_plain_answer_without_thinking_tags() -> None:
+    assert visible_answer_span("Answer: D") == "Answer: D"
+    assert extract_choice("Answer: D") == "D"
+
+
+def test_extract_choice_accepts_inline_code_answer_line_with_following_note() -> None:
+    assert extract_choice("`Answer: B`\nNote: see figure C") == "B"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Option A is plausible, while Option C is stronger.",
+        "I considered A and C before choosing.",
+        "The candidates are A, B, C, and D.",
+    ],
+)
+def test_extract_choice_requires_an_explicit_answer(text: str) -> None:
+    assert extract_choice(text) is None
+
+
+def test_extract_choice_treats_unmatched_thinking_close_as_implicit_open() -> None:
+    text = "Answer: A\n</think>\nAnswer: C"
+    assert visible_answer_span(text).strip() == "Answer: C"
+    assert extract_choice(text) == "C"
+
+
+def test_unmatched_thinking_close_hides_prior_answer_without_final_choice() -> None:
+    text = "Answer: A\n</think>\nNo final choice."
+    assert visible_answer_span(text).strip() == "No final choice."
+    assert extract_choice(text) is None
+
+
 def test_prompt_asks_for_untruncated_reasoning() -> None:
     item = GPQAItem(
         item_id="t1",
@@ -285,7 +333,7 @@ def test_prompt_asks_for_untruncated_reasoning() -> None:
     )
     prompt = format_gpqa_prompt(item)
     assert "Do not stop until the reasoning is complete" in prompt
-    assert "Answer: $LETTER" in prompt
+    assert "The last line of your response must be exactly: Answer: $LETTER" in prompt
     assert "A. up" in prompt
 
 
@@ -401,6 +449,53 @@ def test_continue_on_length_reserves_continuation_message_templates(tmp_path: Pa
     ]
 
 
+def test_continuation_uses_explicit_answer_format_and_parses_inline_code(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000},
+        },
+    )
+    item = GPQAItem(
+        item_id="t1",
+        question="Which particle?",
+        choices={"A": "up", "B": "down", "C": "strange", "D": "charm"},
+        gold="B",
+    )
+    continuation_messages: list[dict[str, str]] = []
+
+    def complete(**kwargs):
+        if len(kwargs["messages"]) == 1:
+            return GenerationResult(
+                text="<think>long trace",
+                finish_reason="length",
+                prompt_tokens=100,
+                completion_tokens=200,
+                truncated=True,
+            )
+        continuation_messages.extend(kwargs["messages"])
+        return GenerationResult(
+            text="</think>\n`Answer: B`\nNote: see figure C",
+            finish_reason="stop",
+            prompt_tokens=0,
+            completion_tokens=10,
+        )
+
+    results = run_gpqa(
+        recipe,
+        items=[item],
+        complete=complete,
+        count_prompt_tokens=lambda _t: 100,
+    )
+    continuation_prompt = continuation_messages[-1]["content"]
+    assert "last line of your response must be exactly: Answer: $LETTER" in continuation_prompt
+    assert "`Answer: $LETTER`" not in continuation_prompt
+    assert results["scores"]["correct"] == 1
+    assert results["scores"]["unparsed"] == 0
+
+
 def test_continue_on_length_zero_usage_makes_progress(tmp_path: Path) -> None:
     recipe = load_eval_recipe(
         RECIPE,
@@ -502,6 +597,114 @@ def test_continue_on_length_does_not_double_count_round_templates(tmp_path: Path
     ]
 
 
+def test_continue_on_length_stops_restarted_prefix(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "limit": 1,
+            "generation": {"max_model_len": 1000, "max_new_tokens": 500},
+        },
+    )
+    item = GPQAItem("repeat", "Q?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    calls: list[int] = []
+    prefix = "The model starts reasoning from the beginning with a long repeated prefix."
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        if len(calls) == 1:
+            return GenerationResult(prefix, "length", 100, 200, truncated=True)
+        return GenerationResult(
+            prefix + " and continues", "length", 444, 200, truncated=True
+        )
+
+    run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
+    assert len(calls) == 2
+    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")["repeat"]
+    assert row.truncated is True
+    assert row.finish_reason == "repetition"
+    assert row.text == prefix
+    assert row.completion_tokens == 400
+    assert row.prompt_tokens == 444
+
+
+@pytest.mark.parametrize("with_usage", [False, True])
+def test_continue_on_length_three_rounds_reserve_once_without_usage(
+    tmp_path: Path, with_usage: bool
+) -> None:
+    recipe = load_eval_recipe(
+        RECIPE,
+        overrides={
+            "output_dir": str(tmp_path),
+            "generation": {"max_model_len": 2500, "max_new_tokens": 700},
+        },
+    )
+    item = GPQAItem("three", "Q?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    calls: list[int] = []
+
+    def complete(**kwargs):
+        calls.append(kwargs["max_tokens"])
+        index = len(calls)
+        return GenerationResult(
+            text="Answer: A" if index == 3 else f"part{index}",
+            finish_reason="stop" if index == 3 else "length",
+            prompt_tokens=(100 if index == 1 else 100 + 200 + CONTINUATION_MESSAGE_TOKEN_RESERVE)
+            if with_usage else 0,
+            completion_tokens=200 if with_usage else 0,
+            truncated=index != 3,
+        )
+
+    run_gpqa(recipe, items=[item], complete=complete, count_prompt_tokens=lambda _t: 100)
+    assert len(calls) == 3
+    if with_usage:
+        assert calls == [700, 700, 700]
+    else:
+        assert calls == [
+            700,
+            remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE + 700 +
+                                 CONTINUATION_MESSAGE_TOKEN_RESERVE, 2500, 700),
+            remaining_new_tokens(100 + CHAT_TEMPLATE_TOKEN_RESERVE + 700 +
+                                 CONTINUATION_MESSAGE_TOKEN_RESERVE + 700, 2500, 700),
+        ]
+
+
+@pytest.mark.parametrize("mismatch", ["seed", "gold", "choices"])
+def test_run_gpqa_rejects_resume_with_changed_item_protocol(
+    tmp_path: Path, mismatch: str
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    source_row = {
+        "Question": "Q?",
+        "Correct Answer": "a",
+        "Incorrect Answer 1": "b",
+        "Incorrect Answer 2": "c",
+        "Incorrect Answer 3": "d",
+        "Record ID": "same",
+    }
+    first = build_gpqa_item(source_row, index=0, seed=0, shuffle=True)
+    second_row = {**source_row, "Question": "Q2?", "Record ID": "later"}
+    original = build_gpqa_item(second_row, index=1, seed=0, shuffle=True)
+    changed = original
+    if mismatch == "seed":
+        changed = build_gpqa_item(source_row, index=0, seed=1, shuffle=True)
+    elif mismatch == "gold":
+        changed = GPQAItem("later", "Q2?", original.choices, "A")
+    else:
+        changed = GPQAItem("later", "Q2?", {**original.choices, "D": "different"}, original.gold)
+    run_gpqa(
+        recipe,
+        items=[first, original],
+        complete=lambda **_k: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _t: 8,
+    )
+    with pytest.raises(EvalError, match="choices/gold mismatch"):
+        run_gpqa(
+            recipe,
+            items=[changed, original] if mismatch == "seed" else [first, changed],
+            complete=lambda **_k: pytest.fail("must reject"),
+        )
+
+
 def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> None:
     recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
     done = GPQAItem(
@@ -556,6 +759,71 @@ def test_run_gpqa_resumes_existing_journal_without_rewriting(tmp_path: Path) -> 
     assert len(lines) == 2
     ids = [json.loads(ln)["item_id"] for ln in lines]
     assert ids == ["done", "pending"]
+
+
+def test_run_gpqa_resumes_unchanged_prompt_fingerprint(tmp_path: Path) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    item = GPQAItem(
+        "same", "unchanged question?", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A"
+    )
+    run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_kwargs: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _text: 8,
+    )
+    summary = run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_kwargs: pytest.fail("cached item must not be regenerated"),
+    )
+    assert summary["scores"]["headline"] == "1/1"
+
+
+def test_run_gpqa_warns_once_for_legacy_journal(tmp_path: Path, capsys) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    item = GPQAItem(
+        "legacy", "same choices and gold", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A"
+    )
+    row = asdict(_journal_item("legacy"))
+    row.pop("prompt_sha256", None)
+    (tmp_path / "gpqa_diamond.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    run_gpqa(recipe, items=[item], complete=lambda **_kwargs: pytest.fail("cached"))
+    err = capsys.readouterr().err
+    assert err.count("question text consistency cannot be verified") == 1
+    assert item.question not in err
+
+
+def test_load_gpqa_journal_rejects_malformed_prompt_fingerprint(tmp_path: Path) -> None:
+    path = tmp_path / "gpqa_diamond.jsonl"
+    row = asdict(_journal_item("bad"))
+    row["prompt_sha256"] = "not-a-sha256"
+    path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(EvalError, match="Invalid prompt_sha256"):
+        load_gpqa_journal(path)
+
+
+def test_run_gpqa_rejects_resume_with_changed_question_fingerprint(
+    tmp_path: Path,
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    choices = {"A": "a", "B": "b", "C": "c", "D": "d"}
+    original = GPQAItem("same", "original question?", choices, "A")
+    changed = GPQAItem("same", "different question?", choices, "A")
+    run_gpqa(
+        recipe,
+        items=[original],
+        complete=lambda **_kwargs: GenerationResult("Answer: A", "stop", 8, 4),
+        count_prompt_tokens=lambda _text: 8,
+    )
+    row = load_gpqa_journal(tmp_path / "gpqa_diamond.jsonl")["same"]
+    assert row.prompt_sha256 == gpqa_prompt_sha256(original)
+    with pytest.raises(EvalError, match="prompt fingerprint mismatch"):
+        run_gpqa(
+            recipe,
+            items=[changed],
+            complete=lambda **_kwargs: pytest.fail("must reject before requesting"),
+        )
 
 
 def test_run_gpqa_concurrency_fans_out(tmp_path: Path) -> None:
@@ -674,6 +942,38 @@ def test_score_recomputes_cached_correct_flags() -> None:
     assert scores["unparsed"] == 1
 
 
+@pytest.mark.parametrize(
+    "finish_reason",
+    [None, "", "future_reason", "abort", "content_filter", "tool_calls"],
+)
+def test_score_requires_explicit_success_finish_reason(finish_reason) -> None:
+    item = GPQAItem("a", "q", {"A": "1", "B": "2", "C": "3", "D": "4"}, "A")
+    row = ItemResult(
+        "a", "A", "A", True, False, finish_reason, 1, 1, 0, "Answer: A", item.choices
+    )
+    assert score_items([item], [row])["headline"] == "0/1"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "truncated"),
+    [
+        ("stop", "stop", False),
+        ("length", "length", True),
+        ("max_tokens", "max_tokens", True),
+        ({"type": "length"}, "length", True),
+        ({"type": "stop", "matched": 42}, "stop", False),
+        ({"type": "abort"}, "abort", False),
+        (None, "missing", False),
+        ({}, "unknown", False),
+    ],
+)
+def test_finish_reason_normalization(raw, expected: str, truncated: bool) -> None:
+    from megaquant.eval_gpqa import is_truncated_finish_reason
+
+    assert normalize_finish_reason(raw) == expected
+    assert is_truncated_finish_reason(raw) is truncated
+
+
 @pytest.mark.parametrize("truncated,text", [(True, "Answer: A"), (False, "")])
 def test_run_gpqa_never_scores_truncated_or_unparsed_answers_correct(
     tmp_path: Path, truncated: bool, text: str
@@ -695,6 +995,64 @@ def test_run_gpqa_never_scores_truncated_or_unparsed_answers_correct(
     assert summary["scores"]["headline"] == "0/1"
     row = json.loads((tmp_path / "gpqa_diamond.jsonl").read_text())
     assert row["correct"] is False
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "truncated", "expected"),
+    [
+        (None, False, "missing"),
+        ("abort", False, "abort"),
+        ("content_filter", False, "content_filter"),
+        ("tool_calls", False, "tool_calls"),
+        ({"type": "length"}, True, "length"),
+    ],
+)
+def test_run_gpqa_only_scores_explicit_stop(
+    tmp_path: Path, finish_reason, truncated: bool, expected: str
+) -> None:
+    recipe = load_eval_recipe(RECIPE, overrides={"output_dir": str(tmp_path)})
+    recipe.generation.continue_on_length = False
+    item = GPQAItem("a", "q", {"A": "a", "B": "b", "C": "c", "D": "d"}, "A")
+    summary = run_gpqa(
+        recipe,
+        items=[item],
+        complete=lambda **_k: GenerationResult(
+            text="Answer: A",
+            finish_reason=finish_reason,
+            prompt_tokens=8,
+            completion_tokens=4,
+            truncated=truncated,
+        ),
+    )
+    row = json.loads((tmp_path / "gpqa_diamond.jsonl").read_text())
+    assert row["finish_reason"] == expected
+    assert row["correct"] is False
+    assert summary["scores"]["headline"] == "0/1"
+
+
+def test_openai_http_does_not_infer_stop_when_finish_reason_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recipe = load_eval_recipe(RECIPE)
+    response = {
+        "choices": [{"message": {"content": "Answer: A"}}],
+        "usage": {"prompt_tokens": 8, "completion_tokens": 4},
+    }
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *_args, **_kwargs: io.BytesIO(json.dumps(response).encode()),
+    )
+    result = openai_chat_complete(
+        base_url="http://sglang.local/v1",
+        model="test-model",
+        messages=[{"role": "user", "content": "Question"}],
+        sampling=recipe.sampling,
+        thinking=recipe.thinking,
+        max_tokens=512,
+        seed=0,
+    )
+    assert result.finish_reason == "missing"
+    assert result.truncated is False
 
 
 @pytest.mark.parametrize("retry_context_overflow", [False, True])
@@ -1130,6 +1488,22 @@ def test_load_gpqa_journal_skips_truncated_last_line(tmp_path: Path, capsys) -> 
     assert "warning" in err
     assert "dropping truncated journal line" in err
     assert path.read_text(encoding="utf-8") == good + "\n"
+
+
+def test_load_gpqa_journal_missing_fields_warning_hides_row_contents(
+    tmp_path: Path, capsys
+) -> None:
+    secret_text = "PRIVATE_RESPONSE_SHOULD_NOT_APPEAR"
+    path = tmp_path / "gpqa_diamond.jsonl"
+    path.write_text(
+        json.dumps({"item_id": "legacy", "text": secret_text}) + "\n" +
+        json.dumps({"item_id": "legacy2", "text": secret_text}) + "\n",
+        encoding="utf-8",
+    )
+    assert load_gpqa_journal(path) == {}
+    err = capsys.readouterr().err
+    assert err.count("missing fields") == 2
+    assert secret_text not in err
 
 
 @pytest.mark.parametrize("truncated,predicted", [(True, "A"), (False, None)])

@@ -1,0 +1,47 @@
+{
+  "container_absent": true,
+  "gpu_export_available": false,
+  "gpu_ptq_executed": false,
+  "image_id": "sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1",
+  "model_loaded": false,
+  "mse_root_cause_established": false,
+  "observed_date": "2026-10-22",
+  "package_sha256": "52f1156d1006d9389133fa825b75c6f3cd6d515cca475894d03d25f61931895b",
+  "result": {
+    "arms": [
+      {
+        "arm": "static-max",
+        "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+        "config_sha256": "4063b5f9e56bb2fe3d691de1f2ed627e5d1d443f9e3cd4ecc0d6860fdcf38f7d",
+        "model_kind": "local",
+        "model_sha256": "b096b397facea42fdf80dffe7eed3fb5c7881959011379deedd2b370562cf516",
+        "mtp": true,
+        "native_selector": "static_max",
+        "source_sha256": "d6b65dd4db276f6a7f11237fa9b022cddbe9979e24da49a2a460bf2fed5031f1",
+        "vision": true
+      },
+      {
+        "arm": "static-MSE",
+        "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+        "config_sha256": "94cdd0b01b636bcab0de0ace8cfbee896e50813427a461a348015d8442fe7572",
+        "model_kind": "local",
+        "model_sha256": "b096b397facea42fdf80dffe7eed3fb5c7881959011379deedd2b370562cf516",
+        "mtp": true,
+        "native_selector": "mse",
+        "source_sha256": "d6b65dd4db276f6a7f11237fa9b022cddbe9979e24da49a2a460bf2fed5031f1",
+        "vision": true
+      }
+    ],
+    "gpu_ptq_executed": false,
+    "modelopt": "0.47.0",
+    "passed": true,
+    "schema": "r6-cpu-smoke-v1",
+    "transformers": "5.12.1"
+  },
+  "returncode": 0,
+  "schema": "r6-cpu-smoke-host-v1",
+  "scope": "CPU-only configuration preparation and input fingerprints in the pinned Spark PTQ image",
+  "service_mutation": false,
+  "serving_validated": false,
+  "source_directory": "scripts/diagnostics/matched-ptq-r6"
+}

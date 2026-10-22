@@ -19,6 +19,7 @@ Agent entry. Humans start at [README.md](README.md) and the
 
 - `megaquant plan` and eval/serve `--dry-run` must not download the 27B checkpoint.
 - A GPQA score is `correct/198` only when `summary.json` exists and the journal has exactly 198 unique dataset-matching rows. Truncated and unparsed rows count as wrong. Do not quote a partial journal. For temperature-0 runs, require `scripts/check_gpqa_results.py` to pass against the actual CSV, seed and choice-shuffle policy before publishing a score.
+- GPQA correctness also requires an explicit `stop` finish reason and a parseable explicit answer (`Answer: A` through `Answer: D`, an equivalent boxed answer, or a sole answer letter). Do not infer a choice from discussion of options or isolated letters in reasoning. Inline-code answer lines such as `` `Answer: B` `` are accepted. Missing, unknown, aborted, filtered, or tool-call finishes count as wrong; never infer `stop` from an absent reason. Ignore answers inside open or closed thinking blocks. Preserve historical journals and use a separate audit when parser or scoring rules change; parser updates do not rewrite historical scores.
 - Do not commit `.env`, `.oss.env`, `docker-compose.override.yml`, SSH material, bucket names, tenant DNS, or host paths.
 - Do not publish the `*-draft` directory as scheme `w4a8`, `w4a4`, or `mixed`.
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
@@ -75,7 +76,7 @@ tests, not a general quality or determinism guarantee.
 
 ## Eval
 
-Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on and preserved, `reasoning_effort=xhigh`). Default, 5090, 6000D and Spark full GPQA recipes use 262144 context. The separate Spark vision/MTP checks retain 32768. `max_new_tokens: 0` fills the selected recipe's remaining window. Continuations cannot enlarge that window; final length finishes count as wrong. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, or an explicit `--output` directory, resume by `item_id`.
+Default YAML sends temperature **0** plus the rest of the Qwen thinking card (`top_p=0.95`, `top_k=20`, thinking on and preserved, `reasoning_effort=xhigh`). Default, 5090, 6000D and Spark full GPQA recipes use 262144 context. The separate Spark vision/MTP checks retain 32768. `max_new_tokens: 0` fills the selected recipe's remaining window. Continuations cannot enlarge that window; final length finishes count as wrong. A continuation that clearly restarts an already emitted prefix is rejected, recorded as `finish_reason=repetition` with `truncated=true`, and its returned token usage is recorded when the service provides usage metadata; the duplicate text is not appended. The checker accepts this diagnostic combination and scores it wrong because only an explicit non-truncated `stop` can be correct. Journal rows now include `prompt_sha256`; resuming a journal containing that field verifies it against the CSV prompt, while a legacy row without the field remains compatible with one warning and cannot receive that question-text check. Journal: `<model>/gpqa_diamond/gpqa_diamond.jsonl`, or an explicit `--output` directory, resume by `item_id`.
 
 Spark full GPQA uses `recipes/eval-gpqa-diamond.spark-gpqa.yaml` for both mixed
 W4A8 and uniform W4A4, with 262144 context, the full remaining output budget,
@@ -153,7 +154,7 @@ draft path at the 64-layer export. Spark recipes explicitly quantize attached
 MTP and serve it as embedded EAGLE MTP, using `serve.speculative_*` without an
 external draft path. See [the Spark MTP workflow](docs/DGX_SPARK.md#vision-and-mtp-inference).
 
-Language-only Qwen3.5 PTQ skips constructing the vision tower. `megaquant.vision_export` copies the source BF16 `model.visual.*` tensors into `vision.safetensors` and adds them to the HF index. Existing exports missing vision can run `megaquant restore-vision <export> --source <BF16 checkpoint>`.
+Language-only Qwen3.5 PTQ skips constructing the vision tower. `megaquant.vision_export` reads missing BF16 `model.visual.*` tensors from the source checkpoint's indexed shard names, writes them to the export's `vision.safetensors`, and updates the HF index; source and output shard names may differ. Missing indexed keys or shards fail closed. Existing exports missing vision can run `megaquant restore-vision <export> --source <BF16 checkpoint>`.
 
 ```bash
 megaquant restore-vision outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
@@ -163,6 +164,11 @@ megaquant restore-mtp outputs/Qwen3.8-27B-NVFP4-W4A8 --source Qwen/Qwen3.8-27B
 ## OSS
 
 Layout: `<prefix>/<scheme>/<content-hash>/`, prefix `Mega-Quantification`. Content-hash is SHA256 of sorted `{safetensors-name} {sha256}\n` lines. Publish one mixed export twice, `--scheme mixed` and `--scheme w4a8`, same hash. Bucket and endpoint come from the environment or `.oss.env`, never from git. Anonymous auth when access keys are unset.
+
+Use `scripts/oss_fetch.py` with the same scheme and 64-character content hash
+to download a published export. It records `SHA256SUMS.txt`; run
+`sha256sum -c SHA256SUMS.txt` before serving or republishing. Keep credentials,
+bucket names and host paths out of recipes and commits.
 
 ## Commands
 

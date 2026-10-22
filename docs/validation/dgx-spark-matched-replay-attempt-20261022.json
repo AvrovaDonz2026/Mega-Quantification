@@ -1,0 +1,62 @@
+{
+  "schema": "matched-ptq-r6-replay-attempt-public-v1",
+  "status": "paired_replay_incomplete",
+  "protocol": {
+    "context_length": 262144,
+    "temperature": 0,
+    "max_new_tokens": 49152,
+    "prompt_tokens": 288,
+    "ssm_dtype": "float32",
+    "mtp_enabled": false,
+    "cold_server_per_arm": true
+  },
+  "arms": {
+    "static-max": {
+      "state": "completed",
+      "export_sha256": "c1c3cdbaca1e808dc4ff8c95d52618045171bfafd4bd567e57c1b385728436b7",
+      "file_count": 16,
+      "elapsed_seconds": 3973.18,
+      "output_tokens": 49152,
+      "finish_reason": "length",
+      "output_sha256": "7eb3d373c9c466f711bba241a8f89a8654e9d2b15deb711099e3b2ef40e8ac55",
+      "cached_tokens": 0,
+      "num_retractions": 0,
+      "protocol_gate_passed": true,
+      "suffix_period_candidates": [
+        {"period": 1229, "suffix_match_tokens": 20988},
+        {"period": 2458, "suffix_match_tokens": 19759},
+        {"period": 3687, "suffix_match_tokens": 18530}
+      ]
+    },
+    "static-MSE": {
+      "state": "failed",
+      "stage": "server_identity",
+      "request_started": false,
+      "elapsed_seconds": 130.035,
+      "exception_class": "RuntimeErrorGate",
+      "server_exit_code": -9,
+      "startup_log_sha256": "8c1b6a90b98ae65d5474adedb40bcd1fc354ab13ba0a85db89a9447e25b9db65",
+      "startup_log_keyword_category": "missing_module",
+      "keyword_category_is_confirmed_cause": false,
+      "kernel_oom_marker_seen_in_failure_window": false
+    }
+  },
+  "restoration": {
+    "paired_process_stability": "passed",
+    "stable_seconds": 120,
+    "fixed_arithmetic_probe": "passed",
+    "fixed_arithmetic_finish_reason": "stop",
+    "broader_application_health_established": false
+  },
+  "cross_arm_token_comparison": "not_performed",
+  "repetition_observed_without_mse_search": true,
+  "mse_root_cause_established": false,
+  "repetition_fix_established": false,
+  "limitations": [
+    "One text-only diagnostic case; not a benchmark score or vision/MTP validation.",
+    "The static-max protocol gate validates request identity and cache conditions, not answer quality.",
+    "Suffix matches establish repetition but do not establish the first loop onset.",
+    "The MSE server exited before readiness; its startup failure is separate from generation behavior.",
+    "No paired MSE response exists, so this attempt cannot quantify the search algorithm's effect."
+  ]
+}

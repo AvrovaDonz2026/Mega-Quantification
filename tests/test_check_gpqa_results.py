@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from megaquant.eval_gpqa import load_gpqa_diamond
+from megaquant.eval_gpqa import format_gpqa_prompt, load_gpqa_diamond
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_gpqa_results", Path(__file__).parents[1] / "scripts" / "check_gpqa_results.py"
@@ -114,6 +114,102 @@ def test_correct_looking_truncated_and_unparsed_responses_count_wrong(run_fixtur
     report = check_gpqa_results.verify_results(dataset, run_dir)
     assert report["passed"], report["errors"]
     assert report["scores"]["correct"] == 196
+
+
+def test_repetition_guard_truncation_is_accepted_and_scores_wrong(run_fixture):
+    dataset, run_dir, rows, summary, save = run_fixture
+    rows[0].update(truncated=True, finish_reason="repetition", correct=False)
+    summary["scores"].update(
+        correct=197, accuracy=197 / 198, truncated=1, headline="197/198"
+    )
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+    assert report["scores"]["correct"] == 197
+
+
+def test_repetition_without_truncation_is_rejected(run_fixture):
+    dataset, run_dir, rows, _, save = run_fixture
+    rows[0].update(truncated=False, finish_reason="repetition", correct=False)
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert not report["passed"]
+    assert "journal row 1: truncation flag disagrees with finish reason" in report["errors"]
+
+
+def test_prompt_fingerprint_matches_csv_built_prompt(run_fixture):
+    dataset, run_dir, rows, _, save = run_fixture
+    item = load_gpqa_diamond(csv_path=dataset, seed=0, shuffle=True)[0]
+    rows[0]["prompt_sha256"] = hashlib.sha256(
+        format_gpqa_prompt(item).encode("utf-8")
+    ).hexdigest()
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+
+
+def test_prompt_fingerprint_mismatch_is_rejected_without_question_leak(run_fixture):
+    dataset, run_dir, rows, _, save = run_fixture
+    rows[0]["prompt_sha256"] = "0" * 64
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert not report["passed"]
+    assert "journal row 1: prompt fingerprint does not match the CSV" in report["errors"]
+    assert "private question" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("fingerprint", ["", "abc", "G" * 64, 123])
+def test_invalid_prompt_fingerprint_is_rejected(run_fixture, fingerprint):
+    dataset, run_dir, rows, _, save = run_fixture
+    rows[0]["prompt_sha256"] = fingerprint
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert not report["passed"]
+    assert "journal row 1: invalid prompt fingerprint" in report["errors"]
+    assert "private question" not in json.dumps(report)
+
+
+def test_legacy_journal_without_prompt_fingerprint_remains_accepted(run_fixture):
+    dataset, run_dir, _, _, _ = run_fixture
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "truncated"),
+    [
+        ("missing", False),
+        ("future_reason", False),
+        ("abort", False),
+        ("content_filter", False),
+        ("tool_calls", False),
+        ("length", True),
+    ],
+)
+def test_checker_only_scores_explicit_stop_reason(run_fixture, finish_reason, truncated):
+    dataset, run_dir, rows, summary, save = run_fixture
+    rows[0].update(finish_reason=finish_reason, truncated=truncated, correct=False)
+    summary["scores"].update(
+        correct=197,
+        accuracy=197 / 198,
+        truncated=int(truncated),
+        headline="197/198",
+    )
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert report["passed"], report["errors"]
+    assert report["scores"]["correct"] == 197
+
+
+@pytest.mark.parametrize("finish_reason", [None, {"type": "length"}, ""])
+def test_checker_rejects_malformed_finish_reason_schema(run_fixture, finish_reason):
+    dataset, run_dir, rows, _, save = run_fixture
+    rows[0].update(finish_reason=finish_reason, truncated=False, correct=False)
+    save()
+    report = check_gpqa_results.verify_results(dataset, run_dir)
+    assert not report["passed"]
+    assert "scores" not in report
+    assert "journal row 1: invalid finish reason" in report["errors"]
 
 
 def test_repeated_wrong_options_in_the_dataset_are_accepted(run_fixture):
