@@ -1,0 +1,43 @@
+{
+  "schema": "r6-gpu-microprobe-public-v1",
+  "passed": true,
+  "probe_passed": true,
+  "actual_modelopt": "0.47.0",
+  "fixture": "synthetic Linear64x32",
+  "activation_amax_equal": true,
+  "activation_amax_sha256": "9ccf3088fe831fec8e12595b8abe0d553ab1f6c23804b943ceb0831a9927ab43",
+  "arms": {
+    "static-max": {
+      "weight_calibrator": "MaxCalibrator",
+      "weight_block_type": "static",
+      "input_block_type": "dynamic",
+      "weight_scale_finite_positive": true,
+      "weight_scale_sha256": "cacd79d5a55ed92ba4461c9468f53924ee73a2dbe11b068ed8c4061d82ae1dbd",
+      "fake_weight_sha256": "3786e0d1ca5dcb6596e858855a81e9c89c07b2c650b392fa2bddb2d2ea6947db",
+      "heldout_output_finite": true,
+      "heldout_output_relative_mse": 0.01958167366683483
+    },
+    "static-MSE": {
+      "weight_calibrator": "NVFP4MSECalibrator",
+      "weight_block_type": "static",
+      "input_block_type": "dynamic",
+      "weight_scale_finite_positive": true,
+      "weight_scale_sha256": "b0c49bfab718acd0b13c4bf3c0a47992d78dbf65f0e34d087549af95396ae443",
+      "fake_weight_sha256": "6c65cd0202b81438bca6dc47f8f5cedd4351d1800e76520f61bac8c0603178f9",
+      "heldout_output_finite": true,
+      "heldout_output_relative_mse": 0.017615284770727158
+    }
+  },
+  "glm_before_after": {
+    "config_hash_equal": true,
+    "identity_equal": true,
+    "started_at_equal": true,
+    "restart_count": 0,
+    "running": true,
+    "oom_killed": false
+  },
+  "experiment_container_cleaned": true,
+  "scope": "synthetic GPU microprobe only; not a 27B benchmark, serving result, or full vision/MTP PTQ",
+  "mse_root_cause_established": false,
+  "mse_repetition_fixed": false
+}

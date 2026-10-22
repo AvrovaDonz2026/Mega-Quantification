@@ -20,7 +20,7 @@
 
 ## 合并前门槛
 
-- 当前验证记录的 Python 3.11 CPU 门禁为 `PYTHONPATH=src /private/tmp/megaquant-clean-py311/bin/python -m pytest -q -o addopts=''`，结果 `745 passed, 5 skipped in 26.46s`；此全量包含 1 个 R6 wrapper，该 wrapper 在隔离子进程中验证 162 项 R6 tests，不能把 162 再加到全量计数。定向 parity/CLI 检查为 `10 passed in 11.47s`，仅覆盖 bounded-ID 输入的诊断路径；`ruff check .` 和 `git diff --check` 通过。本轮门禁覆盖已整合的 `static_max` 代码、plan/provenance 元数据和测试；这是 CPU-only 验证，不是 GPU 验证，也没有 GPU matched-export 结论。
+- 当前验证记录的 Python 3.11 CPU 门禁为 `PYTHONPATH=src python -m pytest -q -o addopts=''`（使用隔离的 Python 3.11 环境），结果 `745 passed, 5 skipped in 24.47s`；此全量包含 1 个 R6 wrapper，该 wrapper 在隔离子进程中验证 167 项 R6 tests，不能把 167 再加到全量计数。定向 parity/CLI 检查为 `10 passed in 11.47s`，仅覆盖 bounded-ID 输入的诊断路径；`ruff check .` 和 `git diff --check` 通过。本轮门禁覆盖已整合的 `static_max` 代码、plan/provenance 元数据和测试；这是 CPU-only 验证，不是 GPU 验证，也没有 GPU matched-export 结论。
 - GPQA 成绩必须同时具备 `summary.json`、198 个唯一题目、实际 CSV/seed/选项打乱
   策略匹配，并通过 `scripts/check_gpqa_results.py`；解析失败和长度结束计错。
 - Spark 的视觉/MTP 功能检查、完整 256k GPQA、MSE 重复输出诊断和容器迁移分别绑定
@@ -43,10 +43,21 @@
   本轮预检未暂停。R6 的本地 DockerAdapter、确定性 bootstrap、strict maintenance-plan 转换，
   以及 mount/entrypoint/tmpfs/env/budget 一致性校验已实现；native_response loopback 客户端
   仅通过 mock 验证。R6 公共离线套件 `tests/test_matched_ptq_r6.py` 的 wrapper 已通过，
-  共 162 项 offline tests passed；尚未部署或执行 GPU 推理，因此没有 GPU export。R6 公共脚本
+  共 167 项 offline tests passed；尚未部署或执行完整模型 GPU PTQ/serving，因此没有完整模型 GPU export。R6 公共脚本
   位于 `scripts/diagnostics/matched-ptq-r6/`；私有部署 glue 未公开，公共工具不提供远程安装器或部署命令。CPU preflight
-  不代表真实 serving 或 GPU PTQ 已验证。不要在 PR 或 release 中写成“已找到 MSE 根因”或
+  不代表真实 serving 或 GPU PTQ 已验证。远端 stage-only 预检的模型、校准、18-shard、source、
+  transport 和 bundle 哈希校验已通过，但 worker 未安装、未启动，服务未修改；deployment adapter
+  未执行 Docker，仅完成只读 inspect。脱敏字段见[stage preflight JSON](dgx-spark-matched-ptq-stage-preflight-20261022.json)。
+  不能把旧 stage bundle 当作 worker 最终版本或 GPU 运行证据。维护器现已覆盖有限启动等待、每端心跳、
+  慢 STOP、失败时仍尝试两端恢复，以及 watchdog 竞态修复；这些是生命周期控制改进，不是应用健康检查。
+  进程稳定（`process_stable`）不等于应用 ready，当前无 healthcheck 时仍应标记 application readiness unknown。
+  不要在 PR 或 release 中写成“已找到 MSE 根因”或
   “已修复循环”。
+  第二次真实 GPU microprobe 已通过，实际使用 ModelOpt 0.47.0；合成 Linear64x32 的 static-max
+  与 static-MSE activation amax 完全相同，weight scale 均 finite-positive 但 fake weights 不同，
+  heldout relative MSE 分别为 0.01958167366683483 与 0.017615284770727158。GLM 前后身份、启动时间、
+  restart count 一致且仍运行，实验容器已清理、无 OOM。脱敏统计见[GPU microprobe JSON](dgx-spark-matched-ptq-gpu-microprobe-20261022.json)。
+  这是合成微探针，不是 27B benchmark、真实 serving 或完整 vision/MTP PTQ，不证明 MSE 重复输出已修复。
 - 视觉/MTP 的公开证据限于导出文件审计、quantizer coverage 检查，以及固定文本、图像、
   OCR 和嵌入式 MTP 功能用例；这些检查不等同于完整 GPU PTQ、256k MTP 质量、TP2 或
   广泛视觉质量验证。MTP 与视觉的实际量化仍需在具备同源权重和校准数据的 GPU 环境中复核。
@@ -54,6 +65,6 @@
 ## Pull request 状态
 
 聚合入口为 [PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70)。本次检查时，
-commit `b3628ae`（MTP 有限分歧诊断与 CLI skip 修复）已推送至 PR #70；PR #70 为 OPEN、
-MERGEABLE，当前 head 的两项 CI checks 均成功。PR #65–#69 仍为 OPEN。状态和 checks 会变化，合并前请以各
-PR 页面当前 head 和 checks 为准，不能把旧 head 的成功结果转移给新提交。
+commit `4bbe205` 已推送至 PR #70，且此前两项 CI checks 均成功；PR #70 为 OPEN、MERGEABLE。
+PR #65–#69 仍为 OPEN。后续新提交需要重新核验 CI；状态和 checks 会变化，合并前请以各 PR
+页面当前 head 和 checks 为准，不能把旧 head 的成功结果转移给新提交。

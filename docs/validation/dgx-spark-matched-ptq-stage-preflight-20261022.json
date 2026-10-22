@@ -1,0 +1,20 @@
+{
+  "schema": "matched-ptq-r6-stage-preflight-public-v1",
+  "passed": true,
+  "staged": true,
+  "execution_enabled": false,
+  "model_sha256": "b096b397facea42fdf80dffe7eed3fb5c7881959011379deedd2b370562cf516",
+  "model_index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+  "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+  "source_sha256": "e8190fc70e42a0968f613a0a34f7749c882ebab5f4f905ccce81bf55cc6fbaf2",
+  "transport_payload_sha256": "52f1156d1006d9389133fa825b75c6f3cd6d515cca475894d03d25f61931895b",
+  "worker_bundle_sha256": "c82f0fd9e8c0743c0c171369ff29430c990d8af24ea092f1867e48bbbd1f1c63",
+  "worker_bundle_verified": true,
+  "worker_installed": false,
+  "worker_started": false,
+  "service_mutation": false,
+  "protected_service_running": true,
+  "deployment_docker_invoked": false,
+  "read_only_inspect_performed": true,
+  "scope": "stage-only preflight; no remote worker deployment or inference"
+}

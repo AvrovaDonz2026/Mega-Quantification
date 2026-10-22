@@ -278,6 +278,33 @@ def test_remote_rpc_retries_only_read_commands_and_bounds_timeout():
         m.RemoteRPC(p, flaky).rpc("STATUS", timeout=301)
 
 
+def test_coordinate_attempts_start_and_verify_after_cleanup_failure(monkeypatch):
+    p = plan(None)
+    calls = []
+    class R:
+        def rpc(self, command, timeout=None):
+            calls.append(command)
+            if command == "LAUNCH":
+                return {"event": "EXPERIMENT_STARTED"}
+            if command == "STATUS":
+                return {"event": "STATUS", "child": {
+                    "Status": "exited", "ExitCode": 0, "Running": False}}
+            events = {
+                "HEARTBEAT": "ALIVE", "ARM": "ARMED", "STOP": "STOPPED",
+                "CLEANUP": "CLEANED", "START": "STARTED", "VERIFY_CLOSE": "VERIFIED_CLOSED",
+            }
+            return {"event": events.get(command, command), "stable_seconds": 120}
+    def best_effort(remotes, command, event):
+        calls.append(command)
+        if command == "CLEANUP":
+            raise m.MaintenanceError("cleanup_failed")
+        return [{"event": event, "stable_seconds": 120} for _ in remotes]
+    monkeypatch.setattr(m, "paired_rpc_best_effort", best_effort)
+    result = m.coordinate([R(), R()], p, now=lambda: 1, sleep=lambda _: None)
+    assert "CLEANUP" in calls and "START" in calls and "VERIFY_CLOSE" in calls
+    assert result["restoration"] == "unconfirmed"
+
+
 def test_service_adapter_is_fail_closed_when_snapshot_is_incomplete(tmp_path):
     p = plan(tmp_path)
 

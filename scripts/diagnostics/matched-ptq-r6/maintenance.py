@@ -457,29 +457,46 @@ class LocalOwner:
         deadline = self.now() + timeout
         since = None
         marker = None
+        readiness = None
         while self.now() <= deadline:
             row = self._service_exact()
+            if row.get("exact") is not True:
+                raise MaintenanceError("identity_mismatch")
             current = (
-                row.get("restart_count"),
-                row.get("started_at"),
-                row.get("health"),
-                row.get("oom_killed"),
+                row["restart_count"],
+                row["started_at"],
+                row["oom_killed"],
+                row["health_configured"],
             )
-            healthy = (
-                row["running"] is True
-                and not row["restarting"]
-                and not row["oom_killed"]
-                and row["health_configured"]
-                and row["health"] == "healthy"
-            )
-            if not healthy or (marker is not None and marker != current):
+            if marker is not None and marker != current:
                 raise MaintenanceError("unstable")
             marker = current
+            if row["running"] is not True or row["restarting"] or row["oom_killed"]:
+                raise MaintenanceError("unstable")
+            if row["health_configured"]:
+                if row["health"] == "starting":
+                    since = None
+                    readiness = "healthcheck_starting"
+                    self.sleep(min(2, max(0.01, deadline - self.now())))
+                    continue
+                if row["health"] != "healthy":
+                    raise MaintenanceError("unstable")
+                readiness = "healthy"
+            else:
+                readiness = "unknown"
             since = self.now() if since is None else since
             if self.now() - since >= seconds:
-                self.state.update(armed=False, restoration="process_stable")
+                self.state.update(
+                    armed=False,
+                    restoration="process_stable",
+                    application_readiness=readiness,
+                )
                 self.persist()
-                return {"event": "VERIFIED_CLOSED", "stable_seconds": self.now() - since}
+                return {
+                    "event": "VERIFIED_CLOSED",
+                    "stable_seconds": self.now() - since,
+                    "application_readiness": readiness,
+                }
             self.sleep(min(2, max(0.01, deadline - self.now())))
         raise MaintenanceError("stability_timeout")
 
@@ -547,6 +564,16 @@ HEARTBEAT_TTL = 45
 HEARTBEAT_ATTEMPTS = 3
 SOCKET_TIMEOUT = 10
 RPC_RETRIES = 2
+RPC_TIMEOUTS = {
+    "HEARTBEAT": 60,
+    "ARM": 120,
+    "STOP": 240,
+    "LAUNCH": 240,
+    "STATUS": 120,
+    "CLEANUP": 120,
+    "START": 240,
+    "VERIFY_CLOSE": 330,
+}
 
 
 def trusted_path(path: str | Path, regular=False):
@@ -713,12 +740,19 @@ def serve(plan, owner: LocalOwner, socket_path: str | Path, lease=HEARTBEAT_TTL)
     lease_deadline = [time.monotonic() + lease]
     shutdown = threading.Event()
     operation_lock = threading.Lock()
+    in_flight = [None]
 
     def watchdog():
         while not shutdown.wait(0.25):
             with lease_lock:
                 expired = time.monotonic() >= lease_deadline[0]
+                operation_deadline = in_flight[0]
+                operation_active = operation_deadline is not None
             if expired:
+                if operation_active:
+                    if time.monotonic() >= operation_deadline:
+                        shutdown.set()
+                    continue
                 try:
                     if operation_lock.acquire(timeout=1):
                         try:
@@ -779,29 +813,61 @@ def serve(plan, owner: LocalOwner, socket_path: str | Path, lease=HEARTBEAT_TTL)
                     remaining = max(0.01, expires - time.monotonic())
                     if not operation_lock.acquire(timeout=remaining):
                         raise MaintenanceError("operation_timeout")
+                    operation_deadline = time.monotonic() + RPC_TIMEOUTS[command]
+                    with lease_lock:
+                        in_flight[0] = operation_deadline
                     try:
-                        if command == "HEARTBEAT":
-                            response = {"event": "ALIVE", "snapshot": owner._service_exact()}
-                        elif command == "ARM":
-                            owner.arm()
-                            response = {"event": "ARMED"}
-                        elif command == "STOP":
-                            owner.stop_service()
-                            response = {"event": "STOPPED"}
-                        elif command == "LAUNCH":
-                            response = owner.launch()
-                        elif command == "STATUS":
-                            response = owner.status()
-                        elif command == "CLEANUP":
-                            owner.cleanup()
-                            response = {"event": "CLEANED"}
-                        elif command == "START":
-                            owner.start_service()
-                            response = {"event": "STARTED"}
-                        else:
-                            response = owner.verify_close()
-                    finally:
-                        operation_lock.release()
+                        try:
+                            if command == "HEARTBEAT":
+                                response = {"event": "ALIVE", "snapshot": owner._service_exact()}
+                            elif command == "ARM":
+                                owner.arm()
+                                response = {"event": "ARMED"}
+                            elif command == "STOP":
+                                owner.stop_service()
+                                response = {"event": "STOPPED"}
+                            elif command == "LAUNCH":
+                                response = owner.launch()
+                            elif command == "STATUS":
+                                response = owner.status()
+                            elif command == "CLEANUP":
+                                owner.cleanup()
+                                response = {"event": "CLEANED"}
+                            elif command == "START":
+                                owner.start_service()
+                                response = {"event": "STARTED"}
+                            else:
+                                response = owner.verify_close()
+                        finally:
+                            operation_lock.release()
+                    except BaseException as exc:
+                        if time.monotonic() >= operation_deadline:
+                            try:
+                                if owner.state.get("armed"):
+                                    owner.recover()
+                            finally:
+                                with lease_lock:
+                                    in_flight[0] = None
+                                shutdown.set()
+                            raise MaintenanceError("operation_lease_expired") from exc
+                        with lease_lock:
+                            lease_deadline[0] = time.monotonic() + lease
+                            in_flight[0] = None
+                        raise
+                    with lease_lock:
+                        operation_overdue = time.monotonic() >= operation_deadline
+                        if not operation_overdue:
+                            lease_deadline[0] = time.monotonic() + lease
+                            in_flight[0] = None
+                    if operation_overdue:
+                        try:
+                            if owner.state.get("armed"):
+                                owner.recover()
+                        finally:
+                            with lease_lock:
+                                in_flight[0] = None
+                            shutdown.set()
+                        raise MaintenanceError("operation_lease_expired")
                     response = dict(response)
                     response["request_id"] = request_id
                     client.sendall((json.dumps(response) + "\n").encode())
@@ -836,12 +902,19 @@ class RemoteRPC:
         if type(retries) is not int or retries < 0 or retries > RPC_RETRIES:
             raise MaintenanceError("invalid_rpc_policy")
         self.plan, self.call, self.retries = plan, call, retries
+        self._lock = threading.Lock()
 
-    def rpc(self, command, timeout=60):
+    def heartbeat_if_idle(self):
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            return self.rpc("HEARTBEAT", _locked=True)
+        finally:
+            self._lock.release()
+
+    def rpc(self, command, timeout=None, _locked=False):
         if self.plan.get("execution_enabled") is not False:
             raise MaintenanceError("execution_disabled")
-        if type(timeout) not in (int, float) or timeout <= 0 or timeout > 300:
-            raise MaintenanceError("invalid_rpc_timeout")
         if command not in {
             "HEARTBEAT",
             "ARM",
@@ -853,6 +926,16 @@ class RemoteRPC:
             "VERIFY_CLOSE",
         }:
             raise MaintenanceError("invalid_rpc_command")
+        timeout = RPC_TIMEOUTS[command] if timeout is None else timeout
+        if (
+            type(timeout) not in (int, float)
+            or timeout <= 0
+            or timeout > RPC_TIMEOUTS[command]
+        ):
+            raise MaintenanceError("invalid_rpc_timeout")
+        if not _locked:
+            with self._lock:
+                return self.rpc(command, timeout, _locked=True)
         attempts = 1 + (self.retries if command in {"HEARTBEAT", "STATUS"} else 0)
         last = None
         for _ in range(attempts):
@@ -893,24 +976,36 @@ def coordinate(remotes, plan, now=time.monotonic, sleep=time.sleep):
     heartbeat_stop = threading.Event()
     heartbeat_failure = []
 
-    def heartbeat_loop():
+    def heartbeat_loop(targets=remotes):
         while not heartbeat_stop.wait(min(HEARTBEAT_TTL / 3, 15)):
             try:
-                paired_rpc(remotes, "HEARTBEAT", "ALIVE")
+                rows = []
+                for remote in targets:
+                    if hasattr(remote, "heartbeat_if_idle"):
+                        row = remote.heartbeat_if_idle()
+                    else:
+                        row = remote.rpc("HEARTBEAT")
+                    if row is not None:
+                        rows.append(row)
+                if any(row.get("event") != "ALIVE" for row in rows):
+                    raise MaintenanceError("worker_failed")
             except BaseException as exc:
                 heartbeat_failure.append(exc)
                 return
 
-    heartbeat_thread = None
+    heartbeat_threads = []
     try:
         paired_rpc(remotes, "HEARTBEAT", "ALIVE")
         armed = True
+        for index, remote in enumerate(remotes):
+            thread = threading.Thread(
+                target=lambda r=remote: heartbeat_loop([r]),
+                name=f"r6-coordinator-heartbeat-{index}", daemon=True,
+            )
+            heartbeat_threads.append(thread)
+            thread.start()
         paired_rpc(remotes, "ARM", "ARMED")
         paired_rpc(remotes, "STOP", "STOPPED")
-        heartbeat_thread = threading.Thread(
-            target=heartbeat_loop, name="r6-coordinator-heartbeat", daemon=True
-        )
-        heartbeat_thread.start()
         started = remotes[1].rpc("LAUNCH")
         if started.get("event") != "EXPERIMENT_STARTED":
             raise MaintenanceError("experiment_failed")
@@ -930,19 +1025,29 @@ def coordinate(remotes, plan, now=time.monotonic, sleep=time.sleep):
     except BaseException as exc:
         result["reason"] = type(exc).__name__
     finally:
-        heartbeat_stop.set()
-        if heartbeat_thread is not None:
-            heartbeat_thread.join(timeout=2)
         if armed:
+            failures = []
             try:
                 paired_rpc_best_effort(remotes, "CLEANUP", "CLEANED")
+            except BaseException as exc:
+                failures.append("cleanup:" + type(exc).__name__)
+            try:
                 paired_rpc_best_effort(remotes, "START", "STARTED")
+            except BaseException as exc:
+                failures.append("start:" + type(exc).__name__)
+            try:
                 rows = paired_rpc(remotes, "VERIFY_CLOSE", "VERIFIED_CLOSED")
                 if any(r.get("stable_seconds", 0) < STABLE_SECONDS for r in rows):
-                    raise MaintenanceError("unstable")
-                result["restoration"] = "process_stable"
+                    failures.append("verify:unstable")
             except BaseException as exc:
-                result["recovery_reason"] = type(exc).__name__
+                failures.append("verify:" + type(exc).__name__)
+            if failures:
+                result["recovery_reason"] = ";".join(failures)
+            else:
+                result["restoration"] = "process_stable"
+        heartbeat_stop.set()
+        for thread in heartbeat_threads:
+            thread.join(timeout=2)
     if passed and result["restoration"] == "process_stable":
         result["status"] = "observation_passed"
     return result

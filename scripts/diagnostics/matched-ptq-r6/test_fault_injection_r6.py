@@ -1,4 +1,5 @@
 import importlib.util
+import threading
 from pathlib import Path
 
 import pytest
@@ -119,12 +120,98 @@ def test_verify_close_rejects_health_restart_and_oom(tmp_path):
     o.stop_service()
     o.start_service()
     d.health = "starting"
-    with pytest.raises(m.MaintenanceError, match="stability_timeout|unstable"):
-        o.verify_close(seconds=1, timeout=1)
+    clock = [0.0]
+    d.service_inspect = lambda: {
+        "exact": True, "running": True, "restarting": False, "oom_killed": d.oom,
+        "restart_count": d.restart_count, "started_at": d.started,
+        "health_configured": True, "health": "starting" if clock[0] < 20 else "healthy",
+    }
+    o.now = lambda: clock[0]
+    o.sleep = lambda amount: clock.__setitem__(0, clock[0] + amount)
+    result = o.verify_close(seconds=120, timeout=300)
+    assert result["application_readiness"] == "healthy"
+    assert result["stable_seconds"] >= 120
+    assert clock[0] >= 140
+    o.state.update(armed=True, restoration="start_attempted")
     d.health = "healthy"
-    d.restart_count = 1
+    d.restart_count = 0
+    def restart_during_sleep(amount):
+        clock[0] += amount
+        d.restart_count = 1
+    o.sleep = restart_during_sleep
     with pytest.raises(m.MaintenanceError, match="stability_timeout|unstable"):
         o.verify_close(seconds=1, timeout=1)
+
+
+def test_verify_close_without_healthcheck_reports_unknown(tmp_path):
+    p = plan()
+    d = ServiceDocker(p)
+    o = m.LocalOwner(p, d, tmp_path / "j.json")
+    o.state.update(armed=True, restoration="start_attempted")
+    d.service_inspect = lambda: {
+        "exact": True, "running": True, "restarting": False, "oom_killed": False,
+        "restart_count": 0, "started_at": "t0", "health_configured": False, "health": "",
+    }
+    clock = [0.0]
+    o.now = lambda: clock[0]
+    o.sleep = lambda amount: clock.__setitem__(0, clock[0] + amount)
+    result = o.verify_close(seconds=120, timeout=300)
+    assert result["application_readiness"] == "unknown"
+
+
+def test_rpc_command_budgets_cover_long_verification_and_allow_shorter_timeouts():
+    p = plan()
+    received = []
+    def call(req, timeout):
+        received.append(timeout)
+        return {"event": "VERIFIED_CLOSED", "request_id": req["request_id"]}
+    rpc = m.RemoteRPC(p, call, retries=0)
+    rpc.rpc("VERIFY_CLOSE")
+    rpc.rpc("VERIFY_CLOSE", timeout=45)
+    assert received == [330, 45]
+    with pytest.raises(m.MaintenanceError, match="invalid_rpc_timeout"):
+        rpc.rpc("STATUS", timeout=121)
+
+
+def test_heartbeat_skips_busy_remote_without_failure():
+    p = plan()
+    calls = []
+
+    def call(req, timeout):
+        calls.append(req["command"])
+        return {"event": "ALIVE", "request_id": req["request_id"]}
+
+    rpc = m.RemoteRPC(p, call, retries=0)
+    assert rpc._lock.acquire(blocking=False)
+    try:
+        assert rpc.heartbeat_if_idle() is None
+    finally:
+        rpc._lock.release()
+    assert rpc.heartbeat_if_idle()["event"] == "ALIVE"
+
+
+def test_slow_stop_blocks_only_busy_remote_heartbeat():
+    p = plan()
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+    def call(req, timeout):
+        calls.append(req["command"])
+        if req["command"] == "STOP":
+            entered.set()
+            release.wait(1)
+        return {
+            "event": "STOPPED" if req["command"] == "STOP" else "ALIVE",
+            "request_id": req["request_id"],
+        }
+    rpc = m.RemoteRPC(p, call, retries=0)
+    worker = threading.Thread(target=rpc.rpc, args=("STOP",), daemon=True)
+    worker.start()
+    assert entered.wait(1)
+    assert rpc.heartbeat_if_idle() is None
+    release.set()
+    worker.join(1)
+    assert calls == ["STOP"]
 
 
 def test_remote_timeout_and_protocol_are_fail_closed():

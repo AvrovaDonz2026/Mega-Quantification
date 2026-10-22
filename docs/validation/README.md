@@ -62,11 +62,22 @@ retry 以 `length`
 
 [Matched PTQ R6 离线工具](../../scripts/diagnostics/matched-ptq-r6/README.md)提供确定性
 bootstrap plan、受约束的本地生命周期监督、配对 evidence 校验与 replay 比较；离线套件
-162 项通过（此 wrapper 在全量 CPU 门禁中占 1 项，其隔离子进程测试不另计入全量）。
+167 项通过（此 wrapper 在全量 CPU 门禁中占 1 项，其隔离子进程测试不另计入全量）。
 私有部署 glue 未公开，公共工具不提供远程安装器或部署命令，也没有 GPU PTQ completion
 证据。固定 Spark 镜像上的最终公共 payload CPU smoke 通过，实验容器已清理；见[脱敏
-preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是 GPU PTQ/export
-证据。CPU preflight 不代表 serving/GPU 推理已验证；MSE 根因仍未确定。
+preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是完整模型 GPU PTQ/export
+证据。CPU preflight 不代表完整模型 serving/GPU 推理已验证；MSE 根因仍未确定。
+
+[R6 stage-only 预检脱敏记录](dgx-spark-matched-ptq-stage-preflight-20261022.json)仅证明输入
+哈希和 bundle 校验通过；worker 未安装或启动，服务未修改，deployment adapter 未执行 Docker
+（仅做只读 inspect），也没有 GPU 推理或 export 证据。
+
+[R6 GPU microprobe 脱敏记录](dgx-spark-matched-ptq-gpu-microprobe-20261022.json)显示 ModelOpt
+0.47.0 的 static-max 与 static-MSE 在合成 Linear64x32 上 activation amax 一致、fake weights
+不同且 scale 有限；这是微探针 evidence，不是 27B benchmark、完整 vision/MTP PTQ 或真实 serving，
+也不证明 MSE 重复输出已修复。维护器的有限启动等待、每端心跳、慢 STOP、失败时双端恢复
+尝试和 watchdog 竞态修复属于生命周期控制；无 healthcheck 时，process stable 不等于应用 ready，
+application readiness 仍为 unknown。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
