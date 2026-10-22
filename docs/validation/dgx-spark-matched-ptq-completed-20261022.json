@@ -1,0 +1,57 @@
+{
+  "schema": "matched-ptq-r6-completed-public-v1",
+  "status": "observation_passed",
+  "arms": {
+    "static-max": {
+      "elapsed_seconds": 1090.708255,
+      "returncode": 0,
+      "timed_out": false,
+      "export_sha256": "c1c3cdbaca1e808dc4ff8c95d52618045171bfafd4bd567e57c1b385728436b7"
+    },
+    "static-MSE": {
+      "elapsed_seconds": 1555.15681,
+      "returncode": 0,
+      "timed_out": false,
+      "export_sha256": "670348d3e08c347a92f980911f45ccf3ddcb36a5778b45787a4fa94b0abf7f0e"
+    }
+  },
+  "comparison": {
+    "ptq_comparable": true,
+    "activation_confounder": false,
+    "all_ptq_checks_passed": true,
+    "scope_counts": {
+      "core": 401,
+      "vision": 110,
+      "mtp": 8,
+      "activation": 574
+    },
+    "activation_hashes_equal": true,
+    "calibration_batches_equal": 256,
+    "weight_amax_different": 519,
+    "global_amax_equal": true,
+    "activation_count_equal": 574,
+    "model_calibration_source_runtime_equal": true,
+    "quant_cfg_equal": true,
+    "calibration_order_equal": true,
+    "export_index_header_keys_validated": true
+  },
+  "restoration": {
+    "coordinator_result": "observation_passed",
+    "restoration": "process_stable",
+    "application_readiness": "unknown",
+    "service_mutation_attempted": true,
+    "original_services_restored": true
+  },
+  "probe": {
+    "robo_arithmetic_probe": "passed",
+    "answer": 2,
+    "finish_reason": "stop",
+    "elapsed_seconds": 0.22,
+    "scope": "fixed arithmetic functionality only; not a GLM health guarantee"
+  },
+  "serving_ready": false,
+  "replay_ready": false,
+  "cross_arm_token_comparison": "not_performed",
+  "mse_root_cause_established": false,
+  "vision_mtp_scope": "quantized export validation only; serving not validated"
+}
