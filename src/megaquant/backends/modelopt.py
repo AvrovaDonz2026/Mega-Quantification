@@ -1243,6 +1243,14 @@ class ModelOptBackend:
         export_memory_kind = _prepare_export_memory(model)
         import torch
 
+        # Capture the opted-in auxiliary quantizers while ModelOpt still owns
+        # the live module graph.  Export can disable or replace these modules;
+        # the post-export guard must validate the precision that was actually
+        # requested by this model, rather than infer it from source names.
+        from megaquant.auxiliary_precision import snapshot_auxiliary_quantizers
+
+        auxiliary_expectations = snapshot_auxiliary_quantizers(model, recipe)
+
         export_oom_message = None
         try:
             with _qwen35_export_l2norm(qwen35), torch.inference_mode():
@@ -1290,6 +1298,13 @@ class ModelOptBackend:
         mtp_note = _restore_mtp_export(output_dir, model, recipe)
         canonical = canonicalize_scheme(str(_attr(recipe, "scheme", "") or ""))
         sglang_layers = _rewrite_sglang_export(output_dir, canonical)
+        auxiliary_precision = None
+        if auxiliary_expectations:
+            from megaquant.auxiliary_precision import validate_auxiliary_precision
+
+            auxiliary_precision = validate_auxiliary_precision(
+                output_dir, auxiliary_expectations, sglang_layers
+            )
         meta = {
             "backend": self.name,
             "qformat": _SCHEME_QFORMAT.get(canonical, canonical),
@@ -1305,6 +1320,8 @@ class ModelOptBackend:
             "scheme": canonical or _attr(recipe, "scheme", None),
             "model_source": _attr(_attr(recipe, "model", None), "source", None),
         }
+        if auxiliary_precision is not None:
+            meta["auxiliary_precision"] = auxiliary_precision
         if sglang_layers is not None:
             # Uniform W4A4 remains NVFP4 even when auxiliary visual/MTP
             # entries are added to opt SGLang into those modules.  Mixed

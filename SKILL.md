@@ -25,6 +25,14 @@ Agent entry. Humans start at [README.md](README.md) and the
 - Do not implement or document ModelOpt `W4A8_NVFP4_FP8` (NVFP4 block 32) as a supported scheme. SGLang rejects that tag.
 - Re-running PTQ recomputes activation scales. It will not byte-match an existing export. Fetch a published content-hash when the bytes must match.
 - `quantize_mtp: false` means keep MTP in BF16 inside `mtp.safetensors`. It does not mean delete the tensors.
+- When a recipe opts into quantized vision or MTP, the ModelOpt export takes a
+  snapshot of the actually enabled auxiliary `weight_quantizer`s before export,
+  then validates only safetensors headers after export. The guard checks the
+  requested precision, packed shape, scale tensors and matching
+  `quantized_layers` entries. An auxiliary tensor exported unexpectedly as
+  BF16 raises `BackendError`; the export is not reported successful and no new
+  `backend_meta.json` is written. This is an early export-contract check, not a
+  repair of MSE duplication or packing root causes and not new GPU validation.
 - License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
 - The pipeline has been industrially validated. The concrete runs are the 5090 production PTQ and the finished GPQA journals in `docs/qwen3.8-27b.md`. Do not invent customers, certifications, or extra scores.
 

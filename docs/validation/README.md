@@ -78,6 +78,8 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 2026-10-22 的启动 probe 记录了一个必须单独标注的导出证据勘误：`static-MSE` 在 142.042 秒、生成前因 `AssertionError` 退出（`param_data=[1152,576]`、`loaded=[1152,1152]`）。header 审计显示 max 为 519 U8 + 519 F8，110 个 vision 与 8 个 MTP 均 packed；MSE 为 401 U8 + 401 F8，而 110 个 vision 与 8 个 MTP 为 BF16。MSE 配置声明 `uniformNVFP4` 且没有 aux `quantized_layers`，因此 loader 预期 packed vision；`visionqkv` 也呈现 MSE `3456x1152 BF16` 对 max `3456x576 U8`，未发现重复 key。此前 matched PTQ 的 comparable 结论仅适用于导出前 quantizer/calibration 证据，不能声称两份导出的 aux scope 相同。[脱敏启动 probe JSON](dgx-spark-mse-startup-probe-20261022.json)。该 probe 无题目请求、token 或质量结果；GLM 成对恢复、120 秒稳定检查及固定 arithmetic probe（answer 2、`stop`）通过，MSE 重复根因仍未确定。历史 dated 报告保留原表述，不据此补写质量结论。
 
+同日的 [辅助精度 guard 现有导出检查](dgx-spark-auxiliary-precision-guard-20261022.json)只读了 safetensors headers：static-max 的 110 个 vision 与 8 个 MTP 权重全部为 U8 packed，118/118 通过；static-MSE 的同一范围全部为 BF16，118/118 被 guard 拒绝。该记录把导出后的辅助范围丢失固定为可重复的 contract failure，不代表 MSE 重复输出的完整根因或新的 GPU 量化验证。
+
 本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
