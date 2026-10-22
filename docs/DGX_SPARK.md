@@ -156,6 +156,26 @@ Exports appear in `OUTPUTS_DIR/Qwen3.8-27B-NVFP4-W4A8-spark` and
 all visual and MTP quantizers were exercised or that every exported tensor and
 scale is valid; inspect those records and audit the checkpoint before serving.
 
+The ModelOpt backend also applies an auxiliary precision guard when a recipe
+opts into quantized vision or MTP. Before export it snapshots the enabled
+visual/MTP `weight_quantizer`s from the live model. After export it reads only
+safetensors headers and checks the requested precision, packed weight shape,
+weight/input scales and matching `quantized_layers` metadata. An unexpected
+BF16 auxiliary weight raises `BackendError`; the run is not marked successful
+and no new `backend_meta.json` is written. This guard makes an export-contract
+mismatch fail early. It does not repair the MSE duplication or packing root
+causes and does not count as new GPU validation.
+
+### Guard maintenance runbook
+
+Keep the guard's snapshot and header checks aligned with the exporter contract
+when ModelOpt or SGLang metadata changes. Reproduce a change in a fresh dated
+output directory, retain the existing logs and audit JSON, and record the
+tested revision and image digest. Do not rewrite historical exports, journals
+or validation evidence to make a new guard pass. A passing header check is
+evidence of the serialized export contract only; it is not a complete PTQ,
+serving, quality or MSE/packing reproduction.
+
 Run the stdlib-only strict audit for each export, supplying the full Git SHA
 used to build the PTQ image. The audit requires all source language, vision and
 MTP tensors, quantized auxiliary projections with calibration coverage, valid

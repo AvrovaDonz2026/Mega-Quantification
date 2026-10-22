@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-22",
+  "scope": "header_only_existing_export_check",
+  "model": "Qwen3.8-27B",
+  "source": "static_max_serialized_auxiliary_scope",
+  "tensor_payloads_read": false,
+  "gpu_used": false,
+  "expected_auxiliary_modules": {
+    "vision": 110,
+    "mtp": 8,
+    "total": 118
+  },
+  "arms": {
+    "static_max": {
+      "guard": "passed",
+      "auxiliary_weight_dtypes": {
+        "U8": 118
+      },
+      "checked": 118,
+      "nvfp4": 118,
+      "fp8": 0,
+      "input_scaled": 118,
+      "quantized_layer_map_present": true
+    },
+    "static_mse": {
+      "guard": "rejected",
+      "auxiliary_weight_dtypes": {
+        "BF16": 118
+      },
+      "rejection": "unquantized_auxiliary_weight",
+      "quantized_layer_map_present": false
+    }
+  },
+  "interpretation": "The existing static-MSE export fails the new auxiliary export contract because all 118 expected visual/MTP weights are BF16. This is evidence of serialized-scope loss after calibration; it does not establish the complete cause of repetitive generation or repair MSE packing.",
+  "historical_artifacts_unchanged": true
+}
