@@ -13,6 +13,13 @@ AST structure, selected-token margins/probabilities, whitelisted scalar
 metrics, source hashes, and environment identity. Native responses are kept in
 memory only.
 
+When outputs diverge, `comparison.first_divergence` additionally records the
+first divergence index, a bounded window of up to four token IDs on each side,
+and numeric top-k token-ID/logprob summaries (up to five entries per side).
+Token text, prompts, and complete token sequences are never added to this
+diagnostic field. A sequence-length mismatch points at the first missing token
+and uses `null` for the missing side's token and top-k summary.
+
 The client verifies the fixture file SHA before importing its cases. For
 `python_code`, it requests up to 768 generated tokens so the fixture can reach
 its natural completion. The parity gate requires all four responses (two

@@ -44,6 +44,10 @@ SOURCE_KEY = "io.megaquant.parity-v7.source"
 DEFAULT_IMAGE = "sha256:e98ca3c6444896d8800dc63cad3d4d22ee842af32fb16badd6cc04ee9090babf"
 SCHEMES = ("w4a4", "w4a8")
 CASES = ("python_code", "arithmetic", "red_square", "blue_square", "ocr_3729")
+# Keep divergence evidence useful for debugging while preventing prompts or long
+# generations from being copied into the persisted report.
+DIVERGENCE_WINDOW_RADIUS = 4
+TOP_LOGPROB_LIMIT = 5
 RUNTIME_MODULES = {
     "sglang.kernels.ops.attention.fla.op": "python/sglang/kernels/ops/attention/fla/op.py",
     "sglang.kernels.ops.attention.fla.fused_gdn_gating": (
@@ -578,12 +582,47 @@ def margin(row: Any) -> float | None:
         return None
 
 
+def token_window(
+    ids: list[int], index: int, radius: int = DIVERGENCE_WINDOW_RADIUS
+) -> dict[str, Any]:
+    """Return only a bounded token-ID window around ``index``."""
+    start = max(0, index - radius)
+    end = min(len(ids), index + radius + 1)
+    return {
+        "start_index": start,
+        "end_index": end,
+        "before_ids": ids[start:min(index, end)],
+        "at_id": ids[index] if 0 <= index < len(ids) else None,
+        "after_ids": ids[min(index + 1, end):end],
+    }
+
+
+def topk_summary(row: Any, limit: int = TOP_LOGPROB_LIMIT) -> dict[str, Any]:
+    """Keep numeric top-k evidence and discard token text or arbitrary fields."""
+    entries: list[dict[str, Any]] = []
+    if isinstance(row, list):
+        for item in row[:limit]:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            logprob, token_id = item[0], item[1]
+            if (
+                finite(logprob)
+                and isinstance(token_id, int)
+                and not isinstance(token_id, bool)
+                and token_id >= 0
+            ):
+                entries.append({"token_id": token_id, "logprob": float(logprob)})
+    return {"k": len(entries), "entries": entries}
+
+
 def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     left, right = a["output_ids"], b["output_ids"]
     prefix = 0
     while prefix < min(len(left), len(right)) and left[prefix] == right[prefix]:
         prefix += 1
-    mismatch = prefix if prefix < len(left) and prefix < len(right) else None
+    # A sequence ending at the shared prefix is also a divergence: the first
+    # missing token is the useful location for diagnosing early termination.
+    mismatch = prefix if prefix < max(len(left), len(right)) else None
     result = {
         "baseline_output_len": len(left),
         "mtp_output_len": len(right),
@@ -604,20 +643,28 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "scalar_whitelist": {"baseline": a["scalars"], "mtp": b["scalars"]},
     }
     if mismatch is not None:
-        selected_a = a["token_logprobs"][mismatch][0] if a["token_logprobs"][mismatch] else None
-        selected_b = b["token_logprobs"][mismatch][0] if b["token_logprobs"][mismatch] else None
+        row_a = a["token_logprobs"][mismatch] if mismatch < len(a["token_logprobs"]) else []
+        row_b = b["token_logprobs"][mismatch] if mismatch < len(b["token_logprobs"]) else []
+        top_a = a["top_logprobs"][mismatch] if mismatch < len(a["top_logprobs"]) else []
+        top_b = b["top_logprobs"][mismatch] if mismatch < len(b["top_logprobs"]) else []
+        selected_a = row_a[0] if row_a else None
+        selected_b = row_b[0] if row_b else None
         result["first_divergence"] = {
             "baseline": {
-                "token_fingerprint": digest(left[mismatch]),
-                "top5_margin": margin(a["top_logprobs"][mismatch]),
+                "token_window": token_window(left, mismatch),
+                "token_fingerprint": digest(left[mismatch]) if mismatch < len(left) else None,
+                "top5_margin": margin(top_a),
                 "selected_logprob": selected_a if finite(selected_a) else None,
                 "selected_probability": math.exp(selected_a) if finite(selected_a) else None,
+                "top_k_logprobs": topk_summary(top_a),
             },
             "mtp": {
-                "token_fingerprint": digest(right[mismatch]),
-                "top5_margin": margin(b["top_logprobs"][mismatch]),
+                "token_window": token_window(right, mismatch),
+                "token_fingerprint": digest(right[mismatch]) if mismatch < len(right) else None,
+                "top5_margin": margin(top_b),
                 "selected_logprob": selected_b if finite(selected_b) else None,
                 "selected_probability": math.exp(selected_b) if finite(selected_b) else None,
+                "top_k_logprobs": topk_summary(top_b),
             },
         }
     return result
