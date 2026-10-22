@@ -640,6 +640,22 @@ def build_phase_argv(
         raise SupervisorError("base command must not contain phase or budget")
     if trajectory != "natural":
         raise SupervisorError("supervisor only accepts natural trajectory")
+    if mlp_projections is not None:
+        if (
+            not mlp_projections
+            or any(projection not in MLP_PROJECTION_ORDER for projection in mlp_projections)
+            or len(set(mlp_projections)) != len(mlp_projections)
+        ):
+            raise SupervisorError("invalid MLP projection selectors")
+    if (layer_start is None) != (layer_end is None):
+        raise SupervisorError("MLP layer-start and layer-end must be supplied together")
+    if layer_start is not None and (
+        type(layer_start) is not int
+        or type(layer_end) is not int
+        or layer_start < 0
+        or layer_end <= layer_start
+    ):
+        raise SupervisorError("invalid MLP layer interval")
     try:
         root_index = argv.index("--root")
     except ValueError as exc:
@@ -764,6 +780,16 @@ def valid_report(path: Path, expected: dict[str, Any] | None = None) -> bool:
                 or arm["model_proof"].get("passed") is not True
                 or arm["termination_metadata"].get("any_present") is not True
             ):
+                return False
+            expected_selection = expected.get("mlp_selection")
+            subset_selected = isinstance(expected_selection, dict) and (
+                expected_selection.get("layer_start") is not None
+                or expected_selection.get("layer_end") is not None
+                or expected_selection.get("mlp_projections")
+                not in (None, list(MLP_PROJECTION_ORDER), MLP_PROJECTION_ORDER)
+            )
+            proof_selection = arm["model_proof"].get("selection")
+            if subset_selected and arm_name == "mlp" and proof_selection != expected_selection:
                 return False
             runtime_hash = arm.get("runtime_source_sha256")
             if (
