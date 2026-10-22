@@ -1,7 +1,37 @@
 {
   "schema": "aux-dispatch-probe-public-v1",
   "date": "2026-10-22",
-  "status": "paired_incomplete",
+  "status": "paired_incomplete_small_cuda_contract_passed",
+  "small_cuda_regression": {
+    "status": "passed",
+    "source_revision": "acdc7238e2b328c9435f3d6c6731a695e970e216",
+    "modelopt": "0.47.0",
+    "fixture": "fresh small Llama with two resident auxiliary modules plus decoder modules",
+    "accelerate_offload": true,
+    "image_id": "sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be",
+    "full_27b_ptq_image_id": "sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1",
+    "elapsed_seconds": 14.178,
+    "vendor_auxiliary": {
+      "dtype": "BF16",
+      "shape": [32, 32],
+      "modules": 2,
+      "packed": false
+    },
+    "patched_auxiliary": {
+      "weight_dtype": "U8",
+      "weight_shape": [32, 16],
+      "block_scale_dtype": "F8_E4M3",
+      "block_scale_shape": [32, 2],
+      "global_scale_dtype": "F32",
+      "modules": 2,
+      "packed": true
+    },
+    "raw_tensor_output": false,
+    "cleanup": "complete",
+    "image_role": "distinct small-test image",
+    "numeric_parity": "not_assessed_fresh_unseeded_fixture",
+    "scope": "CUDA packing-contract regression only"
+  },
   "protocol": {
     "calibration_batches": 256,
     "max_seq_length": 1024,
@@ -71,9 +101,11 @@
   "interpretation": {
     "mse_aux_dispatch_missing": true,
     "candidate": "ModelOpt streaming resident non-decoder path",
-    "patched_gpu_validated": false,
+    "patched_gpu_validated": "small_synthetic_contract_only",
+    "full_27b_patched_gpu_validated": false,
     "repetition_fixed": false,
     "new_gpqa_or_serving_or_tp2": false,
+    "vision_mtp_functionality_validated": false,
     "no_new_matched_fingerprint": true
   }
 }

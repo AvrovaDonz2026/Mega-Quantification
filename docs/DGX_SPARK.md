@@ -176,13 +176,22 @@ dispatched once through the vendor registry. Vendor materialization and
 writeback remain unchanged, and the auxiliary precision guard above still
 checks the serialized headers and `quantized_layers` contract.
 
-Focused local CPU tests passed for this path. The completed unpatched full-256
-diagnostic is separate evidence: max ended with 118 auxiliary U8 tensors, while
-MSE recorded zero auxiliary dispatch calls and 118 BF16 auxiliary tensors, so
-the guard rejected that export. Both GLM services were restored and the API
-readiness smoke passed afterward. This compatibility path has not yet been
-GPU-tested and does not claim to fix repetition or the MSE root cause. Preserve
-the diagnostic and its limits in
+Focused local CPU tests passed for this path. A separate small CUDA regression
+also passed with ModelOpt 0.47.0 on a fresh Llama fixture containing two
+resident auxiliary modules plus decoder modules under Accelerate offload: the vendor
+export left both auxiliary weights BF16 `[32,32]`, while the compatibility path
+produced U8 `[32,16]`, block FP8 `[32,2]` and scalar FP32 scales for both. The
+fresh models were not fixed seeded weights, so this validates the packing
+contract only and provides no numeric parity result. The probe ran in 14.178 s
+on a distinct small-test image; raw tensors were removed and cleanup completed.
+
+The completed unpatched full-256 diagnostic remains separate evidence: max
+ended with 118 auxiliary U8 tensors, while MSE recorded zero auxiliary dispatch
+calls and 118 BF16 auxiliary tensors, so the guard rejected that export. Both
+GLM services were restored and the API readiness smoke passed afterward. No
+full-27B patched export, vision/MTP serving result, GPQA result, or repetition
+repair is established by the small regression. Preserve the diagnostic and its
+limits in
 [`validation/dgx-spark-aux-dispatch-20261022.md`](validation/dgx-spark-aux-dispatch-20261022.md).
 
 ### Guard maintenance runbook

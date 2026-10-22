@@ -1,5 +1,24 @@
 # Auxiliary Dispatch Probe
 
+## Small CUDA regression
+
+After the original paired probe, the exact-source-gated compatibility path was
+run on a small fresh Llama fixture with ModelOpt 0.47.0. Two auxiliary modules
+remained resident on CUDA while the decoder used Accelerate CPU offload. The vendor export retained
+both auxiliary weights as BF16 `[32,32]`; the patched export packed both as U8
+`[32,16]`, with block FP8 `[32,2]` scales and scalar FP32 scales. The run used
+source revision `acdc723`, completed in 14.178 seconds, and cleaned up its
+container. The small-test image was
+`sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be`,
+distinct from the full-27B PTQ image
+`sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1`.
+Raw tensor values were removed from the retained evidence.
+
+This is a CUDA packing-contract regression only. The fresh fixture did not use
+fixed seeded weights, so it does not establish numeric parity, full-27B export
+success, vision/MTP functionality, serving behavior, GPQA quality, or a
+repetition repair. The test image was distinct from the full-27B PTQ image.
+
 The fresh paired probe used 256 calibration batches at max sequence length 1024,
 batch size 1, with vision and MTP enabled under the same recipe and ModelOpt
 0.47.0. It completed the `static-max` arm and failed the `static-MSE` arm before
@@ -26,5 +45,5 @@ a comparable pair was available.
   HTTP 200, and the fixed arithmetic smoke returned `is_two=true` with `stop`.
   No new matched fingerprint was produced.
 
-No patched GPU run, repetition fix, GPQA result, serving result, or TP2 result is
-claimed by this report.
+No completed patched full-27B GPU export, repetition fix, GPQA result, serving
+result, or TP2 result is claimed by this report.
