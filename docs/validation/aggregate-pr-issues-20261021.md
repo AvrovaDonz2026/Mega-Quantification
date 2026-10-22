@@ -29,9 +29,11 @@
   当前 R6 两组 27B 整模 PTQ 已完成：256 个校准 batch 顺序一致，scope 两臂一致（core 401、vision 110、MTP 8、activation 574），
   519 个权重 amax 两臂不同而 global amax 一致，574 个 activation 哈希一致，导出索引 header keys 校验通过；
   `ptq_comparable=true` 且 activation confounder=false。[脱敏完成记录](dgx-spark-matched-ptq-completed-20261022.json)
-  记录两臂均 return code 0、未超时，GLM 已恢复，固定 arithmetic probe 通过。serving、replay 和跨臂 token 比较未执行，
+  记录两臂均 return code 0、未超时，GLM 已恢复，固定 arithmetic probe 通过。新导出 serving、replay 和跨臂 token 比较尚未完成，
   `serving_ready=false`、`replay_ready=false`，MSE 根因未定。旧 [stage 预检](dgx-spark-matched-ptq-stage-preflight-20261022.json)
   与 [GPU microprobe](dgx-spark-matched-ptq-gpu-microprobe-20261022.json) 仅作历史辅助记录；固定 probe 不代表 GLM 整体健康。
+  Fresh serving 尝试的首组 `static-max` 在 6.018 秒因只读文件系统启动失败，题目请求与 MSE 均未开始；两轮均成对恢复并通过 120 秒进程稳定检查。
+  容器可写路径修复及相关测试已通过，新 stage 两端预检通过，真实重跑待进行。该故障不改变已完成 PTQ 结果，也不支持 MSE 根因或修复结论。
 - 视觉/MTP 的新导出已完成并通过 scope/索引审计；完整模型 serving、256k MTP 质量、TP2
   和广泛视觉质量仍待验证。
 

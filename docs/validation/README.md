@@ -68,8 +68,10 @@ bootstrap plan、受约束的本地生命周期监督、配对 evidence 校验�
 preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是完整模型 GPU PTQ/export
 证据。CPU preflight 不代表完整模型 serving/GPU 推理已验证；MSE 根因仍未确定。
 
-当前 R6 两组 27B 整模 PTQ 已完成并通过配对可比性检查：256 个校准 batch 顺序一致，519 个权重 amax 两臂不同、global amax 一致，574 个 activation 哈希一致；固定 arithmetic probe 通过。serving、replay 与跨臂 token 比较仍未执行，MSE 根因未定。
+当前 R6 两组 27B 整模 PTQ 已完成并通过配对可比性检查：256 个校准 batch 顺序一致，519 个权重 amax 两臂不同、global amax 一致，574 个 activation 哈希一致；固定 arithmetic probe 通过。新导出 serving、replay 与跨臂 token 比较尚未完成，MSE 根因未定。
 详见[脱敏完成记录](dgx-spark-matched-ptq-completed-20261022.json)。旧 [stage 预检](dgx-spark-matched-ptq-stage-preflight-20261022.json) 和 [GPU microprobe](dgx-spark-matched-ptq-gpu-microprobe-20261022.json) 仅作辅助记录；固定 probe 不代表 GLM 整体健康。
+
+Fresh serving 首组 `static-max` 在 6.018 秒因只读文件系统启动失败，题目请求与 MSE 未开始；两轮均成对恢复并通过 120 秒进程稳定检查。可写路径修复和测试已通过，新 stage 两端预检通过，真实重跑待进行；MSE 根因仍未定。
 
 视觉/MTP 新导出已完成并通过量化导出审计；完整模型 serving、256k MTP 质量、TP2 和广泛视觉质量仍待验证。无 healthcheck 时，process stable 不等于应用 ready，application readiness 仍为 unknown。
 

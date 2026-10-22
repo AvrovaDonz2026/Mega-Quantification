@@ -19,11 +19,12 @@ configuration, and quantization scope. Replay adds same-prompt native response
 and trajectory checks. Neither gate establishes production serving readiness;
 the comparison reports `serving_ready: false`.
 
-The prior MSE discrepancy has no established algorithmic root cause. Existing
-exports had mismatched auxiliary vision/MTP quantization coverage, which is a
-known comparison confounder. A controlled matched export is needed to attribute
-quality differences to the quantization algorithm. This directory contains no
-GPU completion evidence and makes no claim that the matched run completed.
+The prior MSE discrepancy has no established algorithmic root cause. The
+matched 27B export has now completed with paired scope and activation checks;
+see [the redacted completion record](../../../docs/validation/dgx-spark-matched-ptq-completed-20261022.json).
+This offline harness remains a planning, lifecycle, evidence, and comparison
+tool. Fresh serving replay is not complete, and the export result does not
+establish an algorithmic root cause or a fix for repetition.
 
 Run the offline suite from the repository root with:
 
