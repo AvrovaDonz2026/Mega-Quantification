@@ -950,11 +950,17 @@ def _has_accelerate_offload(model: Any) -> bool:
     named_modules = getattr(model, "named_modules", None)
     if callable(named_modules):
         for _name, module in named_modules():
-            hook = getattr(module, "_hf_hook", None)
-            if getattr(hook, "offload", False):
-                return True
-            if any(getattr(item, "offload", False) for item in getattr(hook, "hooks", ())):
-                return True
+            hooks = [getattr(module, "_hf_hook", None)]
+            seen: set[int] = set()
+            while hooks:
+                hook = hooks.pop()
+                if hook is None or id(hook) in seen:
+                    continue
+                seen.add(id(hook))
+                if getattr(hook, "offload", False):
+                    return True
+                # Accelerate SequentialHook can contain another SequentialHook.
+                hooks.extend(getattr(hook, "hooks", ()) or ())
     return False
 
 

@@ -37,6 +37,19 @@ def _recipe(output_dir: Path) -> dict[str, Any]:
     return {"scheme": "nvfp4_w4a4", "export": {"output_dir": str(output_dir)}}
 
 
+@pytest.mark.parametrize("offload", [True, False])
+def test_nested_accelerate_hooks_detect_offload_without_meta_parameters(offload: bool) -> None:
+    leaf = SimpleNamespace(offload=offload, weights_map={"weight": object()})
+    hook = SimpleNamespace(hooks=(SimpleNamespace(hooks=(leaf,)),))
+    # Protect traversal against repeated hooks or a malformed cyclic wrapper.
+    hook.hooks += (hook,)
+    model = SimpleNamespace(
+        named_parameters=lambda: iter(()),
+        named_modules=lambda: [("layer", SimpleNamespace(_hf_hook=hook))],
+    )
+    assert modelopt._has_accelerate_offload(model) is offload
+
+
 def test_streaming_compat_is_scoped_to_each_export_attempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export_stub: Any
 ) -> None:
