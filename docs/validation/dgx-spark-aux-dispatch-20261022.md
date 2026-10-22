@@ -71,3 +71,20 @@ a comparable pair was available.
 
 No completed patched full-27B GPU export, repetition fix, GPQA result, serving
 result, or TP2 result is claimed by this report.
+
+## Patched full-27B pair update
+
+The subsequent patched ModelOpt 0.47 pair completed both export arms with return
+code 0, and comparison completed with `ptq_comparable=true`. Each export had
+`matched_protocol=true` and 118/118 eligible packed auxiliary tensors (U8): 110
+vision and 8 MTP. Each export index validated 2,756 keys across two shards and
+16 files. Arm durations were 1,102.736 seconds for `static-max` and 1,526.581
+seconds for `static-MSE`. The matched protocol used ModelOpt 0.47.0, seed 42,
+256 ordered calibration batches, and equal source/model/calibration fingerprints.
+The complete quantizer scope was 401 core, 110 vision and 8 MTP weight modules;
+the 118 auxiliary count excludes the 401 core modules.
+The final coordinator process was stable; API readiness was still pending.
+Export reload, serving, replay and trajectory metrics were not validated. This
+is paired export evidence only. No serving or vision/MTP functionality, replay
+or repetition result, GPQA score, TP2 result, or release/fix claim is established
+here.

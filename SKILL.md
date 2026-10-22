@@ -45,8 +45,10 @@ Agent entry. Humans start at [README.md](README.md) and the
   FP8 `[32,2]` and scalar FP32 scales. The earlier unseeded private regression
   remains historical evidence; neither is numeric parity. The unpatched full-256
   diagnostic still recorded max with 118 auxiliary U8 tensors, while MSE had
-  zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. Full 27B
-  GPU export, serving and repetition repair remain unvalidated. See
+  zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. A later
+  patched full-27B pair completed both arms and comparison with 118/118 eligible
+  auxiliary weights packed as U8 (110 vision plus 8 MTP); serving, vision/MTP
+  functionality and repetition repair remain pending. See
   `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
   contract check with `scripts/check_modelopt_streaming_export.py`; its default
   mode plans without downloads and `--execute` requires the pinned ModelOpt

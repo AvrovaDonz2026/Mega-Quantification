@@ -59,6 +59,34 @@
     "numeric_parity": "not_assessed_fresh_unseeded_fixture",
     "scope": "CUDA packing-contract regression only"
   },
+  "patched_full_27b_pair": {
+    "schema": "matched-ptq-r6-1022-supervisor-v1",
+    "status": "completed_export_pair",
+    "modelopt": "0.47.0",
+    "modelopt_sha256_prefix": "d793b7",
+    "source_sha256_prefix": "40128cd",
+    "model_sha256_prefix": "b096b397",
+    "calibration_sha256_prefix": "e2a48a43",
+    "ordered_calibration_sha256_prefix": "b153757f",
+    "recipe_sha256_prefix": "288127",
+    "seed": 42,
+    "calibration_batches": 256,
+    "arms": {
+      "static-max": {"returncode": 0, "elapsed_seconds": 1102.736, "export_index_valid": true, "export_index_keys": 2756, "shards": 2, "files": 16, "quantizer_scope": {"core": 401, "vision": 110, "mtp": 8}, "eligible_auxiliary_packed_u8": 118, "vision_packed_u8": 110, "mtp_packed_u8": 8, "expected_non_linear_vision_bf16_exclusions": true},
+      "static-MSE": {"returncode": 0, "elapsed_seconds": 1526.581, "export_index_valid": true, "export_index_keys": 2756, "shards": 2, "files": 16, "quantizer_scope": {"core": 401, "vision": 110, "mtp": 8}, "eligible_auxiliary_packed_u8": 118, "vision_packed_u8": 110, "mtp_packed_u8": 8, "expected_non_linear_vision_bf16_exclusions": true}
+    },
+    "comparison": {"returncode": 0, "ptq_comparable": true, "matched_protocol": true},
+    "restoration": {"coordinator_process_stable": true, "api_readiness": "pending"},
+    "scope": "paired export and auxiliary header scope only",
+    "export_reload_validated": false,
+    "trajectory_metrics_present": false,
+    "native_text_response_protocol_checks": false,
+    "serving_validated": false,
+    "vision_mtp_functionality_validated": false,
+    "replay_or_repetition_validated": false,
+    "gpqa_or_tp2_validated": false,
+    "release_or_fix_claim": false
+  },
   "protocol": {
     "calibration_batches": 256,
     "max_seq_length": 1024,
@@ -129,7 +157,7 @@
     "mse_aux_dispatch_missing": true,
     "candidate": "ModelOpt streaming resident non-decoder path",
     "patched_gpu_validated": "small_synthetic_contract_only",
-    "full_27b_patched_gpu_validated": false,
+    "full_27b_patched_gpu_validated": "paired_export_only",
     "repetition_fixed": false,
     "new_gpqa_or_serving_or_tp2": false,
     "vision_mtp_functionality_validated": false,

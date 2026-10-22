@@ -196,6 +196,23 @@ repair is established by the small regression. Preserve the diagnostic and its
 limits in
 [`validation/dgx-spark-aux-dispatch-20261022.md`](validation/dgx-spark-aux-dispatch-20261022.md).
 
+### Patched full-27B export pair
+
+A later patched ModelOpt 0.47 full-27B pair completed both `static-max` and
+`static-MSE` exports with return code 0. The comparison also completed with
+`ptq_comparable=true` and `matched_protocol=true`; each arm packed 118/118
+eligible auxiliary weights as U8 (110 vision and 8 MTP). Each export index
+validated 2,756 keys across two shards and 16 files. Recorded arm durations were
+1,102.736 s (max) and 1,526.581 s (MSE). The matched run used ModelOpt 0.47.0,
+seed 42, 256 ordered calibration batches, and equal source/model/calibration
+fingerprints. The complete quantizer scope was 401 core, 110 vision and 8 MTP
+weight modules; the 118 auxiliary count excludes the 401 core modules.
+The final coordinator process was stable, but the API check was still pending
+when this note was written. Export reload, serving, replay and trajectory
+metrics were not validated. This establishes paired export and header scope
+only. Vision/MTP serving functionality, replay/repetition behavior, GPQA and
+release or fix claims remain pending.
+
 To reproduce the small contract check, use an image that already contains the
 pinned Spark CUDA stack (`nvidia-modelopt==0.47.0`, `accelerate==1.14.0`, the
 image's CUDA PyTorch and Transformers 5.12.1). The checker never downloads a
