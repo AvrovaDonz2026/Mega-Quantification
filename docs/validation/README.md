@@ -60,6 +60,14 @@ retry 以 `length`
 覆盖范围不匹配是总体比较中的已知 confounder；不能把 vision/MTP 覆盖差异直接归因于该纯文本
 循环。报告中的 scale 审计、GPU serving 诊断和整模因果判断不可混为一谈。
 
+[Matched PTQ R6 离线工具](../../scripts/diagnostics/matched-ptq-r6/README.md)提供确定性
+bootstrap plan、受约束的本地生命周期监督、配对 evidence 校验与 replay 比较；离线套件
+162 项通过（此 wrapper 在全量 CPU 门禁中占 1 项，其隔离子进程测试不另计入全量）。
+私有部署 glue 未公开，公共工具不提供远程安装器或部署命令，也没有 GPU PTQ completion
+证据。固定 Spark 镜像上的最终公共 payload CPU smoke 通过，实验容器已清理；见[脱敏
+preflight JSON](dgx-spark-matched-ptq-preflight-20261022.json)。该记录不是 GPU PTQ/export
+证据。CPU preflight 不代表 serving/GPU 推理已验证；MSE 根因仍未确定。
+
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
 完整模型视觉/MTP、精度、性能与 TP2 仍待验证。
