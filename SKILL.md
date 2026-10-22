@@ -48,7 +48,10 @@ Agent entry. Humans start at [README.md](README.md) and the
   zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. A later
   patched full-27B pair completed both arms and comparison with 118/118 eligible
   auxiliary weights packed as U8 (110 vision plus 8 MTP); serving, vision/MTP
-  functionality and repetition repair remain pending. See
+  functionality and repetition repair remain pending. A later combined serving
+  attempt failed its RuntimeGate with checker details unavailable; both GLM
+  services were subsequently restored and the API arithmetic smoke returned 2
+  with native `stop`. See
   `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
   contract check with `scripts/check_modelopt_streaming_export.py`; its default
   mode plans without downloads and `--execute` requires the pinned ModelOpt

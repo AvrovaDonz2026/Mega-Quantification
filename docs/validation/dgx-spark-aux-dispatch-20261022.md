@@ -69,8 +69,9 @@ a comparable pair was available.
   HTTP 200, and the fixed arithmetic smoke returned `is_two=true` with `stop`.
   No new matched fingerprint was produced.
 
-No completed patched full-27B GPU export, repetition fix, GPQA result, serving
-result, or TP2 result is claimed by this report.
+The original probe above did not complete a patched full-27B export; later pair
+and restoration evidence is recorded separately below. No repetition fix, GPQA
+result, serving pass, or TP2 result is claimed by this report.
 
 ## Patched full-27B pair update
 
@@ -83,8 +84,13 @@ seconds for `static-MSE`. The matched protocol used ModelOpt 0.47.0, seed 42,
 256 ordered calibration batches, and equal source/model/calibration fingerprints.
 The complete quantizer scope was 401 core, 110 vision and 8 MTP weight modules;
 the 118 auxiliary count excludes the 401 core modules.
-The final coordinator process was stable; API readiness was still pending.
-Export reload, serving, replay and trajectory metrics were not validated. This
-is paired export evidence only. No serving or vision/MTP functionality, replay
-or repetition result, GPQA score, TP2 result, or release/fix claim is established
-here.
+The final coordinator process was stable. A later API restoration check passed
+on both GLM services; the fixed arithmetic request returned `2` with native
+`stop`. A combined serving attempt (job `677944d59ef000cffc50c3be`) subsequently
+failed at `RuntimeGate` with checker return code 1. Lifecycle restoration was
+`process_stable`, but the harness lost the raw checker diagnostics, so the
+specific failed checks are unknown. This is not a serving pass. Export reload,
+vision/MTP functionality, replay and trajectory metrics remain unvalidated.
+This is paired export evidence only: no serving or vision/MTP functionality,
+replay or repetition result, GPQA score, TP2 result, or release/fix claim is
+established here.

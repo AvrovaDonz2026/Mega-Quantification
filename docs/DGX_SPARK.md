@@ -207,11 +207,15 @@ validated 2,756 keys across two shards and 16 files. Recorded arm durations were
 seed 42, 256 ordered calibration batches, and equal source/model/calibration
 fingerprints. The complete quantizer scope was 401 core, 110 vision and 8 MTP
 weight modules; the 118 auxiliary count excludes the 401 core modules.
-The final coordinator process was stable, but the API check was still pending
-when this note was written. Export reload, serving, replay and trajectory
-metrics were not validated. This establishes paired export and header scope
-only. Vision/MTP serving functionality, replay/repetition behavior, GPQA and
-release or fix claims remain pending.
+The final coordinator process was stable. A subsequent API restoration check
+passed on both services; its fixed arithmetic request returned `2` with native
+`stop`. A combined serving attempt then failed with `RuntimeGate` and checker
+return code 1. The lifecycle completed with stable process restoration, but the
+harness lost the raw checker diagnostics, so the failed checks are unknown and
+no serving pass is established. Export reload, vision/MTP functionality,
+replay and trajectory metrics remain unvalidated. This establishes paired
+export and header scope only. Repetition behavior, GPQA and release or fix
+claims remain pending.
 
 To reproduce the small contract check, use an image that already contains the
 pinned Spark CUDA stack (`nvidia-modelopt==0.47.0`, `accelerate==1.14.0`, the
