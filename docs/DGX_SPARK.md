@@ -166,6 +166,25 @@ and no new `backend_meta.json` is written. This guard makes an export-contract
 mismatch fail early. It does not repair the MSE duplication or packing root
 causes and does not count as new GPU validation.
 
+### ModelOpt 0.47 auxiliary streaming compatibility
+
+For an offloaded export with ModelOpt 0.47.0, the backend has a narrowly scoped
+compatibility path for resident auxiliary `QuantLinear` modules (vision and
+MTP). It is enabled only when the inspected vendor streaming exporter matches
+the recorded exact source; otherwise export fails closed. Eligible modules are
+dispatched once through the vendor registry. Vendor materialization and
+writeback remain unchanged, and the auxiliary precision guard above still
+checks the serialized headers and `quantized_layers` contract.
+
+Focused local CPU tests passed for this path. The completed unpatched full-256
+diagnostic is separate evidence: max ended with 118 auxiliary U8 tensors, while
+MSE recorded zero auxiliary dispatch calls and 118 BF16 auxiliary tensors, so
+the guard rejected that export. Both GLM services were restored and the API
+readiness smoke passed afterward. This compatibility path has not yet been
+GPU-tested and does not claim to fix repetition or the MSE root cause. Preserve
+the diagnostic and its limits in
+[`validation/dgx-spark-aux-dispatch-20261022.md`](validation/dgx-spark-aux-dispatch-20261022.md).
+
 ### Guard maintenance runbook
 
 Keep the guard's snapshot and header checks aligned with the exporter contract

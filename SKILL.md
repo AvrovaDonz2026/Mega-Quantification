@@ -33,6 +33,16 @@ Agent entry. Humans start at [README.md](README.md) and the
   BF16 raises `BackendError`; the export is not reported successful and no new
   `backend_meta.json` is written. This is an early export-contract check, not a
   repair of MSE duplication or packing root causes and not new GPU validation.
+- ModelOpt 0.47 offloaded streaming exports have a narrowly gated resident
+  `QuantLinear` auxiliary compatibility path in
+  `src/megaquant/modelopt_streaming.py`: it accepts one exact vendor source,
+  dispatches each eligible resident module once, and leaves vendor
+  materialization/writeback unchanged. The auxiliary precision guard remains
+  authoritative. Focused local CPU tests pass; the unpatched full-256
+  diagnostic recorded max with 118 auxiliary U8 tensors, while MSE had zero
+  auxiliary dispatch and 118 BF16 tensors rejected by the guard. See
+  `docs/validation/dgx-spark-aux-dispatch-20261022.md`; the patch has not been
+  GPU-tested and does not claim to fix repetition.
 - License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
 - The pipeline has been industrially validated. The concrete runs are the 5090 production PTQ and the finished GPQA journals in `docs/qwen3.8-27b.md`. Do not invent customers, certifications, or extra scores.
 

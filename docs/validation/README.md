@@ -80,6 +80,8 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 同日的 [辅助精度 guard 现有导出检查](dgx-spark-auxiliary-precision-guard-20261022.json)只读了 safetensors headers：static-max 的 110 个 vision 与 8 个 MTP 权重全部为 U8 packed，118/118 通过；static-MSE 的同一范围全部为 BF16，118/118 被 guard 拒绝。该记录把导出后的辅助范围丢失固定为可重复的 contract failure，不代表 MSE 重复输出的完整根因或新的 GPU 量化验证。
 
+[Auxiliary dispatch probe](dgx-spark-aux-dispatch-20261022.md)记录 fresh paired probe：static-max 完成辅助 dispatch；static-MSE 未调用辅助 dispatch，118 个辅助权重仍为 BF16，随后被精度 guard 拒绝。Pair comparison 因 arm incomplete 跳过。该证据支持 ModelOpt streaming resident non-decoder 路径的候选定位，不代表 patched GPU、重复修复、GPQA、serving 或 TP2 结果。
+
 本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP

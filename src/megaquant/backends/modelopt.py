@@ -1250,10 +1250,15 @@ class ModelOptBackend:
         from megaquant.auxiliary_precision import snapshot_auxiliary_quantizers
 
         auxiliary_expectations = snapshot_auxiliary_quantizers(model, recipe)
+        from megaquant.modelopt_streaming import streaming_export_compat
 
         export_oom_message = None
         try:
-            with _qwen35_export_l2norm(qwen35), torch.inference_mode():
+            with (
+                streaming_export_compat(offloaded=_has_accelerate_offload(model)),
+                _qwen35_export_l2norm(qwen35),
+                torch.inference_mode(),
+            ):
                 _call_export_hf(export_hf_checkpoint, model, output_dir)
         except Exception as exc:
             if not _is_cuda_oom(exc):
@@ -1284,7 +1289,11 @@ class ModelOptBackend:
                     "or lower the GPU budget in MEGAQUANT_MAX_MEMORY before loading "
                     f"the model. Original error: {export_oom_message}"
                 )
-            with _qwen35_export_l2norm(qwen35), torch.inference_mode():
+            with (
+                streaming_export_compat(offloaded=_has_accelerate_offload(model)),
+                _qwen35_export_l2norm(qwen35),
+                torch.inference_mode(),
+            ):
                 _call_export_hf(export_hf_checkpoint, model, output_dir)
 
         if tokenizer is not None:

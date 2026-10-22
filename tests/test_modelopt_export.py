@@ -6,7 +6,7 @@ import gc
 import json
 import sys
 import weakref
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -35,6 +35,41 @@ def export_stub(monkeypatch: pytest.MonkeyPatch):
 
 def _recipe(output_dir: Path) -> dict[str, Any]:
     return {"scheme": "nvfp4_w4a4", "export": {"output_dir": str(output_dir)}}
+
+
+def test_streaming_compat_is_scoped_to_each_export_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export_stub: Any
+) -> None:
+    import megaquant.modelopt_streaming as streaming
+
+    active = []
+    contexts = []
+    attempts = []
+
+    @contextmanager
+    def compat(*, offloaded: bool):
+        contexts.append(offloaded)
+        active.append(True)
+        try:
+            yield
+        finally:
+            active.pop()
+
+    def fake_export(_model: Any, *, export_dir: str) -> None:
+        assert active == [True]
+        attempts.append(export_dir)
+        if len(attempts) == 1:
+            raise RuntimeError("CUDA out of memory")
+
+    export_stub(fake_export)
+    monkeypatch.setattr(streaming, "streaming_export_compat", compat)
+    monkeypatch.setattr(modelopt, "_has_accelerate_offload", lambda _: True)
+    preparations = iter(("cuda", "partial-cpu"))
+    monkeypatch.setattr(modelopt, "_prepare_export_memory", lambda *a, **k: next(preparations))
+    assert modelopt.ModelOptBackend().export(object(), _recipe(tmp_path)) == tmp_path
+    assert contexts == [True, True]
+    assert len(attempts) == 2
+    assert not active
 
 
 @pytest.mark.parametrize("preparation", ["preserve-offload", "cuda", "cuda-unchanged", "cpu-only"])

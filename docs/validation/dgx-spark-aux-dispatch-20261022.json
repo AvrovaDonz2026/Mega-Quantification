@@ -1,0 +1,79 @@
+{
+  "schema": "aux-dispatch-probe-public-v1",
+  "date": "2026-10-22",
+  "status": "paired_incomplete",
+  "protocol": {
+    "calibration_batches": 256,
+    "max_seq_length": 1024,
+    "batch_size": 1,
+    "vision": true,
+    "mtp": true,
+    "same_recipe": true,
+    "modelopt": "0.47.0"
+  },
+  "arms": {
+    "static-max": {
+      "elapsed_seconds": 1084.633522,
+      "returncode": 0,
+      "status": "completed",
+      "export_sha256": "770aed36de2eb5c445b473da6f7449c7f34f9a8a428b924cd424363fa6a14d6d",
+      "dispatch_calls": 3815,
+      "aux_calls": 889,
+      "prepare": {
+        "enabled": 118,
+        "vision": 110,
+        "mtp": 8,
+        "quantizer": "QuantLinear",
+        "format": "nvfp4",
+        "dtype": "cudaBF16",
+        "requires_weight_materialization": false
+      },
+      "after": {"enabled": 118, "dtype": "cudaU8"}
+    },
+    "static-MSE": {
+      "elapsed_seconds": 1480.491465,
+      "returncode": 2,
+      "status": "failed",
+      "dispatch_calls": 2917,
+      "aux_calls": 0,
+      "prepare": {
+        "enabled": 118,
+        "vision": 110,
+        "mtp": 8,
+        "quantizer": "QuantLinear",
+        "format": "nvfp4",
+        "dtype": "cudaBF16",
+        "requires_weight_materialization": false
+      },
+      "after": {"enabled": 118, "dtype": "cudaBF16", "packed": false},
+      "failure_category": "backend_error",
+      "failure_sha256": "de58b1bfcf507b5587000a36cf6b176d324ec9153e97cae57cbadf916b07ceb0"
+    }
+  },
+  "comparison": {
+    "paircompare": "skipped_arm_incomplete",
+    "full_fingerprint_matched": false,
+    "aux_calls_are_not_quantized_layer_count": true
+  },
+  "restoration": {
+    "armed": false,
+    "cleanup": "observed-absent",
+    "restoration": "process_stable",
+    "coordinator": "failed",
+    "recovery_successful": true,
+    "application_readiness": "passed",
+    "both_running": true,
+    "restarting": false,
+    "oom": false,
+    "health_status": 200,
+    "fixed_arithmetic_smoke": {"is_two": true, "finish_reason": "stop"}
+  },
+  "interpretation": {
+    "mse_aux_dispatch_missing": true,
+    "candidate": "ModelOpt streaming resident non-decoder path",
+    "patched_gpu_validated": false,
+    "repetition_fixed": false,
+    "new_gpqa_or_serving_or_tp2": false,
+    "no_new_matched_fingerprint": true
+  }
+}
