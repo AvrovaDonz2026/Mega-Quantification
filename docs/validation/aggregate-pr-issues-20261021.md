@@ -15,7 +15,7 @@
 | 当前分支 | 量化 vision export 的 shard key 缺失或索引不一致时 fail-closed；BF16 restore 可从源 index/shard 恢复缺键 | Python 单元测试覆盖量化拒绝路径、BF16 缺键恢复和索引更新 | 仅覆盖 export 文件路径，不证明真实视觉权重已在 GPU 上加载或生成 |
 | 当前分支 | MTP 4D packed/cached attention mask 诊断与兼容性边界 | 形状/类型诊断和明确错误路径 | 不把不支持的 4D packed/cached mask 转换成可用实现，也不证明 MTP 质量 |
 | [commit 588afcb](https://github.com/AvrovaDonz2026/Mega-Quantification/commit/588afcbd1371af90e05cfed2a7b43f3e4a4f5c8d) | 校验 MTP calibration shapes，并从 safetensors headers 重建 export index `metadata.total_size` | Python 单元测试覆盖形状拒绝和 header-only total-size 修复 | 仍是 CPU/export metadata 证据，不是 GPU MTP 质量或 serving 结果 |
-| 当前分支 | NVFP4 `static_max` 控制 selector：静态 weight block scale、动态 input scale，runtime 仍为 ModelOpt `max` | CPU 门禁通过；同源 matched GPU PTQ 完成，见下方 R6 记录 | static-max replay 已完成；MSE 配对 replay、serving readiness 与质量/性能仍未验证 |
+| 当前分支 | NVFP4 `static_max` 控制 selector：静态 weight block scale、动态 input scale，runtime 仍为 ModelOpt `max` | CPU 门禁通过；同源 matched GPU PTQ 完成，见下方 R6 记录；两臂 scoped five-case serving smoke 已完成 | MTP/五题 smoke 不等于广泛视觉质量、完整 256k GPQA 或 MSE 重复修复；自然 49,152-token 对照仍在运行 |
 | [聚合 PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70) | GPQA continuation 高置信重复前缀保护；新 journal 的 `prompt_sha256` 与 CSV prompt 交叉校验，旧行缺字段兼容并单次告警；服务返回 usage 时 repetition row 保留该次实际 usage；vision restore 按源 shard 名恢复 BF16 缺键 | CPU 测试覆盖 continuation/checker/resume 和 vision shard 恢复路径 | 重复 chunk 不追加文本；checker 接受 `repetition` + `truncated=true` 并计错。此评测保护及 CPU 权重文件检查均不证明 GPU MSE 根因已修复或整模视觉已验证 |
 
 ## 合并前门槛
@@ -37,6 +37,19 @@
 - 2026-10-22 启动 probe 对上述 export 结论作出明确勘误：`static-MSE` 在 142.042 秒、生成前以 `AssertionError` 退出（`param_data=[1152,576]`、`loaded=[1152,1152]`）。header 审计为 max `519 U8 + 519 F8` 且 vision/MTP（110/8）packed；MSE `401 U8 + 401 F8` 且 vision/MTP（110/8）为 BF16。MSE 配置为 `uniformNVFP4`，未声明 aux `quantized_layers`，loader 因而预期 packed vision；`visionqkv` 为 MSE `3456x1152 BF16` 对 max `3456x576 U8`，无 duplicate keys。matched PTQ comparable 仅是 quantizer/calibration 的导出前证据，不能证明导出的 aux scope 相同。见[脱敏启动 probe JSON](dgx-spark-mse-startup-probe-20261022.json)；无题目请求、token 或质量结果。GLM 成对恢复、120 秒稳定和固定 arithmetic probe（answer 2、`stop`）通过；MSE 重复根因仍未确定。历史 dated 记录保留，不将此勘误改写为质量结论。
 - 本轮 MSE 视觉/MTP 导出未满足请求的量化范围。已有索引/key 检查不能证明实际量化范围一致；
   完整量化 serving、256k MTP 质量、TP2 和广泛视觉质量仍待验证。
+
+- 2026-10-23 的后续脱敏记录见 [aux dispatch validation](dgx-spark-aux-dispatch-20261022.md)
+  和 [JSON evidence](dgx-spark-aux-dispatch-20261022.json)。patched full-27B 的
+  `static-max` 与 `static-MSE` 均完成五题 baseline/MTP smoke；每个 arm 的 MTP
+  verify/accept 均覆盖五题，baseline 与 MTP output IDs 在 arm 内一致（accepted
+  drafts 为 136；proposed drafts 为 max 144、MSE 146；verify count 为 max 72、MSE
+  73）。`static-MSE` 五题通过，`static-max` 的 OCR 仍为 3720 而非 3729，因此
+  不能写成双臂质量通过或广泛视觉验证。此前只读文件系统启动失败及 MSE
+  `AssertionError` 的 dated records 保持不变。
+  已完成的 bounded 4,096-token natural/prefix probe 仍只覆盖其限定窗口；当前
+  49,152-token natural 对照尚在运行，暂无结果可写。selected-layer v3 仅在一层
+  NVFP4 视觉算术中显示默认近似除法解释 fake/export code mismatch，不是整模
+  MSE 重复根因或修复证据。
 
 ## Pull request 状态
 
