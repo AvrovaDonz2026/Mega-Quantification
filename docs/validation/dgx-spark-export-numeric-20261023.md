@@ -82,6 +82,26 @@ that actual model weights differ, that the Triton and PyTorch CUDA paths differ,
 or that rounding causes the long-generation repetition. Those hardware and
 full-model comparisons remain pending.
 
+## CPU readiness follow-up: 2026-10-24
+
+The pinned ModelOpt CPU classification follow-up validated the real vendor
+`TensorQuantizer` path for `nvfp4`, static-quantizer classification, and the
+quantized-data accessor. V2 retained its original byte identity
+`f0cbcbac5958ce1b21b8b2f2677d3ca0dbb667aa041369c6af9c64845055fe46` and passed
+5 tests with 1 CUDA skip. V3 fixed bounded exception handling and passed 6 tests
+with 1 CUDA skip; its probe SHA-256 is
+`12d5c2730df9ca183e3bd6775a723a4a7e5cafa64479d3a874554d636ebb352b`.
+Ruff and driver plan/compile checks passed. The V1 plus V2 rounding suite
+totals 35 passed and 2 CUDA skipped; its additive V2 source SHA-256 is
+`709c8722cd84d8d9b058ff7ccd33c097f3194f435da3db220ceaf3565cb35dbf`.
+
+These are CPU and source-readiness results only. The default Torch codec and
+frozen Triton candidate have not been shown arithmetically identical on GPU;
+the FP32 12-code/6-packed-byte difference remains a CPU boundary observation,
+not a bug or root-cause proof. GPU, full-model MSE, visual/MTP, and matched-long
+validation remain pending. The current certificate is expired and no new GPU
+execution or GLM pause was performed.
+
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519

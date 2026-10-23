@@ -146,6 +146,18 @@
     "actual_model_weights_compared": false,
     "repetition_causality_established": false
   },
+  "cpu_readiness_followup_20261024": {
+    "vendor_modelopt_classification": {"tensor_quantizer": true, "format": "nvfp4", "is_static_quantizer": true, "quantized_data_accessor": true, "tests_passed": 5, "cuda_tests_skipped": 1, "source_sha256": "f0cbcbac5958ce1b21b8b2f2677d3ca0dbb667aa041369c6af9c64845055fe46"},
+    "v3_exception_probe": {"traceback_injection_fixed": true, "tests_passed": 6, "cuda_tests_skipped": 1, "probe_sha256": "12d5c2730df9ca183e3bd6775a723a4a7e5cafa64479d3a874554d636ebb352b", "ruff_passed": true, "driver_plan_compile_passed": true},
+    "rounding_v2": {"source_sha256": "709c8722cd84d8d9b058ff7ccd33c097f3194f435da3db220ceaf3565cb35dbf", "v1_v2_tests_passed": 35, "v1_v2_cuda_tests_skipped": 2, "float32_code_differences": 12, "float32_packed_byte_differences": 6},
+    "gpu_executed": false,
+    "full_model_mse_validated": false,
+    "visual_mtp_validated": false,
+    "matched_long_validated": false,
+    "certificate_expired": true,
+    "glms_paused_for_probe": false,
+    "codec_arithmetic_equivalence_proven": false
+  },
   "recovery": {
     "experiment_absent": true,
     "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},
