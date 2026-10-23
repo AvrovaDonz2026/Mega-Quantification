@@ -66,9 +66,51 @@
   数值结果；尚未集成 production/live export，不证明 full-model parity、整模
   serving 行为、重复原因或修复。
 
+- 2026-10-23 strict CUDA matrix + tiny resident-export integration：strict matrix
+  的 7/7 cases 通过，覆盖 random FP16/BF16/FP32、threshold 邻域、小正值与符号、
+  subnormal positive scale 和 noncontiguous input；共 352 个元素，code/packed
+  mismatch 均为 0，输入保持不变，且无 skip/error。候选 helper SHA-256 为
+  `75eabea892299caa2db008f29275687dee438328431ecd115dd05d0c30eab308`，上下文
+  source SHA-256 为
+  `b3d070842b59916b47d964af5158a72bedadf0f1407277e190a864544aaa887b`；使用既有
+  pinned ModelOpt 0.47.0 image。与此分开的真实 resident tiny-Llama export 仅执行
+  seeded `static-max` 单臂，因 `TypeError`（脱敏错误摘要 SHA-256
+  `51d3d9f64a62a84face3e10218f1819436d142e4faea3ce72c216e21ffad2542`）在 tiny gate
+  失败；临时 checkpoint 已清理。因此整体 integration 的 tiny gate 未通过，不能
+  宣称 tiny export 成功或 max/MSE 配对。独立 readback 确认两端 journal 均
+  `armed=false`、cleanup `observed-absent`、restoration `process_stable` 且无 failure；
+  原 GLM 均运行中、restart count 为 0、无 OOM，实验容器不存在，服务 API smoke
+  通过。v2 仅完成 staging、未执行，已由 v3 替代。v3 的 strict CUDA matrix 再次
+  7/7 通过；真实 resident tiny-Llama export 已通过 codec、oracle/candidate 比较和
+  audit 计数/alias gates，但在 serialized contract 的 header-set 校验处失败
+  （`RuntimeError`）：v3 测试夹具的 header allowlist 只允许 3 项，漏掉 pinned
+  ModelOpt schema 中合法的第 4 项 `input_scale`。临时 checkpoint 已清理，独立
+  readback 确认恢复通过。该 header gate 失败仅表示 v3 当时的 tiny export 未通过；
+  这是测试夹具契约问题，不能与 v4 的四字段 contract pass 混淆。以上仍不证明
+  production/live export 集成、full-model parity、serving quality 或 repetition
+  修复；PR72 保持 draft。
+
+- 2026-10-23 v4 codec integration（job `27b8490b4767d5e082cc571f`，plan SHA-256
+  `63bb37c924489b5c99e96fd8c8c43f8b979c1d67a66b2b7dd049d905d68db245`）重新通过
+  strict CUDA matrix 7/7，code/packed mismatch 均为 0。seeded `static-max` 的
+  resident tiny export 这次通过四字段 serialized contract：weight、weight scale、
+  `weight_scale_2` 和 input scale；candidate 与 oracle/packed 结果 exact，输入与
+  scales 保持不变，alias restore 通过，临时 checkpoint 已删除。该结果只覆盖
+  tiny 单臂，且 streaming 标记为 unsupported；不包含整模或 max/MSE 双臂，因此不
+  证明 27B/full-model parity、production serving quality 或 repetition 修复。
+  独立 readback 显示实验容器 absent，双端 GLM Running、restart count 为 0、无 OOM，
+  journal 为 `armed=false`、cleanup `observed-absent`、restoration `process_stable`；
+  服务 API 返回 `2`、`stop`（0.222 秒）。v3 的 serialized header gate 失败保留为
+  历史记录；v4 仅说明本次 tiny contract gate 已通过，PR72 仍保持 draft。
+
 ## Pull request 状态
 
-聚合入口为 [PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70)。本次检查时，
-commit `6e82ca21a68c23f91bdc90b9bc6279548311d907` 已推送至 PR #70，当前两项 pytest CI checks 均成功；PR #70 为 OPEN、MERGEABLE。
-PR #65–#69 仍为 OPEN。后续新提交需要重新核验 CI；状态和 checks 会变化，合并前请以各 PR
-页面当前 head 和 checks 为准，不能把旧 head 的成功结果转移给新提交。
+2026-10-23 当前核验显示，公开未合并 PR 仅有 [PR #72](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/72)
+（draft）和 [PR #73](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/73)
+（writable TileLang cache）。PR72 的 main 基线为 merge state `CLEAN`；head
+`1b0df53` 的两项 pytest checks 均为 SUCCESS。该 head/check 记录只适用于当前
+head，后续任何新 commit 都必须重新核验，不能继承旧 checks。PR72/PR73 的开放状态
+也不代表 full-model parity、serving quality 或 repetition 修复已成立。
+
+诊断 worker 的 17 项独立复审未发现 blocking issue，但尚未 bundle、stage 或部署；
+这只是审阅状态，不是运行时验证。
