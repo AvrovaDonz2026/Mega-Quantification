@@ -174,6 +174,27 @@ Eighteen packaging tests pass. Recovery API arithmetic passed in 0.214 seconds
 with answer `2` and native `stop`, with both services running and no restart/OOM
 observed.
 
+## Long-prefix repetition probe
+
+A four-request, MTP-off probe used a 262,144-token context and 4,096-token
+generation budget. Natural-prompt generation matched the historical 4,096-token
+continuation for `static-MSE`; `static-max` first diverged at token 2. With a
+41,760-token supplied historical prefix, both arms exactly matched the next
+4,096 historical tokens, including the 2,032-token lag. All requests ended at
+the length limit; no EOS candidate or think-end token was observed. The natural
+4,096-token window is shorter than the historical loop onset at token 33,131,
+so it cannot determine whether natural generation reproduces that later loop.
+The supplied-prefix condition uses a fresh prefill, not the old incremental
+SSM/KV state. The full five-copy detector threshold (10,160 tokens) was not
+reached. This probe
+neither proves the natural loop reproduced nor establishes a fix.
+
+The local coordinator reported a verification failure, but the remote lifecycle
+journal showed stable process restoration and cleanup. One separate TP2
+serving-entry API check passed: fixed arithmetic returned `2` with
+native `stop` in 0.215 seconds. Both containers were running without restart or
+OOM.
+
 ## Capacity-control baseline
 
 A separate baseline-only run capped running requests at 4 and Mamba cache at 16
