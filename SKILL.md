@@ -47,13 +47,22 @@ Agent entry. Humans start at [README.md](README.md) and the
   diagnostic still recorded max with 118 auxiliary U8 tensors, while MSE had
   zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. A later
   patched full-27B pair completed both arms and comparison with 118/118 eligible
-  auxiliary weights packed as U8 (110 vision plus 8 MTP); serving, vision/MTP
-  functionality and repetition repair remain pending. A later combined serving
+  auxiliary weights packed as U8 (110 vision plus 8 MTP); writable-cache MTP
+  serving was exercised, while broad quality and repetition repair remain pending.
+  A later combined serving
   attempt failed its RuntimeGate with checker details unavailable; both GLM
   services were subsequently restored, with 121.684 seconds of stable-process
   observation and an API arithmetic smoke returning 2 with native `stop`. All
-  five pinned-image dependency imports passed; model serving remains unvalidated.
-  See
+  five pinned-image dependency imports passed. Two pre-cache-fix baseline attempts
+  returned identical outputs: OCR was `3720` instead of `3729`, and Python ended
+  at its length limit. The first MTP startup failure lacked captured errno/stack;
+  the repeat failed with errno 30. Source audit traced it to unconditional
+  TileLang cache creation at `~/.tilelang/cache` before the MTP flag check; the
+  writable-cache service checks now run both arms: MSE passed all five checks,
+  while max still returned the wrong OCR answer. MTP verification ran for each
+  case; Python remained length-limited. A separate bounded short replay completed
+  with identical within-arm 512-token outputs but no repetition fix proof or
+  cold-cache verification. The later API smoke passed in 0.214 seconds. See
   `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
   contract check with `scripts/check_modelopt_streaming_export.py`; its default
   mode plans without downloads and `--execute` requires the pinned ModelOpt

@@ -1,7 +1,7 @@
 {
   "schema": "aux-dispatch-probe-public-v1",
   "date": "2026-10-22",
-  "status": "paired_export_complete_serving_unvalidated",
+  "status": "paired_export_and_bounded_serving_observed_quality_gate_failed",
   "seeded_public_cuda_regression": {
     "status": "passed",
     "source_revision": "e11b673523815e874416a3fca9fba0e59526d4fe",
@@ -79,14 +79,40 @@
     "restoration": {"coordinator_process_stable": true, "services_running": true, "oom_killed": false, "restarting": false, "api_readiness": "passed", "fixed_arithmetic_answer": 2, "finish_reason": "stop", "observation_scope": "point_in_time_at_pair_completion"},
     "latest_recovery": {"date": "2026-10-23", "status": "observation_passed", "stable_seconds": 121.68356083298568, "api_arithmetic_smoke": {"status": "passed", "elapsed_seconds": 0.221, "answer_is_two": true, "native_stop": true, "finish_reason": "stop"}},
     "pinned_image_dependency_preflight": {"date": "2026-10-23", "status": "passed", "imports_passed": 5, "cache_configuration": "writable_and_stage_matching"},
-    "scope": "paired export and auxiliary header scope only",
+    "latest_model_validation_attempt": {
+      "status": "incomplete_failed",
+      "baseline": {
+        "case_count": 5,
+        "checker_returncode": 1,
+        "passed_cases": ["arithmetic", "red_square", "blue_square"],
+        "python_code": {"output_tokens": 192, "finish_reason": "length", "nonempty": true, "finite_logprobs": true, "correctness_or_natural_stop_established": false},
+        "ocr": {"expected": "3729", "observed": "3720", "finish_reason": "stop", "response_sha256": "3644cb1007be9e1b14ab1654c02bf01c49b8155f64bca5089dd2ec8fd6942004", "historical_response_hash_comparison": "not_performed", "image_sha256": "7b33b2d31984bee0e73a443717f5864f9beecea5264de47c7bc0fdf33b39f931", "historical_image_sha256_match": true, "pillow_version": "12.3.0", "image_byte_drift_excluded": true, "root_cause_established": false},
+        "checker_sha256": "f0e8ff85f40b4aaa9847ab95dd9098591845f137faab574ca6d146f0be3f04da",
+        "pillow_version": "12.3.0",
+        "loader_diagnostic_counters": {"vision_weight_skipped_unknown_unloaded": 0, "vision_scale_skipped_unknown_unloaded": 0, "mtp_weight_skipped_unknown_unloaded": 0, "mtp_scale_skipped_unknown_unloaded": 0}
+      },
+      "mtp": {"stage": "startup", "error_category": "read_only_fs", "exception_class": "OSError", "errno": null, "request_started": false, "stack_captured": false, "cause_known_from_later_source_audit": true},
+      "static_mse": "not_run",
+      "replay": "not_run",
+      "same_pinned_image_on_both_workers": true,
+      "image_hash_interpretation": "matching_bytes_exclude_image_byte_drift_only; OCR_root_cause_undetermined",
+      "restoration": {"status": "process_stable", "api_smoke": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.217}},
+      "repeat_attempt": {"same_image_weights_parameters": true, "baseline_case_outputs_identical_by_token_ids_and_response_hashes": true, "ocr_expected": "3729", "ocr_observed": "3720", "mtp_error_category": "read_only_fs", "mtp_exception_class": "OSError", "mtp_errno": 30, "mtp_failure_path": "eagle_worker_v2._configure_qsa_mtp_index_share -> __new__ -> _create_dirs -> os.makedirs", "target_category": "TileLang default cache directory /root/.tilelang/cache", "static_mse": "not_run", "replay": "not_run", "restoration": "process_stable", "api_smoke": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.219}},
+      "mtp_startup_source_audit": {"status": "cause_identified_and_service_override_verified", "sequence": ["eagle_worker_v2.py imports QSAIndexer before MTP flag check", "qsa/mqa.py imports tilelang", "tilelang/cache/__init__.py instantiates KernelCache", "kernel_cache.py __new__ calls _create_dirs", "os.makedirs uses default ~/.tilelang/cache"], "container_cache_path": "/root/.tilelang/cache", "diagnostic_failed_directory": "/root/.tilelang", "diagnostic_failed_directory_sha256_matches_path_bytes": true, "cpu_import_smoke": {"runtime": "runc", "network": "none", "container_root": "read_only", "default_tilelang_cache": {"status": "failed", "exception_class": "OSError", "errno": 30, "failed_parent_directory": "/root/.tilelang", "failed_directory_sha256_matches_path_bytes": true}, "tmp_cache_override": {"cache_dir": "/tmp/tilelang", "tmp_dir": "/tmp/tilelang/tmp", "status": "import_pass"}, "scope": "CPU-only TileLang import; no model, GPU, service, or network"}, "service_cache_override": {"TILELANG_CACHE_DIR": "/cache/tilelang", "TILELANG_TMP_DIR": "/cache/tilelang/tmp", "status": "used_for_successful_scoped_pair"}, "scope": "MTP startup read-only-filesystem failure only; does not explain OCR or MSE behavior"},
+      "fixed_cache_pair_validation": {"status": "completed_observation_quality_failed", "cache_override": "TILELANG_CACHE_DIR=/cache/tilelang; TILELANG_TMP_DIR=/cache/tilelang/tmp", "both_arms": {"static-max": {"baseline_cases": 5, "baseline_checker_returncode": 1, "mtp_cases": 5, "mtp_checker_returncode": 1, "mtp_verify_and_accept_observed_for_every_case": true, "mtp_accepted_drafts": 136, "mtp_proposed_drafts": 144, "mtp_verify_ct": 72, "failed_case": "ocr_3729"}, "static-MSE": {"baseline_cases": 5, "baseline_checker_returncode": 0, "mtp_cases": 5, "mtp_checker_returncode": 0, "mtp_verify_and_accept_observed_for_every_case": true, "mtp_accepted_drafts": 136, "mtp_proposed_drafts": 146, "mtp_verify_ct": 73, "all_five_checker_cases_passed": true}}, "shared_case_results": {"arithmetic_red_blue": "passed_in_both_arms_and_modes", "ocr_3729": {"static_MSE": "3729_passed_in_baseline_and_mtp", "static_max": "3720_failed_in_baseline_and_mtp"}, "python_code": {"tokens": 192, "finish_reason": "length", "gate": "nonempty_and_finite_logprobs_only", "semantic_correctness_established": false}}, "within_arm_baseline_mtp_output_ids_identical_all_cases": true, "loader_diagnostics": {"vision_mtp_skip_unknown_unloaded_counters_zero": true, "torchcodec_notice_nonfatal": true, "numerical_parity_proven": false}, "multimodal_validation_passed": false, "repetition_fixed": false, "mse_long_repetition": "unresolved", "coordinator_restoration": "process_stable", "api_recheck": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.214}, "compose_build_verified": false, "packaging_tests_passed": 18, "scope": "paired five-case baseline/MTP serving smoke; no numerical parity, broad quality, or repetition-fix claim"},
+      "short_max_mse_replay": {"status": "completed", "mode": "diagnostic_only", "request_count_per_arm": 3, "completion_tokens_per_request": 512, "finish_reason": "length", "within_arm_outputs_identical": true, "cross_arm_common_prefix_tokens": 2, "period_candidates": [], "prompt_tokens": 288, "cached_tokens": 0, "num_retractions": 0, "flush_status": "passed", "cold_cache_verified": false, "spec_verify_ct_present": false, "repetition_fixed": false, "scope": "bounded short determinism only; does not exclude long-context or later-period repetition"}
+    },
+    "scope": "paired export, auxiliary header, and scoped five-case serving evidence",
     "export_reload_validated": false,
     "trajectory_metrics_present": false,
     "native_text_response_protocol_checks": false,
     "serving_validated": false,
-    "combined_serving_attempt": {"job": "677944d59ef000cffc50c3be", "status": "failed", "failure_stage": "RuntimeGate", "checker_returncode": 1, "checker_diagnostics": "unavailable_harness_lost_raw_diagnostic", "lifecycle_restoration": "process_stable"},
+    "current_serving_scope": {"static_MSE_five_case_smoke_passed": true, "static_max_five_case_smoke_passed": false, "static_max_failure": "OCR_3720_vs_3729", "baseline_mtp_token_equivalence_both_arms": true, "broad_multimodal_validation_passed": false},
+    "combined_serving_attempt": {"status": "failed", "failure_stage": "RuntimeGate", "checker_returncode": 1, "checker_diagnostics": "unavailable_harness_lost_raw_diagnostic", "lifecycle_restoration": "process_stable"},
     "vision_mtp_functionality_validated": false,
+    "scoped_mtp_serving_observed": true,
     "replay_or_repetition_validated": false,
+    "mse_fix_established": false,
     "gpqa_or_tp2_validated": false,
     "release_or_fix_claim": false
   },
@@ -159,10 +185,11 @@
   "interpretation": {
     "mse_aux_dispatch_missing": true,
     "candidate": "ModelOpt streaming resident non-decoder path",
-    "patched_gpu_validated": "small_contract_and_full_27b_paired_export",
-    "full_27b_patched_gpu_validated": "paired_export_only",
+    "patched_gpu_validated": "small_contract_full_27b_paired_export_and_scoped_five_case_serving",
+    "full_27b_patched_gpu_validated": "paired_export_and_scoped_serving; broad_multimodal_gate_failed_on_static_max_ocr",
     "repetition_fixed": false,
-    "new_gpqa_or_serving_or_tp2": false,
+    "new_gpqa_or_tp2": false,
+    "new_scoped_serving_observation": true,
     "vision_mtp_functionality_validated": false,
     "no_new_matched_fingerprint": false
   }

@@ -190,9 +190,9 @@ The earlier unseeded private regression remains historical evidence.
 The completed unpatched full-256 diagnostic remains separate evidence: max
 ended with 118 auxiliary U8 tensors, while MSE recorded zero auxiliary dispatch
 calls and 118 BF16 auxiliary tensors, so the guard rejected that export. Both
-GLM services were restored and the API readiness smoke passed afterward. No
-full-27B patched export, vision/MTP serving result, GPQA result, or repetition
-repair is established by the small regression. Preserve the diagnostic and its
+GLM services were restored and the API readiness smoke passed afterward. The
+small regression itself does not establish full-27B serving, vision/MTP
+functionality, GPQA quality or repetition repair. Preserve the diagnostic and its
 limits in
 [`validation/dgx-spark-aux-dispatch-20261022.md`](validation/dgx-spark-aux-dispatch-20261022.md).
 
@@ -212,16 +212,60 @@ passed on both services; its fixed arithmetic request returned `2` with native
 `stop`. A combined serving attempt then failed with `RuntimeGate` and checker
 return code 1. The lifecycle completed with stable process restoration, but the
 harness lost the raw checker diagnostics, so the failed checks are unknown and
-no serving pass is established. Export reload, vision/MTP functionality,
-replay and trajectory metrics remain unvalidated. This establishes paired
-export and header scope only. Repetition behavior, GPQA and release or fix
+no serving pass was established by that attempt. At that point export reload,
+vision/MTP functionality, replay and trajectory metrics remained unvalidated.
+That attempt established paired export and header scope only; later scoped
+serving evidence is recorded below. Repetition behavior, GPQA and release or fix
 claims remain pending.
 
 A subsequent reviewed recovery passed a 121.684-second process-stability
 observation. Its fixed arithmetic API smoke passed in 0.221 seconds with answer
 `2` and native `stop`. The pinned-image dependency preflight passed all five
-imports with writable, stage-matching cache configuration. These checks do not
-establish model loading or serving; those validations remain pending.
+imports with writable, stage-matching cache configuration. Those checks did not
+establish model serving at that point; the scoped result below supersedes
+that historical status.
+
+Before the writable-cache fix, two model-validation attempts used the same pinned image, weights and
+parameters and reproduced the same `static-max` baseline outputs by token IDs
+and response hashes. Arithmetic and red/blue image checks passed; Python output
+was nonempty with finite logprobs but ended at 192 tokens. OCR returned `3720`
+for expected `3729`; only image/checker/Pillow input identity is matched to the
+historical run; no historical response-hash comparison was performed. This
+excludes image byte drift only and does not identify the OCR cause. The first
+attempt's `static-max` MTP startup failed before requests with a
+read-only-filesystem `OSError`; errno and stack were not captured. The second
+attempt failed before requests with errno 30 and a stack through
+`eagle_worker_v2._configure_qsa_mtp_index_share` directory creation. A pinned
+image source audit traced the read-only failure to unconditional `QSAIndexer`
+import before the MTP flag check, which imports TileLang and initializes its
+cache at `~/.tilelang/cache` (`/root/.tilelang/cache` in the container). The
+diagnostic failed-directory hash matched `/root/.tilelang` path bytes. A
+separate CPU-only pinned-image import smoke reproduced errno 30 with TileLang
+cache variables unset and passed with cache/tmp redirected under `/tmp` in a
+read-only container. This confirms the TileLang import cache cause. Proposed
+service overrides `TILELANG_CACHE_DIR=/cache/tilelang` and
+`TILELANG_TMP_DIR=/cache/tilelang/tmp` were subsequently exercised in the
+scoped serving check below. This diagnosis is limited to the MTP
+startup filesystem failure; it does not explain OCR or MSE. MSE and replay did
+not run in the two pre-cache-fix attempts. The earlier GLM restoration was
+stable and its fixed API check passed; the later recovery result is recorded
+below.
+Details are in the [dated validation record](validation/dgx-spark-aux-dispatch-20261022.md).
+A bounded short max/MSE replay completed three 512-token requests per arm with
+identical within-arm outputs, only a two-token cross-arm prefix and no detected
+short period. `spec_verify_ct` was absent, so cold-cache verification was not
+established; this diagnostic does not prove repetition is fixed or exclude
+later long-context behavior. The writable-cache MTP check then ran both arms
+through all five baseline and MTP cases. MSE passed all five cases, including
+OCR `3729`; max still returned `3720` in both modes. MTP verification ran for
+every case and within-arm baseline/MTP token IDs matched. The paired multimodal
+gate remains false, repetition remains unresolved. Recovery API arithmetic passed in
+0.214 seconds with answer `2` and native `stop`; both services were running with
+no restart/OOM observed. The separate [cache configuration PR #73](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/73)
+proposes writable TileLang cache variables and temporary storage. Compose 5.6.1
+configuration parsing passed locally, but actual build/start remains unverified;
+the paired serving run used explicit runtime environment settings. Eighteen
+packaging tests pass.
 
 To reproduce the small contract check, use an image that already contains the
 pinned Spark CUDA stack (`nvidia-modelopt==0.47.0`, `accelerate==1.14.0`, the
