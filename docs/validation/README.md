@@ -82,6 +82,11 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 [Auxiliary dispatch probe](dgx-spark-aux-dispatch-20261022.md)记录 fresh paired probe：static-max 完成辅助 dispatch；static-MSE 未调用辅助 dispatch，118 个辅助权重仍为 BF16，随后被精度 guard 拒绝。Pair comparison 因 arm incomplete 跳过。该证据支持 ModelOpt streaming resident non-decoder 路径的候选定位，不代表 patched GPU、重复修复、GPQA、serving 或 TP2 结果。
 
+2026-10-23 的 [full static-max export validation](dgx-spark-export-numeric-20261023.md)
+记录一臂 full export contract 与独立恢复证据。导出 gates 通过，但整体协议保留
+late-heartbeat watchdog advisory；static-MSE v1 在执行中因连接和心跳故障失败，未生成导出，随后独立恢复检查通过。该记录不等同于 paired
+quality、production serving、full-model parity 或 repetition fix。
+
 本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP

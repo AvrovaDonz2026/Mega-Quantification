@@ -1,0 +1,69 @@
+{
+  "schema": "full-static-max-export-public-v1",
+  "date": "2026-10-23",
+  "arm": "static-max",
+  "job": "b0497cd020fabd1bc8768911",
+  "status": "export_contract_passed_protocol_advisory",
+  "protocol": {
+    "coordinator_status": "observation_passed",
+    "coordinator_errors": 0,
+    "post_close_watchdog": "late_heartbeat_failure_under_adjudication",
+    "primary_failure": "heartbeat_failed",
+    "recovery_failures": [],
+    "overall_protocol_passed": false
+  },
+  "identity": {
+    "plan_sha256": "9e27ce85886a6d76b5d49603ccd4e093404590ef61b0bce6131f7ebe02f26f7c",
+    "export_tree_sha256": "63ca89e911cabe4e04106ce7173f21853fdda93cc73ddbfac3cef22ba225a914",
+    "evidence_sha256": "8b0cf011d818f8f270f7a058fc84990db47432eba0fd0a02a537e2f9fd8207ea"
+  },
+  "export": {
+    "expected_static_nvfp4": 519,
+    "candidate_calls": 519,
+    "candidate_oracle_exact": true,
+    "scales_unchanged": true,
+    "vision": {"expected": 333, "retained": 333, "quantizers": 110},
+    "mtp": {"expected": 15, "retained": 15, "quantizers": 8},
+    "index_keys": 2756,
+    "shards": 2,
+    "export_files": 16,
+    "total_bytes": 17499733224,
+    "header_key_mapping_passed": true,
+    "restored": true
+  },
+  "mse_v1": {
+    "state": "active_execution_failed_before_export",
+    "failure_class": "ssh_transport_eof_and_heartbeat_expiry",
+    "export_generated": false,
+    "paired_scientific_match": "same_frozen_payload_only_arm_diff",
+    "model_or_quantization_diagnosis": false
+  },
+  "mse_recovery_readback": {
+    "primary_failure": "heartbeat_failed",
+    "recovery_failures": [],
+    "recovery_passed": true,
+    "restoration_passed": true,
+    "experiment_absent": true,
+    "services_running": true,
+    "restart_count": 0,
+    "oom_killed": false,
+    "service_api_passed": true
+  },
+  "recovery": {
+    "experiment_absent": true,
+    "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},
+    "services_running": true,
+    "restart_count": 0,
+    "oom_killed": false,
+    "service_api": {"answer": 2, "finish_reason": "stop", "passed": true}
+  },
+  "scope": {
+    "single_arm_static_max_completed": true,
+    "static_mse_execution_failed_before_export": true,
+    "single_arm": true,
+    "reload_validated": false,
+    "serving_validated": false,
+    "full_model_parity": false,
+    "repetition_fix": false
+  }
+}
