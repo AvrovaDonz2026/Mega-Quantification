@@ -96,6 +96,9 @@ exit/stderr 仅是后置观察，不能隔离 v4 SSH 根因，也不证明 PTQ l
 稳定性或量化/export 成功。
 该记录不等同于 paired quality、production
 serving、full-model parity 或 repetition fix。
+Static-MSE v6 的双端 staging 与 26 项 focused tests 通过，但证书在执行前过期，
+没有启动 GPU quantization/export。独立 tiny public-codec hardware probe 未完成
+codec/audit coverage，因此不能写成 GPU codec 通过；V2 尚未执行。
 
 本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 

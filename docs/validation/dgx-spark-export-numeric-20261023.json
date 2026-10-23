@@ -108,6 +108,28 @@
     "ptq_load_stability_proven": false,
     "quantization_or_export_result": false
   },
+  "mse_v6_staging": {
+    "job": "d4f368ca832d87e3ce0d4a78",
+    "staging_passed": true,
+    "dual_peer_service_unchanged": true,
+    "focused_tests_passed": 26,
+    "arm_timeout_seconds": 1800,
+    "experiment_timeout_seconds": 2400,
+    "worker_timeout_seconds": 3000,
+    "unchanged_scientific_payload_files": 40,
+    "changed_operational_files": 4,
+    "execution_started": false,
+    "gpu_quantization_started": false,
+    "export_generated": false,
+    "certificate_expired_before_execution": true
+  },
+  "tiny_public_codec_probe": {
+    "status": "failed_before_codec_coverage",
+    "gpu_codec_validated": false,
+    "candidate_audit_covered": false,
+    "probe_defects": ["stand_in_quantizer_not_recognized", "incorrect_qtensor_data_accessor"],
+    "v2": "in_progress_not_executed"
+  },
   "recovery": {
     "experiment_absent": true,
     "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},

@@ -46,6 +46,23 @@ per peer with maximum Docker inspection durations of 49.461 ms and 13.287 ms, wi
 errors. This probe does not prove transport stability under PTQ load or provide
 a quantization/export result.
 
+## Static-MSE v6 staging checkpoint
+
+Static-MSE v6 job `d4f368ca832d87e3ce0d4a78` passed dual staging with both
+services unchanged and source, calibration, and pinned image identities
+verified. The focused preflight/test gate passed 26 tests; planned arm,
+experiment, and worker timeouts were 1,800, 2,400, and 3,000 seconds. No GPU
+quantization or export started because the certificate expired before execution.
+The retry preserves all 40 scientific payload files; its changes are limited to
+four operational files. This is staging evidence only.
+
+A separate tiny public-codec hardware probe failed before codec coverage. It did
+not complete candidate audit coverage: the probe used a stand-in quantizer that
+the vendor classifier did not recognize, then read a nonexistent `.data`
+attribute instead of `_quantized_data`. V2 uses real vendor quantizers and the
+correct accessor, but has not executed on a GPU. Neither result establishes
+full-export correctness or a repetition fix.
+
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519
