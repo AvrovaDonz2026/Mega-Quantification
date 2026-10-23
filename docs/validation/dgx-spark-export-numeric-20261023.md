@@ -132,7 +132,11 @@ full-model validation.
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519
-candidate calls and exact candidate/oracle results. Scales were unchanged.
+candidate calls and exact candidate/oracle results. The candidate and oracle
+used separate implementations and call paths, but both use Triton's default
+division and the same E2M1 thresholds, sign handling, and packing. This is not
+a live ModelOpt fake-quant comparison or an independent arithmetic-equivalence
+proof. Scales were unchanged.
 Vision retention was 333/333 entries across 110 quantizers, and MTP retention
 was 15/15 entries across 8 quantizers. The export index contained 2,756 keys
 across two shards and 16 export files, totaling 17,499,733,224 bytes. Header

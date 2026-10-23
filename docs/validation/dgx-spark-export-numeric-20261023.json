@@ -28,6 +28,7 @@
     "expected_static_nvfp4": 519,
     "candidate_calls": 519,
     "candidate_oracle_exact": true,
+    "candidate_oracle_scope": "separate implementations and call paths; both use Triton default division and the same E2M1 thresholds, sign handling, and packing; no live ModelOpt fake-quant comparison or independent arithmetic-equivalence proof",
     "scales_unchanged": true,
     "vision": {"expected": 333, "retained": 333, "quantizers": 110},
     "mtp": {"expected": 15, "retained": 15, "quantizers": 8},
