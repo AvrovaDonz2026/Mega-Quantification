@@ -170,6 +170,9 @@ def main() -> int:
             "stream": False,
             "return_logprob": True,
             "logprob_start_len": -1,
+            # Baseline/MTP adjudication compares native token ids exactly;
+            # text equality alone cannot establish the same greedy sequence.
+            "return_output_ids": True,
         }
         if "image_data" in case:
             payload["image_data"] = case["image_data"]
