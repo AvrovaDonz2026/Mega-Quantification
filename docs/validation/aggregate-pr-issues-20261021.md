@@ -15,7 +15,7 @@
 | 当前分支 | 量化 vision export 的 shard key 缺失或索引不一致时 fail-closed；BF16 restore 可从源 index/shard 恢复缺键 | Python 单元测试覆盖量化拒绝路径、BF16 缺键恢复和索引更新 | 仅覆盖 export 文件路径，不证明真实视觉权重已在 GPU 上加载或生成 |
 | 当前分支 | MTP 4D packed/cached attention mask 诊断与兼容性边界 | 形状/类型诊断和明确错误路径 | 不把不支持的 4D packed/cached mask 转换成可用实现，也不证明 MTP 质量 |
 | [commit 588afcb](https://github.com/AvrovaDonz2026/Mega-Quantification/commit/588afcbd1371af90e05cfed2a7b43f3e4a4f5c8d) | 校验 MTP calibration shapes，并从 safetensors headers 重建 export index `metadata.total_size` | Python 单元测试覆盖形状拒绝和 header-only total-size 修复 | 仍是 CPU/export metadata 证据，不是 GPU MTP 质量或 serving 结果 |
-| 当前分支 | NVFP4 `static_max` 控制 selector：静态 weight block scale、动态 input scale，runtime 仍为 ModelOpt `max` | CPU 门禁通过；同源 matched GPU PTQ 完成，见下方 R6 记录；两臂 scoped five-case serving smoke 已完成 | MTP/五题 smoke 不等于广泛视觉质量、完整 256k GPQA 或 MSE 重复修复；自然 49,152-token 对照仍在运行 |
+| 当前分支 | NVFP4 `static_max` 控制 selector：静态 weight block scale、动态 input scale，runtime 仍为 ModelOpt `max` | CPU 门禁通过；同源 matched GPU PTQ 完成，见下方 R6 记录；两臂 scoped five-case serving smoke 已完成 | MTP/五题 smoke 不等于广泛视觉质量、完整 256k GPQA 或 MSE 重复修复；49,152-token natural 对照未完成 |
 | [聚合 PR #70](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/70) | GPQA continuation 高置信重复前缀保护；新 journal 的 `prompt_sha256` 与 CSV prompt 交叉校验，旧行缺字段兼容并单次告警；服务返回 usage 时 repetition row 保留该次实际 usage；vision restore 按源 shard 名恢复 BF16 缺键 | CPU 测试覆盖 continuation/checker/resume 和 vision shard 恢复路径 | 重复 chunk 不追加文本；checker 接受 `repetition` + `truncated=true` 并计错。此评测保护及 CPU 权重文件检查均不证明 GPU MSE 根因已修复或整模视觉已验证 |
 
 ## 合并前门槛
@@ -46,10 +46,25 @@
   73）。`static-MSE` 五题通过，`static-max` 的 OCR 仍为 3720 而非 3729，因此
   不能写成双臂质量通过或广泛视觉验证。此前只读文件系统启动失败及 MSE
   `AssertionError` 的 dated records 保持不变。
-  已完成的 bounded 4,096-token natural/prefix probe 仍只覆盖其限定窗口；当前
-  49,152-token natural 对照尚在运行，暂无结果可写。selected-layer v3 仅在一层
-  NVFP4 视觉算术中显示默认近似除法解释 fake/export code mismatch，不是整模
-  MSE 重复根因或修复证据。
+  已完成的 bounded 4,096-token natural/prefix probe 仍只覆盖其限定窗口。随后
+  49,152-token natural 对照的 coordinator 以 `MaintenanceError` 失败，且 max
+  仅有陈旧 progress 记录；static-MSE 从未开始，因此没有可用的长输出、周期或
+  跨臂比较结果，不能推断周期变化或长程验证通过。独立 after-run readiness
+  证据显示两端 journal 均 `armed=false`、cleanup `observed-absent`、restoration
+  `process_stable`，原 GLM 均 Running、restart count 为 0 且无 OOM；服务 API
+  arithmetic smoke 返回 `2`、`stop`（0.22 秒）。这些是恢复/可用性观察，不是
+  long-generation 结果；transport/lifecycle interruption 的具体原因仍待调查。
+  selected-layer v3 仅在一层 NVFP4 视觉算术中显示默认近似除法解释
+  fake/export code mismatch，不是整模 MSE 重复根因或修复证据。
+
+- 2026-10-23 的 selected-layer candidate 已由协调器以 `observation_passed` 完成。
+  该隔离 CUDA helper 对同一视觉层的 `max`/`MSE` 两臂各验证 3,981,312 个
+  quantization codes（含 signed zero）全部 exact，并验证各自 1,990,656 个
+  packed bytes 全部一致；weight/scale hash 的前后检查一致。两端 journal 均
+  `armed=false`、cleanup `observed-absent`、restoration `process_stable`，服务 API
+  返回 `2`、`stop`（0.211 秒）。这只证明 selected-layer CUDA helper 的候选
+  数值结果；尚未集成 production/live export，不证明 full-model parity、整模
+  serving 行为、重复原因或修复。
 
 ## Pull request 状态
 
