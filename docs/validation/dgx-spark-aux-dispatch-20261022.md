@@ -173,3 +173,15 @@ parsing passed locally, but actual build and service start remain unverified.
 Eighteen packaging tests pass. Recovery API arithmetic passed in 0.214 seconds
 with answer `2` and native `stop`, with both services running and no restart/OOM
 observed.
+
+## Capacity-control baseline
+
+A separate baseline-only run capped running requests at 4 and Mamba cache at 16
+and completed both arms' five cases in 380.075 seconds. `static-MSE` passed all
+five; `static-max` again returned the wrong OCR answer. All five `static-max`
+output-ID hashes exactly matched the prior 16/64 run, including OCR; this
+excludes the observed capacity reduction as the sole cause of that max OCR
+failure. `static-MSE` outputs were not all identical across runs. This control
+does not exclude other capacity effects, nondeterminism, or all-batch behavior;
+it did not enable MTP or test repetition repair. Processes were restored to a
+stable state.
