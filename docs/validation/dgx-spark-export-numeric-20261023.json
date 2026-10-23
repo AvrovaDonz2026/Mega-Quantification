@@ -173,6 +173,33 @@
     "full_27b_memory_performance_validated": false,
     "serving_quality_validated": false
   },
+  "cpu_reference_grid_followup_20261024": {
+    "values_per_dtype": 720,
+    "same_fp32_quotient_inputs": true,
+    "vendor_vs_frozen_candidate": {
+      "fp16_code_differences": 0,
+      "bf16_code_differences": 0,
+      "fp32_raw_code_differences": 9,
+      "fp32_raw_differences_negative_tiny_to_negative_zero": true,
+      "fp32_magnitude_differences": 0,
+      "decoded_values_unchanged": true
+    },
+    "exact_fraction_oracle": {
+      "fp16_code_differences": 3,
+      "fp16_packed_byte_differences": 2,
+      "bf16_code_differences": 3,
+      "bf16_packed_byte_differences": 2,
+      "fp32_code_differences": 25,
+      "fp32_packed_byte_differences": 24,
+      "total_code_differences": 31,
+      "total_packed_byte_differences": 28
+    },
+    "scope": "constructed CPU reference boundaries only",
+    "gpu_validated": false,
+    "real_weight_parity_validated": false,
+    "full_model_validation": false,
+    "repetition_fix": false
+  },
   "recovery": {
     "experiment_absent": true,
     "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},

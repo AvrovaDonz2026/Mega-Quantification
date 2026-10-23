@@ -116,6 +116,19 @@ checkpoint was removed. This establishes persistence of the same calibrated
 static state only; it does not establish packed-export parity, GPU behavior,
 offload behavior, full-27B memory/performance, or serving quality.
 
+## CPU reference-grid follow-up
+
+A pinned-vendor CPU comparison used the same FP32 quotient inputs across 720
+values per dtype. Against the frozen candidate, FP16 and BF16 had zero code
+differences; FP32 had 9 raw-code differences, all negative tiny values that
+underflowed to negative zero, with zero magnitude differences and unchanged
+decoded values. The exact-real Fraction oracle comparison produced 3 code/2
+packed-byte differences for FP16, 3/2 for BF16, and 25/24 for FP32 (31 code
+and 28 packed-byte differences in total). These are constructed CPU reference
+boundaries, not evidence of a codec defect, GPU equivalence, real-weight
+parity, or a repetition fix. The comparison remains pending GPU execution and
+full-model validation.
+
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519
