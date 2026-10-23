@@ -66,6 +66,22 @@ attribute instead of `_quantized_data`. V2 uses real vendor quantizers and the
 correct accessor, but has not executed on a GPU. Neither result establishes
 full-export correctness or a repetition fix.
 
+## Synthetic rounding diagnostic
+
+An additive CPU diagnostic compares the frozen candidate's FP32 division path
+with an independent FP64 nearest-distance reference, checked against exact
+rational distances. Each input dtype uses six scales and 288 synthetic values
+at quantization thresholds, their representable neighbours, signed zero, and
+tiny values. FP16 and BF16 produced no code differences; FP32 produced 12 code
+differences, corresponding to six differing packed bytes. The result repeated
+with the same aggregate hash. Its focused tests passed 17 cases, with the CUDA
+case skipped.
+
+This shows sensitivity to rounding at constructed boundaries. It does not show
+that actual model weights differ, that the Triton and PyTorch CUDA paths differ,
+or that rounding causes the long-generation repetition. Those hardware and
+full-model comparisons remain pending.
+
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519

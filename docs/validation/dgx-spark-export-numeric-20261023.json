@@ -132,6 +132,20 @@
     "probe_defects": ["stand_in_quantizer_not_recognized", "incorrect_qtensor_data_accessor"],
     "v2": "in_progress_not_executed"
   },
+  "synthetic_rounding_cpu": {
+    "status": "boundary_difference_observed",
+    "values_per_dtype": 288,
+    "scales": 6,
+    "oracle": "fp64_scaled_nearest_even_checked_against_exact_rational_distances",
+    "code_mismatches": {"float16": 0, "bfloat16": 0, "float32": 12},
+    "float32_packed_byte_mismatches": 6,
+    "repeat_aggregate_sha256": "4d7314e9d54a987e3b030a6a71d5c9fcafecf7d55ce9a274db0b8afc34571b8c",
+    "focused_tests_passed": 17,
+    "cuda_tests_skipped": 1,
+    "gpu_compared": false,
+    "actual_model_weights_compared": false,
+    "repetition_causality_established": false
+  },
   "recovery": {
     "experiment_absent": true,
     "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},
