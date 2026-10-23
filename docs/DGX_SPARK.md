@@ -56,6 +56,15 @@ recipes. Their only host mounts are:
 | `HF_CACHE` | `/cache/huggingface` | Read/write |
 | `OFFLOAD_DIR` | `/opt/megaquant/offload` | Read/write |
 
+Spark SGLang serving fixes TileLang's runtime paths to
+`/cache/tilelang` and `/cache/tilelang/tmp`; the public Compose serving,
+checker and evaluation services mount `/cache/tilelang` as writable tmpfs.
+Spark PTQ services keep the existing volume set and do not need this cache.
+When running the serving image independently with `--read-only`, add a
+writable mount for `/cache/tilelang` (which must include its `tmp` child).
+The runtime override has been verified on Spark; the public Compose image
+configuration has not been built in this validation.
+
 Changing host `src/`, `recipes/` or `docs/` does not change a running Spark
 image. Rebuild the image to change code or recipes.
 

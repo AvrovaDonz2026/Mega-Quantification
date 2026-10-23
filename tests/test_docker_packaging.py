@@ -211,6 +211,9 @@ def test_dockerfile_sglang_spark_is_pinned_and_patches_quantized_vlm(repo_root: 
     assert "pip install --no-cache-dir --no-deps --no-build-isolation ." in dockerfile
     assert "-e ." not in dockerfile
     assert "scripts/patch_sglang_spark.py" in dockerfile
+    assert "TILELANG_CACHE_DIR=/cache/tilelang" in dockerfile
+    assert "TILELANG_TMP_DIR=/cache/tilelang/tmp" in dockerfile
+    assert "/cache/tilelang/tmp" in dockerfile
     assert "requirements-sglang.txt" not in dockerfile
     assert "COPY outputs" not in dockerfile
     for line in dockerfile.splitlines():
@@ -224,29 +227,50 @@ def test_spark_compose_retains_image_source_and_recipes(repo_root: Path) -> None
     data = yaml.safe_load((repo_root / "docker-compose.yml").read_text())
     allowed = {
         "/cache/huggingface",
+        "/cache/tilelang",
         "/models",
         "/opt/megaquant/outputs",
         "/opt/megaquant/offload",
         "/data",
     }
-    for name in (
+    serving_services = (
         "serve-sglang-spark",
         "serve-sglang-spark-mtp",
         "eval-gpqa-spark",
-        "quantize-spark-w4a8",
-        "quantize-spark-w4a4",
         "check-sglang-spark",
         "check-sglang-spark-mtp",
-    ):
+    )
+    for name in serving_services:
         service = data["services"][name]
+        env = service["environment"]
+        assert env["TILELANG_CACHE_DIR"] == "/cache/tilelang"
+        assert env["TILELANG_TMP_DIR"] == "/cache/tilelang/tmp"
         targets = {
-            volume.rsplit(":", 2)[-2 if volume.endswith(":ro") else -1]
+            volume["target"] if isinstance(volume, dict)
+            else volume.rsplit(":", 2)[-2 if volume.endswith(":ro") else -1]
             for volume in service["volumes"]
         }
         assert targets == allowed, name
         for volume in service["volumes"]:
+            if isinstance(volume, dict):
+                continue
             if ":/models" in volume or ":/data" in volume:
                 assert volume.endswith(":ro"), (name, volume)
+
+        tilelang = [v for v in service["volumes"]
+                    if isinstance(v, dict) and v.get("target") == "/cache/tilelang"]
+        assert tilelang == [
+            {"type": "tmpfs", "target": "/cache/tilelang", "tmpfs": {"mode": 0o1777}}
+        ]
+
+    for name in ("quantize-spark-w4a8", "quantize-spark-w4a4"):
+        service = data["services"][name]
+        assert "TILELANG_CACHE_DIR" not in service["environment"]
+        assert "TILELANG_TMP_DIR" not in service["environment"]
+        assert all(
+            not (isinstance(volume, dict) and volume.get("target") == "/cache/tilelang")
+            for volume in service["volumes"]
+        )
 
 
 def test_spark_ptq_compose_uses_clean_image_defaults(repo_root: Path) -> None:

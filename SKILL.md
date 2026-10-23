@@ -137,6 +137,11 @@ Spark serving uses `Dockerfile.sglang.spark` and the `serve-sglang-spark` Compos
 service, independently of the PTQ image. The base is pinned by digest; the
 version-specific loader patch must fail on unrecognized sources. Do not claim
 vision or quantized MTP serving from export coverage or an import check alone.
+Spark SGLang runtime cache paths are fixed to `TILELANG_CACHE_DIR=/cache/tilelang`
+and `TILELANG_TMP_DIR=/cache/tilelang/tmp`; public Compose services provide a
+writable tmpfs at `/cache/tilelang`. Pure PTQ services keep their existing
+mounts and environment. An independent `docker run --read-only` invocation
+must mount writable storage at both cache paths (or their shared parent).
 Spark CPU and GPU share RAM: do not enable automatic host HiCache allocation.
 The Spark recipe is TP1; a two-node TP2 deployment needs explicit distributed
 configuration. Optional `serve.speculative_*` fields enable embedded MTP, without
