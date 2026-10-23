@@ -33,6 +33,10 @@ x-common-env: &common-env
   CXX: /usr/bin/g++
   CUDAHOSTCXX: /usr/bin/g++
 
+x-tilelang-env: &tilelang-env
+  TILELANG_CACHE_DIR: /cache/tilelang
+  TILELANG_TMP_DIR: /cache/tilelang/tmp
+
 x-common-volumes: &common-volumes
   - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
   - ${MODELS_DIR:-./models}:/models
@@ -49,6 +53,18 @@ x-common-volumes: &common-volumes
 # exports, download caches and temporary offload storage come from the host.
 x-spark-volumes: &spark-volumes
   - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
+  - ${MODELS_DIR:-./models}:/models:ro
+  - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
+  - ${OFFLOAD_DIR:-./offload_folder}:/opt/megaquant/offload
+  - ${DATA_DIR:-./data}:/data:ro
+
+x-sglang-spark-volumes: &sglang-spark-volumes
+  - ${HF_CACHE:-./.cache/huggingface}:/cache/huggingface
+  # TileLang initializes its cache during import, so keep it on writable tmpfs.
+  - type: tmpfs
+    target: /cache/tilelang
+    tmpfs:
+      mode: 01777
   - ${MODELS_DIR:-./models}:/models:ro
   - ${OUTPUTS_DIR:-./outputs}:/opt/megaquant/outputs
   - ${OFFLOAD_DIR:-./offload_folder}:/opt/megaquant/offload
@@ -122,11 +138,11 @@ x-sglang-spark: &sglang-spark
   platform: linux/arm64
   pull_policy: missing
   environment:
-    <<: *common-env
+    <<: [*common-env, *tilelang-env]
     EVAL_RECIPE: ${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}
     NVIDIA_VISIBLE_DEVICES: all
     NVIDIA_DRIVER_CAPABILITIES: compute,utility
-  volumes: *spark-volumes
+  volumes: *sglang-spark-volumes
   working_dir: /opt/megaquant
 
 x-ptq-spark: &ptq-spark
@@ -230,7 +246,7 @@ services:
     <<: *sglang-spark
     profiles: ["spark-check"]
     environment:
-      <<: *common-env
+      <<: [*common-env, *tilelang-env]
       NVIDIA_VISIBLE_DEVICES: ""
       MEGAQUANT_SKIP_GPU_REPORT: "1"
     entrypoint: ["python", "scripts/check_sglang_multimodal.py"]
@@ -243,7 +259,7 @@ services:
     <<: *sglang-spark
     profiles: ["spark-check"]
     environment:
-      <<: *common-env
+      <<: [*common-env, *tilelang-env]
       NVIDIA_VISIBLE_DEVICES: ""
       MEGAQUANT_SKIP_GPU_REPORT: "1"
     entrypoint: ["python", "scripts/check_sglang_multimodal.py"]
@@ -257,7 +273,7 @@ services:
     <<: *sglang-spark
     profiles: ["spark"]
     environment:
-      <<: *common-env
+      <<: [*common-env, *tilelang-env]
       EVAL_RECIPE: ${SPARK_EVAL_RECIPE:-recipes/eval-gpqa-diamond.spark.yaml}
       MEGAQUANT_SGLANG_BASE_URL: ${SPARK_SGLANG_BASE_URL:-http://serve-sglang-spark:30000/v1}
       MEGAQUANT_SKIP_GPU_REPORT: "1"
