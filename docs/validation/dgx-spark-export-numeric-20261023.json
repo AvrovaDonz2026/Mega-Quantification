@@ -45,6 +45,46 @@
     "paired_scientific_match": "same_frozen_payload_only_arm_diff",
     "model_or_quantization_diagnosis": false
   },
+  "mse_retry_v3": {
+    "state": "failed_before_service_mutation",
+    "staging_passed": true,
+    "failure_stage": "worker_installation",
+    "failure_class": "deployment_unit_ttl_hard_gate",
+    "legacy_ttl_seconds": 30600,
+    "planned_ttl_seconds": 9000,
+    "mismatch_independently_reproduced": true,
+    "quantization_or_export_launched": false,
+    "quantizer_reproduction_failure": false
+  },
+  "mse_retry_v4": {
+    "state": "failed_during_execution_before_export",
+    "job": "0fc25e19d0c9bcdeae7c7afc",
+    "staging_passed": true,
+    "execution_started": true,
+    "started_at_cst": "20:51:25",
+    "failed_at_cst": "20:57:06",
+    "failure_class": "transport_timeout",
+    "container_and_plan_started": true,
+    "export_complete": false,
+    "authorized_services_paused": true,
+    "coordinator_recovery": "process_stable",
+    "formal_independent_recovery_verification": "passed_additive_v7",
+    "quantizer_reproduction_failure": false,
+    "recovery_readback": {
+      "passed": true,
+      "export_generated": false,
+      "experiment_absent": true,
+      "services_running": true,
+      "restart_count": 0,
+      "oom_killed": false,
+      "journal_status": "verified_closed_unarmed",
+      "primary_failure": null,
+      "recovery_failures": [],
+      "service_api_passed": true,
+      "additive_only": true,
+      "does_not_rewrite_execution_failure": true
+    }
+  },
   "mse_recovery_readback": {
     "primary_failure": "heartbeat_failed",
     "recovery_failures": [],
@@ -55,6 +95,18 @@
     "restart_count": 0,
     "oom_killed": false,
     "service_api_passed": true
+  },
+  "no_gpu_transport_probe": {
+    "duration_seconds": 420,
+    "peer_echo_success": {"peer_0": "357/357", "peer_1": "356/356"},
+    "preclose_natural_failure": false,
+    "preclose_process_alive": true,
+    "postclose_exit_code": 1,
+    "postclose_stderr_sha256": "d2a09940c601d68ce13253a06643414ab23a2ba2bf1e40d6114bd87ae4169a18",
+    "postclose_observation_limit": "captured after intentional teardown; does not establish original SSH root cause",
+    "idle_inspection": {"samples_per_peer": 118, "max_idle_ms": {"peer_0": 49.461, "peer_1": 13.287}, "errors": 0},
+    "ptq_load_stability_proven": false,
+    "quantization_or_export_result": false
   },
   "recovery": {
     "experiment_absent": true,

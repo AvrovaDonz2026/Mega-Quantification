@@ -5,14 +5,11 @@
 The full static-max single-arm export completed its export and recovery gates,
 but the overall protocol remains advisory: a post-close heartbeat watchdog
 reported a late heartbeat failure after the worker had closed. This does not
-invalidate the read-back export evidence, but it prevents calling the whole
-protocol passed until that watchdog event is adjudicated. The max journal's
-primary failure is `heartbeat_failed` with no recovery failures; recovery
-success is a separate observation and is not adjudication success.
-The strict-bound successor adjudication later marked the max artifact usable
-for the matched experiment, while retaining the original overall protocol
-status as failed/advisory. It does not promote the original lifecycle result
-to a protocol pass.
+invalidate the read-back export evidence. Strict-bound successor adjudication
+passed the artifact-usability check for the matched experiment; the original
+lifecycle protocol remains failed/advisory. The max journal's primary failure
+is `heartbeat_failed` with no recovery failures. Recovery success is a separate
+observation and does not make the overall protocol pass.
 
 The static-MSE v1 arm was staged and launched separately with the same frozen
 payload, but active execution terminated on an SSH transport EOF/heartbeat
@@ -21,6 +18,33 @@ restoration, running services, no OOM/restarts, and a passing service API smoke.
 This is an execution/lifecycle failure, not a model or quantization diagnosis.
 No paired max/MSE quality or repetition
 conclusion is made here.
+
+A separate static-MSE retry v3 passed staging but failed before service mutation,
+during worker installation: a deployment-unit TTL hard gate compared legacy
+`30600` seconds with the planned `9000` seconds. The mismatch was independently
+reproduced. No quantization or export was launched, so this is an installation
+gate failure, not a reproduction failure of the quantizer. The original v1
+active-execution failure above remains a separate historical attempt. Retry v4
+job `0fc25e19d0c9bcdeae7c7afc` began execution at 20:51:25 CST and failed with
+`transport_timeout` at 20:57:06 CST, before producing an export. Coordinator
+recovery was stable. Additive V7 independent readback later passed recovery:
+both services were running with zero restarts and no OOM, the experiment was
+absent, journals were closed/unarmed with no primary failure, and the service API
+smoke passed. This recovery readback does not change the v4 execution failure or
+create an export; it remains an execution/lifecycle failure, not a quantizer
+reproduction result. Earlier V4/V5/V6 readback failures were verifier defects.
+
+## No-GPU transport diagnostic
+
+A separate 420-second no-GPU echo probe completed successfully on both peers:
+357/357 and 356/356 messages were received with no natural failure and the
+processes remained alive before intentional teardown. The post-teardown exit
+code 1 and 37-byte stderr digest matched the historical post-close diagnostic;
+because both were captured after teardown, they do not establish the original
+v4 SSH root cause. Separate idle-container inspection sampled 118 observations
+per peer with maximum Docker inspection durations of 49.461 ms and 13.287 ms, with no
+errors. This probe does not prove transport stability under PTQ load or provide
+a quantization/export result.
 
 ## Export evidence
 
@@ -44,10 +68,11 @@ Independent read-back found both original GLM services restored and stable:
 both were running with restart count zero and no OOM, the experiment container
 was absent, and the service arithmetic smoke returned `2` with `stop`. Recovery
 passed despite the late watchdog advisory.
-The MSE read-back likewise recorded primary failure `heartbeat_failed`, an empty
-recovery-failures list, successful restoration, and no generated export. A later
-strict adjudication is still required; neither arm's recovery observation makes
-the overall protocol passed.
+The MSE v1 read-back recorded primary failure `heartbeat_failed`, an empty
+recovery-failures list, successful restoration, and no generated export. MSE v4
+V7 recovery passed additively after the failed execution; it does not rewrite the
+failed run as successful.
+The max artifact adjudication does not change either MSE status.
 
 ## Scope
 
