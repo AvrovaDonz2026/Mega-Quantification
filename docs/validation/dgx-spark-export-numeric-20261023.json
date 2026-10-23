@@ -7,10 +7,17 @@
   "protocol": {
     "coordinator_status": "observation_passed",
     "coordinator_errors": 0,
-    "post_close_watchdog": "late_heartbeat_failure_under_adjudication",
+    "post_close_watchdog": "late_heartbeat_failure_retained_after_artifact_adjudication",
     "primary_failure": "heartbeat_failed",
     "recovery_failures": [],
     "overall_protocol_passed": false
+  },
+  "adjudication": {
+    "artifact_usable_for_matched_experiment": true,
+    "strict_bound_successor": true,
+    "original_completion_passed": false,
+    "original_lifecycle_promoted_to_pass": false,
+    "scope": "artifact usability only; no lifecycle, production, or repetition-fix pass"
   },
   "identity": {
     "plan_sha256": "9e27ce85886a6d76b5d49603ccd4e093404590ef61b0bce6131f7ebe02f26f7c",

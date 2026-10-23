@@ -9,6 +9,10 @@ invalidate the read-back export evidence, but it prevents calling the whole
 protocol passed until that watchdog event is adjudicated. The max journal's
 primary failure is `heartbeat_failed` with no recovery failures; recovery
 success is a separate observation and is not adjudication success.
+The strict-bound successor adjudication later marked the max artifact usable
+for the matched experiment, while retaining the original overall protocol
+status as failed/advisory. It does not promote the original lifecycle result
+to a protocol pass.
 
 The static-MSE v1 arm was staged and launched separately with the same frozen
 payload, but active execution terminated on an SSH transport EOF/heartbeat
