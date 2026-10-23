@@ -55,4 +55,15 @@ full-model 或 SGLang kernel 数值 parity。
 差为 0），且 legacy 与 vendor 解码乘法顺序之间的 BF16 差异为 0；残差仍为 max 804、MSE 674
 个元素，均属于 magnitude/signed-nonzero mismatch。effective-scale 数值和
 decode association 因此不再是该探针中的解释，但 FP4 code decision 仍有差异。
-除法精度只是待验证假设，不能据此定位 MSE 根因或声称重复问题已修复。
+v3 将除法精度假设限定在所选视觉层：path A 使用 Torch quotient，复现实际导出打包的编码选择；path B 使用默认 Triton quotient，精确复现 live fake quantization；path C 只把 B 的除法改为 `libdevice.div_rn`。默认除法在 0.75 FP4 tie 附近造成的 code 选择差异解释了该层观测到的 fake/export 差异；这不是整模 MSE 根因，也不表示重复问题已修复。
+
+v3 两臂使用相同 source bytes，并复现 max 804、MSE 674 个残差；这些都位于
+magnitude 从 1.0 向下跨过 0.75 tie 到 0.5 的位置。默认 ratio 相对 path A 有
+1 ULP 差异，而 round-to-nearest 除法的 path C 在 ratio、magnitude 和非零符号上
+与 path A 一致，仅有 318,729（max）和 335,136（MSE）个 signed-zero raw-code
+差异，这些零符号码差异不改变解码数值。v2 与 v3 的 source hash 使用不同
+计算规则，不应直接比较。数值 executor 以 exit code 0 完成，`observation_passed`，armed=false、
+cleanup 为 observed-absent，恢复状态 process_stable。独立 readiness 检查确认
+两个 GLM 容器运行且 restart count 为 0、无 OOM；服务入口的算术 smoke 在 0.219 秒
+返回 2 和 native stop。该证据支持“默认近似除法造成所选层 fake/export code
+mismatch”的局部解释；它不构成 full-model parity、MSE 独有重复根因或修复声明。

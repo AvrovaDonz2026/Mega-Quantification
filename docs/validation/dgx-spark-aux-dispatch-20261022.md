@@ -258,3 +258,28 @@ path, outside the historical full checkpoint and SGLang kernel behavior.
 The paired workflow completed with `observation_passed` and `process_stable`;
 a separate TP2 readiness check returned answer `2` with native `stop` in
 0.255 seconds.
+
+## Selected real-vision numerical probe v3
+
+A third probe of the same selected layer passed its comparison gates in 80.22
+seconds. For each arm, path A uses the Torch quotient and reproduces the actual
+export packing decisions; path B uses the default Triton quotient and reproduces
+live fake quantization exactly; path C changes only B's division to `libdevice.div_rn`.
+Both arms used identical source bytes within this run and reproduced 804 (`max`)
+and 674 (`MSE`) fake-versus-export BF16 residuals. Every residual occurred at
+the 0.75 FP4 tie crossed downward from magnitude 1.0 to 0.5. B differed from A
+by one ULP in 1,300,476 (`max`) and 1,304,593 (`MSE`) ratios. C matched A's
+ratios, magnitudes, and nonzero signs; only signed-zero raw-code classifications
+differed, for 318,729 (`max`) and 335,136 (`MSE`) elements. Those signed-zero
+code differences do not change the decoded numerical values.
+
+Within this selected-layer probe, default approximate division explains all
+observed fake/export code differences at the FP4 tie. The v2 and v3 source
+hashes use different hashing definitions and cannot be compared directly.
+A separate post-probe readiness check found both GLM containers
+running with restart count zero and no OOM; the serving-rank arithmetic smoke
+returned `2` with native `stop` in 0.219 seconds. The numeric executor exited
+0 with `observation_passed`, `armed=false`, cleanup `observed-absent`, and
+`process_stable` restoration. This recovery evidence is scoped to those
+observations. The result is not a full-model parity finding and does not
+establish an MSE-specific repetition cause or fix.
