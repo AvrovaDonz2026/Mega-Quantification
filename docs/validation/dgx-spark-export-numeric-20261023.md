@@ -53,8 +53,11 @@ services unchanged and source, calibration, and pinned image identities
 verified. The focused preflight/test gate passed 26 tests; planned arm,
 experiment, and worker timeouts were 1,800, 2,400, and 3,000 seconds. No GPU
 quantization or export started because the certificate expired before execution.
-The retry preserves all 40 scientific payload files; its changes are limited to
-four operational files. This is staging evidence only.
+Against the frozen max plan, 39 of 43 payload files are byte-identical. The four
+differing files are the execution descriptor, maintenance worker, deployment
+worker, and runtime validator. The descriptor carries the intended max/MSE arm
+selection and timeout; the other differences are operational. This is staging
+evidence only.
 
 A separate tiny public-codec hardware probe failed before codec coverage. It did
 not complete candidate audit coverage: the probe used a stand-in quantizer that
