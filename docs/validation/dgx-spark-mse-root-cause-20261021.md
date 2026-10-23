@@ -37,3 +37,16 @@ Retry job `60348764d2634c4d68aaf486` 于 2026-10-21 22:49:32 CST 启动，模型
 - R5 retry：完成 49,152-token 单次生成与候选周期检查；源码门禁通过，双端服务恢复与稳定性验证通过。该统计不含题目、原始输出、token ID 或张量。
 
 该报告只保留聚合统计，不包含主机、私有路径、请求内容、输出文本、token ID 或原始张量。
+
+## 后续 matched export 与数值探针（2026-10-23）
+
+后续 matched full-27B 导出已完成：text 401、vision 110、MTP 8 个量化模块，
+auxiliary U8 条目为 118/118；配对 serving 的范围与限制见
+[`dgx-spark-aux-dispatch-20261022.md`](dgx-spark-aux-dispatch-20261022.md)。
+其 bounded long-prefix 试验没有复现自然循环：4,096-token 自然窗口早于历史
+33,131-token 循环起点，supplied prefix 也不是旧增量 SSM/KV 状态。
+
+同日 selected real-vision layer 数值探针观察到 fake/decode BF16 的有限差异，
+但 decode 乘法顺序尚未与 vendor 对齐，scale、FP4 rounding 或重建顺序仍待细分。
+该结果不定位本地导出 bug，也不能解释 MSE 独有重复；它不等同于 full-checkpoint、
+full-model 或 SGLang kernel 数值 parity。

@@ -206,3 +206,31 @@ failure. `static-MSE` outputs were not all identical across runs. This control
 does not exclude other capacity effects, nondeterminism, or all-batch behavior;
 it did not enable MTP or test repetition repair. Processes were restored to a
 stable state.
+
+## Selected real-vision numerical probe
+
+A GPU probe completed in 84.901 seconds on one real vision linear source layer
+with shape `[3456,1152]`, ModelOpt 0.47.0 NVFP4 E2M1 block-16 weights, FP8 E4M3
+block scales and an FP32 `weight_scale_2` multiplier. It used eight BF16 seeded
+calibration rows and 16 BF16 held-out rows, all with seed 241023. Both `max` and
+`MSE` produced 1,990,656 packed bytes, and repacking reproduced every byte.
+Both arms also passed the probe's live/export block-scale byte-equality and FP32
+`scale2` equality gates. Temporary exports were removed
+and raw tensors were not retained.
+
+The comparison used FP32 matmul plus an explicit BF16 path. Fake-quantized versus
+reloaded-decode BF16 weights differed in 804 of 3,981,312 elements for `max`
+(MSE 5.232381e-9, max absolute difference 0.0242919921875) and 674 elements
+for `MSE` (MSE 4.646133e-9, same max absolute difference). These are measured
+differences, not a parity pass or a rounding-only conclusion. The independent
+decode multiplication order has not been aligned to the vendor path; scale,
+FP4 rounding or reconstruction order may contribute. This selected-layer probe
+does not establish historical full-checkpoint parity, full-model numeric parity,
+or SGLang kernel/serving behavior, and does not explain the MSE-only repetition
+result.
+
+The retained probe records `process_stable`, `cleanup=observed-absent`,
+`armed=false`, and `observation_passed` for the paired coordinator workflow.
+A separate TP2 readiness check passed with answer `2`, native `stop`, and
+0.196 seconds. These lifecycle and readiness checks do not expand the selected
+layer probe into full-model numeric parity or broad serving quality.
