@@ -46,6 +46,12 @@ auxiliary U8 条目为 118/118；配对 serving 的范围与限制见
 其 bounded long-prefix 试验没有复现自然循环：4,096-token 自然窗口早于历史
 33,131-token 循环起点，supplied prefix 也不是旧增量 SSM/KV 状态。
 
+另对 pinned serving image 做了 CPU-only source capability 检查：SGLang 0.5.20
+镜像 `sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25` 的
+loader source SHA-256 为 `017a0319e7f9c5550c1cdb940ff8ddb92428e34804b477da16fff7e3d761ac40`，
+七项 W4A16 capability 检查均通过，可用于准备 W4A16 对照。该证据仅确认 source
+capability；`gpu_support_proven=false`，没有证明 tiny-GPU 运行、整模量化或 serving 行为。
+
 同日 selected real-vision layer 数值探针观察到 fake/decode BF16 的有限差异，
 但 decode 乘法顺序尚未与 vendor 对齐，scale、FP4 rounding 或重建顺序仍待细分。
 该结果不定位本地导出 bug，也不能解释 MSE 独有重复；它不等同于 full-checkpoint、

@@ -195,6 +195,18 @@ serving-entry API check passed: fixed arithmetic returned `2` with
 native `stop` in 0.215 seconds. Both containers were running without restart or
 OOM.
 
+### Natural long-generation metric contract
+
+For the in-progress long-natural runtime, the fixed-lag-2032 metric counts a
+longest consecutive match run where `ids[i] == ids[i-2032]`; a run of length
+`L` covers `L + 2032` tokens. Its reported onset is the start of that longest
+run (ties retain the first run), not the earliest occurrence of any repetition.
+This contract does not describe the completed prefix probe above, whose runtime
+did not emit an `earliest_onset` field. It does not establish that 2032 is the
+shortest period or exclude other periods. A service `stop` finish reason is
+metadata and does not by itself prove a matched EOS token. Long-natural results
+remain pending.
+
 ## Capacity-control baseline
 
 A separate baseline-only run capped running requests at 4 and Mamba cache at 16
