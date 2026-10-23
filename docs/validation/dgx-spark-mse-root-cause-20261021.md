@@ -50,3 +50,9 @@ auxiliary U8 条目为 118/118；配对 serving 的范围与限制见
 但 decode 乘法顺序尚未与 vendor 对齐，scale、FP4 rounding 或重建顺序仍待细分。
 该结果不定位本地导出 bug，也不能解释 MSE 独有重复；它不等同于 full-checkpoint、
 full-model 或 SGLang kernel 数值 parity。
+
+后续 v2 探针在同一层确认两臂有效 scale 的 248,832 个值均 exact（最大 ULP
+差为 0），且 legacy 与 vendor 解码乘法顺序之间的 BF16 差异为 0；残差仍为 max 804、MSE 674
+个元素，均属于 magnitude/signed-nonzero mismatch。effective-scale 数值和
+decode association 因此不再是该探针中的解释，但 FP4 code decision 仍有差异。
+除法精度只是待验证假设，不能据此定位 MSE 根因或声称重复问题已修复。

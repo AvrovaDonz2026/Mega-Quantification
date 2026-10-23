@@ -234,3 +234,27 @@ The retained probe records `process_stable`, `cleanup=observed-absent`,
 A separate TP2 readiness check passed with answer `2`, native `stop`, and
 0.196 seconds. These lifecycle and readiness checks do not expand the selected
 layer probe into full-model numeric parity or broad serving quality.
+
+## Selected real-vision numerical probe v2
+
+A second probe of the same selected real vision layer completed in 79.681
+seconds. Within each arm, all 1,990,656 exported bytes matched repacking from
+the live calibrated layer. Effective scales matched for all 248,832 values in
+each arm with maximum ULP difference zero.
+Changing from the legacy to vendor decode association changed zero BF16 values.
+The fake versus
+reloaded-decode residual count remained 804 elements for `max` and 674 for
+`MSE`, out of 3,981,312; all mismatches were magnitude and signed-nonzero
+mismatches. Magnitude inversion had zero unresolved and ambiguous entries;
+sign-zero remained ambiguous for 638,148 `max` entries and 670,743 `MSE`
+entries. These results exclude effective-scale numerics and decode association
+as explanations within this probe, but the FP4 code decision still differs
+between paths.
+
+This does not establish full-model parity or explain MSE-specific repetition.
+Division precision is a hypothesis only; the selected-layer probe does not prove
+it. The result remains limited to the real vision layer and its FP32/BF16 probe
+path, outside the historical full checkpoint and SGLang kernel behavior.
+The paired workflow completed with `observation_passed` and `process_stable`;
+a separate TP2 readiness check returned answer `2` with native `stop` in
+0.255 seconds.
