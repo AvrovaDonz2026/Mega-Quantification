@@ -102,6 +102,20 @@ not a bug or root-cause proof. GPU, full-model MSE, visual/MTP, and matched-long
 validation remain pending. The current certificate is expired and no new GPU
 execution or GLM pause was performed.
 
+## CPU checkpoint persistence follow-up
+
+A static-state CPU probe (SHA-256
+`1b779c159015c499fbedc8c2e5823bab29be5d710fffd223eb1f43d511b3b207`) used the
+pinned ModelOpt runtime and repository static transform with block-16 E4M3
+scale metadata, including weight per-block amax shape `[64,1]` and global
+scalar amax state. It saved a 9,895-byte checkpoint, restored it in two fresh
+subprocesses, and matched the full four-entry state fingerprint exactly
+(`0654d60134263c9a88521c85bed9a68305c21e05430ef04098032df16d5fc874`,
+`3 passed`). The temporary
+checkpoint was removed. This establishes persistence of the same calibrated
+static state only; it does not establish packed-export parity, GPU behavior,
+offload behavior, full-27B memory/performance, or serving quality.
+
 ## Export evidence
 
 The static-max arm verified all 519 expected static-NVFP4 targets with 519

@@ -158,6 +158,21 @@
     "glms_paused_for_probe": false,
     "codec_arithmetic_equivalence_proven": false
   },
+  "cpu_static_state_persistence_20261024": {
+    "probe_sha256": "1b779c159015c499fbedc8c2e5823bab29be5d710fffd223eb1f43d511b3b207",
+    "tests_passed": 3,
+    "checkpoint_bytes": 9895,
+    "fresh_subprocess_restores": 2,
+    "weight_and_state_hashes_exact": true,
+    "state_entry_count": 4,
+    "temporary_checkpoint_removed": true,
+    "scope": "checkpoint persistence only",
+    "packed_export_parity": false,
+    "gpu_validated": false,
+    "offload_validated": false,
+    "full_27b_memory_performance_validated": false,
+    "serving_quality_validated": false
+  },
   "recovery": {
     "experiment_absent": true,
     "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},
