@@ -116,8 +116,39 @@ MSE, or a repetition fix.
 
 A separate CUDA rounding attempt failed while inspecting the dynamic Triton
 source with `ValueError`, before numeric comparison and with no raw tensor
-output. It provides no numerical conclusion. Full-model MSE execution was
-running separately at the time of this update and is not reported as passed.
+output. A V2 retry failed at the first CPU-to-CUDA tensor transfer with
+`AcceleratorError`; the service remained unchanged. Those two attempts provide
+no numerical conclusion. A completed retry then ran the synthetic CPU/GPU
+comparison and failed its exactness gate while leaving the service unchanged.
+For FP16 and BF16, all candidate/public/oracle code and packed comparisons were
+zero. For FP32 on GPU, candidate-versus-public differed by 14 codes/7 packed
+bytes, candidate-versus-oracle by 22/11, and public-versus-oracle by 12/6; the
+CPU candidate-versus-oracle comparison was 12/6. These are distinct pairwise
+comparisons, not unique affected-value counts. They are synthetic boundary
+results and do not establish full-model behavior or a repetition fix. V7 is
+being prepared and has not been staged or executed.
+
+A separate bounded CUDA control passed for one 32x32 FP32 weight using pinned
+ModelOpt 0.47.0, the repository static transform, one MSE plus FP8-scale-sweep
+calibration, and two fresh restores with the same state fingerprint. The
+pinned HF weight-export helper (not a full checkpoint export) and frozen
+candidate produced identical packed bytes under the same scales; both workers'
+fake-quant/dequant values matched exactly with zero maximum absolute error. The
+temporary checkpoint was removed, no raw tensor artifacts were written, and the
+service was unchanged. This supports the narrow real-CUDA MSE weight-helper
+path for this tensor; it does not establish full-model behavior, equivalence for
+all tensors or dtypes, full-checkpoint export parity, or a repetition fix.
+
+The separate static-MSE v6 full-model attempt ran from 21:49 to 22:19 CST and
+timed out. Its remote log metadata records 256/256 calibration progress and a
+10,486-byte calibration-coverage file, but no complete shard set or export. The coordinator
+reported `experiment_failed` with stable-process recovery and no recovery
+errors. The V9 independent completion read-back failed on one peer because the
+expected export was absent; that overall failed result is retained. A later V10
+independent recovery read-back passed on both peers: services were running with
+zero restarts and no OOM, the experiment was absent, and the independent service
+API check passed. V10 confirms recovery only and no export. The timeout does not
+establish a quantizer defect or confirm a hash-processing bottleneck.
 
 ## CPU checkpoint persistence follow-up
 
