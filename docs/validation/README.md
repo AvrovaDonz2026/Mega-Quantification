@@ -80,6 +80,28 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 同日的 [辅助精度 guard 现有导出检查](dgx-spark-auxiliary-precision-guard-20261022.json)只读了 safetensors headers：static-max 的 110 个 vision 与 8 个 MTP 权重全部为 U8 packed，118/118 通过；static-MSE 的同一范围全部为 BF16，118/118 被 guard 拒绝。该记录把导出后的辅助范围丢失固定为可重复的 contract failure，不代表 MSE 重复输出的完整根因或新的 GPU 量化验证。
 
+[Auxiliary dispatch probe](dgx-spark-aux-dispatch-20261022.md)记录 fresh paired probe：static-max 完成辅助 dispatch；static-MSE 未调用辅助 dispatch，118 个辅助权重仍为 BF16，随后被精度 guard 拒绝。Pair comparison 因 arm incomplete 跳过。该证据支持 ModelOpt streaming resident non-decoder 路径的候选定位，不代表 patched GPU、重复修复、GPQA、serving 或 TP2 结果。
+
+2026-10-23 的 [full static-max export validation](dgx-spark-export-numeric-20261023.md)
+记录一臂 full export contract 与独立恢复证据。导出 gates 通过；严格 successor
+adjudication 将 artifact 标记为可用于 matched experiment，但原始生命周期协议仍
+保留 late-heartbeat advisory/failed 状态。static-MSE v1 在执行中失败，未生成
+export；retry v3 又在 worker installation 的 TTL hard gate 前失败，同样没有启动
+量化/export。retry v4 于 20:51:25 CST 开始执行，约 6 分钟后因 transport timeout
+在导出前失败；coordinator recovery 稳定。随后 additive V7 readback 已通过恢复验证；该 readback 不生成 export，也不改写 v4
+执行失败状态。
+另有 no-GPU transport echo/idle diagnostic：420 秒内两 peer 分别 357/357 与
+356/356 成功，teardown 前进程存活，118 次 idle inspection 无错误。teardown 后的
+exit/stderr 仅是后置观察，不能隔离 v4 SSH 根因，也不证明 PTQ load 下的 transport
+稳定性或量化/export 成功。
+该记录不等同于 paired quality、production
+serving、full-model parity 或 repetition fix。
+Static-MSE v6 的双端 staging 与 26 项 focused tests 通过，但证书在执行前过期，
+没有启动 GPU quantization/export。独立 tiny public-codec hardware probe 未完成
+codec/audit coverage，因此不能写成 GPU codec 通过；V2 尚未执行。
+新增合成 CPU 阈值诊断观察到 FP32 舍入边界差异；尚未证明实际模型权重或
+两条 CUDA 路径存在差异，也未建立与长回答重复的因果关系。
+
 本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP

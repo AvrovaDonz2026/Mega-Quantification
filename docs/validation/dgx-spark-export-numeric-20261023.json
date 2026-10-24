@@ -1,0 +1,259 @@
+{
+  "schema": "full-static-max-export-public-v1",
+  "date": "2026-10-23",
+  "arm": "static-max",
+  "job": "b0497cd020fabd1bc8768911",
+  "status": "export_contract_passed_protocol_advisory",
+  "protocol": {
+    "coordinator_status": "observation_passed",
+    "coordinator_errors": 0,
+    "post_close_watchdog": "late_heartbeat_failure_retained_after_artifact_adjudication",
+    "primary_failure": "heartbeat_failed",
+    "recovery_failures": [],
+    "overall_protocol_passed": false
+  },
+  "adjudication": {
+    "artifact_usable_for_matched_experiment": true,
+    "strict_bound_successor": true,
+    "original_completion_passed": false,
+    "original_lifecycle_promoted_to_pass": false,
+    "scope": "artifact usability only; no lifecycle, production, or repetition-fix pass"
+  },
+  "identity": {
+    "plan_sha256": "9e27ce85886a6d76b5d49603ccd4e093404590ef61b0bce6131f7ebe02f26f7c",
+    "export_tree_sha256": "63ca89e911cabe4e04106ce7173f21853fdda93cc73ddbfac3cef22ba225a914",
+    "evidence_sha256": "8b0cf011d818f8f270f7a058fc84990db47432eba0fd0a02a537e2f9fd8207ea"
+  },
+  "export": {
+    "expected_static_nvfp4": 519,
+    "candidate_calls": 519,
+    "candidate_oracle_exact": true,
+    "candidate_oracle_scope": "separate implementations and call paths; both use Triton default division and the same E2M1 thresholds, sign handling, and packing; no live ModelOpt fake-quant comparison or independent arithmetic-equivalence proof",
+    "scales_unchanged": true,
+    "vision": {"expected": 333, "retained": 333, "quantizers": 110},
+    "mtp": {"expected": 15, "retained": 15, "quantizers": 8},
+    "index_keys": 2756,
+    "shards": 2,
+    "export_files": 16,
+    "total_bytes": 17499733224,
+    "header_key_mapping_passed": true,
+    "restored": true
+  },
+  "mse_v1": {
+    "state": "active_execution_failed_before_export",
+    "failure_class": "ssh_transport_eof_and_heartbeat_expiry",
+    "export_generated": false,
+    "paired_scientific_match": "same_frozen_payload_only_arm_diff",
+    "model_or_quantization_diagnosis": false
+  },
+  "mse_retry_v3": {
+    "state": "failed_before_service_mutation",
+    "staging_passed": true,
+    "failure_stage": "worker_installation",
+    "failure_class": "deployment_unit_ttl_hard_gate",
+    "legacy_ttl_seconds": 30600,
+    "planned_ttl_seconds": 9000,
+    "mismatch_independently_reproduced": true,
+    "quantization_or_export_launched": false,
+    "quantizer_reproduction_failure": false
+  },
+  "mse_retry_v4": {
+    "state": "failed_during_execution_before_export",
+    "job": "0fc25e19d0c9bcdeae7c7afc",
+    "staging_passed": true,
+    "execution_started": true,
+    "started_at_cst": "20:51:25",
+    "failed_at_cst": "20:57:06",
+    "failure_class": "transport_timeout",
+    "container_and_plan_started": true,
+    "export_complete": false,
+    "authorized_services_paused": true,
+    "coordinator_recovery": "process_stable",
+    "formal_independent_recovery_verification": "passed_additive_v7",
+    "quantizer_reproduction_failure": false,
+    "recovery_readback": {
+      "passed": true,
+      "export_generated": false,
+      "experiment_absent": true,
+      "services_running": true,
+      "restart_count": 0,
+      "oom_killed": false,
+      "journal_status": "verified_closed_unarmed",
+      "primary_failure": null,
+      "recovery_failures": [],
+      "service_api_passed": true,
+      "additive_only": true,
+      "does_not_rewrite_execution_failure": true
+    }
+  },
+  "mse_recovery_readback": {
+    "primary_failure": "heartbeat_failed",
+    "recovery_failures": [],
+    "recovery_passed": true,
+    "restoration_passed": true,
+    "experiment_absent": true,
+    "services_running": true,
+    "restart_count": 0,
+    "oom_killed": false,
+    "service_api_passed": true
+  },
+  "no_gpu_transport_probe": {
+    "duration_seconds": 420,
+    "peer_echo_success": {"peer_0": "357/357", "peer_1": "356/356"},
+    "preclose_natural_failure": false,
+    "preclose_process_alive": true,
+    "postclose_exit_code": 1,
+    "postclose_stderr_sha256": "d2a09940c601d68ce13253a06643414ab23a2ba2bf1e40d6114bd87ae4169a18",
+    "postclose_observation_limit": "captured after intentional teardown; does not establish original SSH root cause",
+    "idle_inspection": {"samples_per_peer": 118, "max_idle_ms": {"peer_0": 49.461, "peer_1": 13.287}, "errors": 0},
+    "ptq_load_stability_proven": false,
+    "quantization_or_export_result": false
+  },
+  "mse_v6_staging": {
+    "job": "d4f368ca832d87e3ce0d4a78",
+    "staging_passed": true,
+    "dual_peer_service_unchanged": true,
+    "focused_tests_passed": 26,
+    "arm_timeout_seconds": 1800,
+    "experiment_timeout_seconds": 2400,
+    "worker_timeout_seconds": 3000,
+    "payload_files": 43,
+    "byte_identical_payload_files_vs_max": 39,
+    "changed_payload_files_vs_max": 4,
+    "changed_payload_roles": ["execution_descriptor", "maintenance_worker", "deployment_worker", "runtime_validator"],
+    "execution_started": false,
+    "gpu_quantization_started": false,
+    "export_generated": false,
+    "certificate_expired_before_execution": true
+  },
+  "tiny_public_codec_probe": {
+    "status": "failed_before_codec_coverage",
+    "gpu_codec_validated": false,
+    "candidate_audit_covered": false,
+    "probe_defects": ["stand_in_quantizer_not_recognized", "incorrect_qtensor_data_accessor"],
+    "v2": "in_progress_not_executed",
+    "oct24_gpu_followup": {
+      "initial_v3": {
+        "status": "failed_before_codec_coverage",
+        "error_type": "AcceleratorError",
+        "error_sha256": "c4ee938c8cc80090a7b7101d047f1f5c9e8c16c2f6c7602e291ae186f8e28d0b",
+        "raw_tensor_output": false,
+        "candidate_audit_covered": false,
+        "root_cause_established": false,
+        "service_unchanged": true
+      },
+      "retry_v3": {
+        "status": "covered",
+        "hook_contract": "custom_registry_handler",
+        "candidate_attempts": 1,
+        "candidate_calls": 1,
+        "delegated_calls": 0,
+        "failures": 0,
+        "shape": [1, 16],
+        "scale": 1,
+        "oracle_exact": true,
+        "restored": true,
+        "service_unchanged": true,
+        "scope": "one-shape handler contract only; not arithmetic equivalence, full-export parity, real-weight parity, full-model MSE, or repetition validation"
+      },
+      "rounding_v1": {
+        "status": "failed_before_numeric_comparison",
+        "failure_stage": "dynamic Triton source inspection",
+        "error_type": "ValueError",
+        "error_sha256": "98f364b899ecbeacc0fa48669d34c3a65c20434ac27d80e077f015c70927e495",
+        "raw_tensor_output": false,
+        "numerical_conclusion": false,
+        "service_unchanged": true
+      },
+      "gpu_codec_arithmetic_equivalence": false,
+      "full_model_mse_validated": false,
+      "repetition_fix": false
+    }
+  },
+  "synthetic_rounding_cpu": {
+    "status": "boundary_difference_observed",
+    "values_per_dtype": 288,
+    "scales": 6,
+    "oracle": "fp64_scaled_nearest_even_checked_against_exact_rational_distances",
+    "code_mismatches": {"float16": 0, "bfloat16": 0, "float32": 12},
+    "float32_packed_byte_mismatches": 6,
+    "repeat_aggregate_sha256": "4d7314e9d54a987e3b030a6a71d5c9fcafecf7d55ce9a274db0b8afc34571b8c",
+    "focused_tests_passed": 17,
+    "cuda_tests_skipped": 1,
+    "gpu_compared": false,
+    "actual_model_weights_compared": false,
+    "repetition_causality_established": false
+  },
+  "cpu_readiness_followup_20261024": {
+    "vendor_modelopt_classification": {"tensor_quantizer": true, "format": "nvfp4", "is_static_quantizer": true, "quantized_data_accessor": true, "tests_passed": 5, "cuda_tests_skipped": 1, "source_sha256": "f0cbcbac5958ce1b21b8b2f2677d3ca0dbb667aa041369c6af9c64845055fe46"},
+    "v3_exception_probe": {"traceback_injection_fixed": true, "tests_passed": 6, "cuda_tests_skipped": 1, "probe_sha256": "12d5c2730df9ca183e3bd6775a723a4a7e5cafa64479d3a874554d636ebb352b", "ruff_passed": true, "driver_plan_compile_passed": true},
+    "rounding_v2": {"source_sha256": "709c8722cd84d8d9b058ff7ccd33c097f3194f435da3db220ceaf3565cb35dbf", "v1_v2_tests_passed": 35, "v1_v2_cuda_tests_skipped": 2, "float32_code_differences": 12, "float32_packed_byte_differences": 6},
+    "checkpoint_scope": "status at the CPU/source-readiness checkpoint before the Oct 24 GPU follow-up",
+    "gpu_executed": false,
+    "full_model_mse_validated": false,
+    "visual_mtp_validated": false,
+    "matched_long_validated": false,
+    "certificate_expired": true,
+    "glms_paused_for_probe": false,
+    "codec_arithmetic_equivalence_proven": false
+  },
+  "cpu_static_state_persistence_20261024": {
+    "probe_sha256": "1b779c159015c499fbedc8c2e5823bab29be5d710fffd223eb1f43d511b3b207",
+    "tests_passed": 3,
+    "checkpoint_bytes": 9895,
+    "fresh_subprocess_restores": 2,
+    "weight_and_state_hashes_exact": true,
+    "state_entry_count": 4,
+    "temporary_checkpoint_removed": true,
+    "scope": "checkpoint persistence only",
+    "packed_export_parity": false,
+    "gpu_validated": false,
+    "offload_validated": false,
+    "full_27b_memory_performance_validated": false,
+    "serving_quality_validated": false
+  },
+  "cpu_reference_grid_followup_20261024": {
+    "values_per_dtype": 720,
+    "same_fp32_quotient_inputs": true,
+    "vendor_vs_frozen_candidate": {
+      "fp16_code_differences": 0,
+      "bf16_code_differences": 0,
+      "fp32_raw_code_differences": 9,
+      "fp32_raw_differences_negative_tiny_to_negative_zero": true,
+      "fp32_magnitude_differences": 0,
+      "decoded_values_unchanged": true
+    },
+    "exact_fraction_oracle": {
+      "fp16_code_differences": 3,
+      "fp16_packed_byte_differences": 2,
+      "bf16_code_differences": 3,
+      "bf16_packed_byte_differences": 2,
+      "fp32_code_differences": 25,
+      "fp32_packed_byte_differences": 24,
+      "total_code_differences": 31,
+      "total_packed_byte_differences": 28
+    },
+    "scope": "constructed CPU reference boundaries only",
+    "gpu_validated": false,
+    "real_weight_parity_validated": false,
+    "full_model_validation": false,
+    "repetition_fix": false
+  },
+  "recovery": {
+    "experiment_absent": true,
+    "journals": {"armed": false, "cleanup": "observed-absent", "restoration": "process_stable", "primary_failure": "heartbeat_failed", "recovery_failures": []},
+    "services_running": true,
+    "restart_count": 0,
+    "oom_killed": false,
+    "service_api": {"answer": 2, "finish_reason": "stop", "passed": true}
+  },
+  "scope": {
+    "single_arm_static_max_completed": true,
+    "static_mse_execution_failed_before_export": true,
+    "single_arm": true,
+    "reload_validated": false,
+    "serving_validated": false,
+    "full_model_parity": false,
+    "repetition_fix": false
+  }
+}
