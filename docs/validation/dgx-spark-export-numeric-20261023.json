@@ -131,7 +131,44 @@
     "gpu_codec_validated": false,
     "candidate_audit_covered": false,
     "probe_defects": ["stand_in_quantizer_not_recognized", "incorrect_qtensor_data_accessor"],
-    "v2": "in_progress_not_executed"
+    "v2": "in_progress_not_executed",
+    "oct24_gpu_followup": {
+      "initial_v3": {
+        "status": "failed_before_codec_coverage",
+        "error_type": "AcceleratorError",
+        "error_sha256": "c4ee938c8cc80090a7b7101d047f1f5c9e8c16c2f6c7602e291ae186f8e28d0b",
+        "raw_tensor_output": false,
+        "candidate_audit_covered": false,
+        "root_cause_established": false,
+        "service_unchanged": true
+      },
+      "retry_v3": {
+        "status": "covered",
+        "hook_contract": "custom_registry_handler",
+        "candidate_attempts": 1,
+        "candidate_calls": 1,
+        "delegated_calls": 0,
+        "failures": 0,
+        "shape": [1, 16],
+        "scale": 1,
+        "oracle_exact": true,
+        "restored": true,
+        "service_unchanged": true,
+        "scope": "one-shape handler contract only; not arithmetic equivalence, full-export parity, real-weight parity, full-model MSE, or repetition validation"
+      },
+      "rounding_v1": {
+        "status": "failed_before_numeric_comparison",
+        "failure_stage": "dynamic Triton source inspection",
+        "error_type": "ValueError",
+        "error_sha256": "98f364b899ecbeacc0fa48669d34c3a65c20434ac27d80e077f015c70927e495",
+        "raw_tensor_output": false,
+        "numerical_conclusion": false,
+        "service_unchanged": true
+      },
+      "gpu_codec_arithmetic_equivalence": false,
+      "full_model_mse_validated": false,
+      "repetition_fix": false
+    }
   },
   "synthetic_rounding_cpu": {
     "status": "boundary_difference_observed",
@@ -151,6 +188,7 @@
     "vendor_modelopt_classification": {"tensor_quantizer": true, "format": "nvfp4", "is_static_quantizer": true, "quantized_data_accessor": true, "tests_passed": 5, "cuda_tests_skipped": 1, "source_sha256": "f0cbcbac5958ce1b21b8b2f2677d3ca0dbb667aa041369c6af9c64845055fe46"},
     "v3_exception_probe": {"traceback_injection_fixed": true, "tests_passed": 6, "cuda_tests_skipped": 1, "probe_sha256": "12d5c2730df9ca183e3bd6775a723a4a7e5cafa64479d3a874554d636ebb352b", "ruff_passed": true, "driver_plan_compile_passed": true},
     "rounding_v2": {"source_sha256": "709c8722cd84d8d9b058ff7ccd33c097f3194f435da3db220ceaf3565cb35dbf", "v1_v2_tests_passed": 35, "v1_v2_cuda_tests_skipped": 2, "float32_code_differences": 12, "float32_packed_byte_differences": 6},
+    "checkpoint_scope": "status at the CPU/source-readiness checkpoint before the Oct 24 GPU follow-up",
     "gpu_executed": false,
     "full_model_mse_validated": false,
     "visual_mtp_validated": false,

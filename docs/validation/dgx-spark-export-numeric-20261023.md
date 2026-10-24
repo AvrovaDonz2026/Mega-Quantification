@@ -63,8 +63,9 @@ A separate tiny public-codec hardware probe failed before codec coverage. It did
 not complete candidate audit coverage: the probe used a stand-in quantizer that
 the vendor classifier did not recognize, then read a nonexistent `.data`
 attribute instead of `_quantized_data`. V2 uses real vendor quantizers and the
-correct accessor, but has not executed on a GPU. Neither result establishes
-full-export correctness or a repetition fix.
+correct accessor. Those earlier failures are retained as historical probe
+checkpoints; neither result establishes full-export correctness or a repetition
+fix.
 
 ## Synthetic rounding diagnostic
 
@@ -95,12 +96,28 @@ Ruff and driver plan/compile checks passed. The V1 plus V2 rounding suite
 totals 35 passed and 2 CUDA skipped; its additive V2 source SHA-256 is
 `709c8722cd84d8d9b058ff7ccd33c097f3194f435da3db220ceaf3565cb35dbf`.
 
-These are CPU and source-readiness results only. The default Torch codec and
-frozen Triton candidate have not been shown arithmetically identical on GPU;
-the FP32 12-code/6-packed-byte difference remains a CPU boundary observation,
-not a bug or root-cause proof. GPU, full-model MSE, visual/MTP, and matched-long
-validation remain pending. The current certificate is expired and no new GPU
-execution or GLM pause was performed.
+These are CPU and source-readiness results at this checkpoint. The default Torch
+codec and frozen Triton candidate had not yet been shown arithmetically
+identical on GPU; the FP32 12-code/6-packed-byte difference remains a CPU
+boundary observation, not a bug or root-cause proof. At that checkpoint, GPU,
+full-model MSE, visual/MTP, and matched-long validation remained pending, and
+the certificate was expired with no new GPU execution or GLM pause performed.
+
+## Oct 24 GPU follow-up
+
+The first pinned public-codec CUDA V3 attempt failed at the first CUDA tensor
+allocation with `AcceleratorError`, before codec coverage or candidate audit.
+The report contained no raw tensor output and does not establish the failure's
+root cause. A retry with the custom registry handler completed one candidate
+call at scale 1, matched the exact oracle, restored the original codec bindings, and left the
+service unchanged. This is a narrow handler and one-shape check; it does not
+establish arithmetic equivalence, full-export or real-weight parity, full-model
+MSE, or a repetition fix.
+
+A separate CUDA rounding attempt failed while inspecting the dynamic Triton
+source with `ValueError`, before numeric comparison and with no raw tensor
+output. It provides no numerical conclusion. Full-model MSE execution was
+running separately at the time of this update and is not reported as passed.
 
 ## CPU checkpoint persistence follow-up
 
