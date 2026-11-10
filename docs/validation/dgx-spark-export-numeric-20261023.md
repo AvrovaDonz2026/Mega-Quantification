@@ -125,8 +125,35 @@ zero. For FP32 on GPU, candidate-versus-public differed by 14 codes/7 packed
 bytes, candidate-versus-oracle by 22/11, and public-versus-oracle by 12/6; the
 CPU candidate-versus-oracle comparison was 12/6. These are distinct pairwise
 comparisons, not unique affected-value counts. They are synthetic boundary
-results and do not establish full-model behavior or a repetition fix. V7 is
-being prepared and has not been staged or executed.
+results and do not establish full-model behavior or a repetition fix. V7
+staging passed for the frozen v7 plan, and its execution was launched around
+22:53 CST. An intermediate observation around 15:10 UTC recorded
+`scale_inspection_enter` after 895.435 seconds, with zero completed candidates;
+at that point snapshot/inventory had not been reached and no packed shards
+were available. A resource snapshot at 14:59:16 UTC showed 100.93% CPU,
+52.45 GiB RAM, and 1% GPU utilization with zero OOM/restarts. These historical
+observations do not establish a bottleneck or cause and are superseded by the
+terminal progress snapshot below. The final progress snapshot at
+2026-10-24 15:35:53 UTC recorded 256/256 calibration batches, 519/519 codec
+candidates, `phase/state=completed`, and 16 output files totaling
+17,520,063,440 bytes; elapsed execution was 2,463.88 seconds. The coordinator
+reported `observation_passed`, `primary_failure=null`, no recovery failures,
+and `process_stable`. This establishes successful runtime export execution
+and recovery observation for job `2109ef4ca2f82217d0a60c29`. The independent
+V11 read-back on 2026-11-10 failed with a verifier projection issue; it is a
+historical verifier result and not the final artifact verdict. Corrected V12
+read-back independently passed the artifact/export gate: 519/519 candidates,
+333/333 vision entries across 110 quantizers, 15/15 MTP entries across 8
+quantizers, 2,756 index keys, and two shards totaling 17,499,733,224 bytes
+within a 16-file export. Export tree SHA-256 is
+`eed63db900dfd4df60edcaa8c8a2a840a2d95b04eec19552553531dcabcbfb4b`;
+evidence summary SHA-256 is
+`2aa20c2c1ccd869390bb19da67b518e617d92c0d1e53d34098f384b42b1477e9`.
+V12's overall result remains failed because its separate recovery check found
+the original services off at the later read-back time. That later state does
+not alter the successful 2026-10-24 recovery observation. The independent
+artifact/export gate passed; vision/MTP serving and matched long-generation
+validation remain pending.
 
 A separate bounded CUDA control passed for one 32x32 FP32 weight using pinned
 ModelOpt 0.47.0, the repository static transform, one MSE plus FP8-scale-sweep
@@ -211,7 +238,10 @@ The max artifact adjudication does not change either MSE status.
 
 ## Scope
 
-This is one completed static-max export arm plus a separately failed static-MSE
-execution. It is not a matched max/MSE result, does not prove the MSE hypothesis
-or a repetition fix, and does not establish a production serving pass or
-release readiness.
+This includes one completed static-max export arm, earlier failed static-MSE
+attempts, and a later static-MSE v7 runtime export execution that completed
+with successful recovery observation. The corrected independent V12 read-back
+passed the artifact/export gate; its later recovery and overall results remain
+false. Vision/MTP serving and matched long-generation comparison remain pending.
+It is not a matched max/MSE result, does not prove the MSE hypothesis or a
+repetition fix, and does not establish production serving or release readiness.
