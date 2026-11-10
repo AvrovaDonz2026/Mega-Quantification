@@ -1,0 +1,202 @@
+{
+  "schema": "aux-dispatch-probe-public-v1",
+  "date": "2026-10-22",
+  "status": "paired_export_and_bounded_serving_observed_quality_gate_failed",
+  "seeded_public_cuda_regression": {
+    "status": "passed",
+    "source_revision": "e11b673523815e874416a3fca9fba0e59526d4fe",
+    "checker_sha256": "7c077f17d0db6fc55a320ec6214df58d67bf29716f9e506764fcda38c08fdb30",
+    "modelopt": "0.47.0",
+    "seed": 19031,
+    "input_sha256": "f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a",
+    "image_id": "sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be",
+    "archive_sha256": "434fdbf47d222f17a3980f7958f672d9491291450426dd0a267c9f129bf8de41",
+    "manifest_sha256": "03134533653445d66f96705be2236a451faad99fcc931142ff59770d1b5362a5",
+    "elapsed_seconds": 14.939,
+    "input_match": true,
+    "vendor_auxiliary": {"dtype": "BF16", "shape": [32, 32], "modules": 2, "packed": false},
+    "patched_auxiliary": {
+      "weight_dtype": "U8",
+      "weight_shape": [32, 16],
+      "block_scale_dtype": "F8_E4M3",
+      "block_scale_shape": [32, 2],
+      "global_scale_dtype": "F32",
+      "modules": 2,
+      "packed": true
+    },
+    "raw_tensor_output": false,
+    "cleanup": "complete",
+    "scope": "CUDA packing-contract regression only",
+    "numeric_parity": "not_assessed"
+  },
+  "small_cuda_regression": {
+    "status": "passed",
+    "source_revision": "acdc7238e2b328c9435f3d6c6731a695e970e216",
+    "modelopt": "0.47.0",
+    "fixture": "fresh small Llama with two resident auxiliary modules plus decoder modules",
+    "accelerate_offload": true,
+    "image_id": "sha256:7d9ba02b9968e61435174e541141e4f4dd6df03fcb9a5f99108bee67531294be",
+    "full_27b_ptq_image_id": "sha256:d3f9770ae061eeedd10100971ce77e2ac253cf5a45914b3d65c1bee86847dfe1",
+    "elapsed_seconds": 14.178,
+    "vendor_auxiliary": {
+      "dtype": "BF16",
+      "shape": [32, 32],
+      "modules": 2,
+      "packed": false
+    },
+    "patched_auxiliary": {
+      "weight_dtype": "U8",
+      "weight_shape": [32, 16],
+      "block_scale_dtype": "F8_E4M3",
+      "block_scale_shape": [32, 2],
+      "global_scale_dtype": "F32",
+      "modules": 2,
+      "packed": true
+    },
+    "raw_tensor_output": false,
+    "cleanup": "complete",
+    "image_role": "distinct small-test image",
+    "numeric_parity": "not_assessed_fresh_unseeded_fixture",
+    "scope": "CUDA packing-contract regression only"
+  },
+  "patched_full_27b_pair": {
+    "schema": "matched-ptq-r6-1022-supervisor-v1",
+    "status": "completed_export_pair",
+    "modelopt": "0.47.0",
+    "modelopt_sha256": "d793b7a02aa98eac43c0580bf9ebf28b9f6c085162e9408d8d01e8726a530dc8",
+    "source_sha256": "40128cdcd695ae6bd77463b22163bcc07dcf15cbcab3789a11a979ae43468dcc",
+    "model_sha256": "b096b397facea42fdf80dffe7eed3fb5c7881959011379deedd2b370562cf516",
+    "calibration_sha256": "e2a48a43e732995c36a2096dd95f2edbad3f13eaa85a042ced7094a149af6eed",
+    "ordered_calibration_sha256": "b153757f3a53559386a7aaef49cd7c921952e90411370307ad4df0dca57d0a9b",
+    "recipe_sha256": "288127c16ac520d8c41f43112b4170ec21302ffd199628cd837a4de7d6e399fb",
+    "seed": 42,
+    "calibration_batches": 256,
+    "arms": {
+      "static-max": {"returncode": 0, "elapsed_seconds": 1102.736, "export_sha256": "0d5f69b17c484cc9224af7c76b8b51b27287bc45f89fe82d300bd12c6f8be678", "export_index_valid": true, "export_index_keys": 2756, "shards": 2, "files": 16, "quantizer_scope": {"core": 401, "vision": 110, "mtp": 8}, "eligible_auxiliary_packed_u8": 118, "vision_packed_u8": 110, "mtp_packed_u8": 8, "expected_non_linear_vision_bf16_exclusions": true},
+      "static-MSE": {"returncode": 0, "elapsed_seconds": 1526.581, "export_sha256": "0062cb9948822244e6083f0abbc95b9fb5ab28fd01fb1f7cd3bb938529e2a0c5", "export_index_valid": true, "export_index_keys": 2756, "shards": 2, "files": 16, "quantizer_scope": {"core": 401, "vision": 110, "mtp": 8}, "eligible_auxiliary_packed_u8": 118, "vision_packed_u8": 110, "mtp_packed_u8": 8, "expected_non_linear_vision_bf16_exclusions": true}
+    },
+    "comparison": {"returncode": 0, "ptq_comparable": true, "matched_protocol": true},
+    "restoration": {"coordinator_process_stable": true, "services_running": true, "oom_killed": false, "restarting": false, "api_readiness": "passed", "fixed_arithmetic_answer": 2, "finish_reason": "stop", "observation_scope": "point_in_time_at_pair_completion"},
+    "latest_recovery": {"date": "2026-10-23", "status": "observation_passed", "stable_seconds": 121.68356083298568, "api_arithmetic_smoke": {"status": "passed", "elapsed_seconds": 0.221, "answer_is_two": true, "native_stop": true, "finish_reason": "stop"}},
+    "pinned_image_dependency_preflight": {"date": "2026-10-23", "status": "passed", "imports_passed": 5, "cache_configuration": "writable_and_stage_matching"},
+    "latest_model_validation_attempt": {
+      "status": "incomplete_failed",
+      "baseline": {
+        "case_count": 5,
+        "checker_returncode": 1,
+        "passed_cases": ["arithmetic", "red_square", "blue_square"],
+        "python_code": {"output_tokens": 192, "finish_reason": "length", "nonempty": true, "finite_logprobs": true, "correctness_or_natural_stop_established": false},
+        "ocr": {"expected": "3729", "observed": "3720", "finish_reason": "stop", "response_sha256": "3644cb1007be9e1b14ab1654c02bf01c49b8155f64bca5089dd2ec8fd6942004", "historical_response_hash_comparison": "not_performed", "image_sha256": "7b33b2d31984bee0e73a443717f5864f9beecea5264de47c7bc0fdf33b39f931", "historical_image_sha256_match": true, "pillow_version": "12.3.0", "image_byte_drift_excluded": true, "root_cause_established": false},
+        "checker_sha256": "f0e8ff85f40b4aaa9847ab95dd9098591845f137faab574ca6d146f0be3f04da",
+        "pillow_version": "12.3.0",
+        "loader_diagnostic_counters": {"vision_weight_skipped_unknown_unloaded": 0, "vision_scale_skipped_unknown_unloaded": 0, "mtp_weight_skipped_unknown_unloaded": 0, "mtp_scale_skipped_unknown_unloaded": 0}
+      },
+      "mtp": {"stage": "startup", "error_category": "read_only_fs", "exception_class": "OSError", "errno": null, "request_started": false, "stack_captured": false, "cause_known_from_later_source_audit": true},
+      "static_mse": "not_run",
+      "replay": "not_run",
+      "same_pinned_image_on_both_workers": true,
+      "image_hash_interpretation": "matching_bytes_exclude_image_byte_drift_only; OCR_root_cause_undetermined",
+      "restoration": {"status": "process_stable", "api_smoke": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.217}},
+      "repeat_attempt": {"same_image_weights_parameters": true, "baseline_case_outputs_identical_by_token_ids_and_response_hashes": true, "ocr_expected": "3729", "ocr_observed": "3720", "mtp_error_category": "read_only_fs", "mtp_exception_class": "OSError", "mtp_errno": 30, "mtp_failure_path": "eagle_worker_v2._configure_qsa_mtp_index_share -> __new__ -> _create_dirs -> os.makedirs", "target_category": "TileLang default cache directory /root/.tilelang/cache", "static_mse": "not_run", "replay": "not_run", "restoration": "process_stable", "api_smoke": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.219}},
+      "mtp_startup_source_audit": {"status": "cause_identified_and_service_override_verified", "sequence": ["eagle_worker_v2.py imports QSAIndexer before MTP flag check", "qsa/mqa.py imports tilelang", "tilelang/cache/__init__.py instantiates KernelCache", "kernel_cache.py __new__ calls _create_dirs", "os.makedirs uses default ~/.tilelang/cache"], "container_cache_path": "/root/.tilelang/cache", "diagnostic_failed_directory": "/root/.tilelang", "diagnostic_failed_directory_sha256_matches_path_bytes": true, "cpu_import_smoke": {"runtime": "runc", "network": "none", "container_root": "read_only", "default_tilelang_cache": {"status": "failed", "exception_class": "OSError", "errno": 30, "failed_parent_directory": "/root/.tilelang", "failed_directory_sha256_matches_path_bytes": true}, "tmp_cache_override": {"cache_dir": "/tmp/tilelang", "tmp_dir": "/tmp/tilelang/tmp", "status": "import_pass"}, "scope": "CPU-only TileLang import; no model, GPU, service, or network"}, "service_cache_override": {"TILELANG_CACHE_DIR": "/cache/tilelang", "TILELANG_TMP_DIR": "/cache/tilelang/tmp", "status": "used_for_successful_scoped_pair"}, "scope": "MTP startup read-only-filesystem failure only; does not explain OCR or MSE behavior"},
+      "fixed_cache_pair_validation": {"status": "completed_observation_quality_failed", "cache_override": "TILELANG_CACHE_DIR=/cache/tilelang; TILELANG_TMP_DIR=/cache/tilelang/tmp", "both_arms": {"static-max": {"baseline_cases": 5, "baseline_checker_returncode": 1, "mtp_cases": 5, "mtp_checker_returncode": 1, "mtp_verify_and_accept_observed_for_every_case": true, "mtp_accepted_drafts": 136, "mtp_proposed_drafts": 144, "mtp_verify_ct": 72, "failed_case": "ocr_3729"}, "static-MSE": {"baseline_cases": 5, "baseline_checker_returncode": 0, "mtp_cases": 5, "mtp_checker_returncode": 0, "mtp_verify_and_accept_observed_for_every_case": true, "mtp_accepted_drafts": 136, "mtp_proposed_drafts": 146, "mtp_verify_ct": 73, "all_five_checker_cases_passed": true}}, "shared_case_results": {"arithmetic_red_blue": "passed_in_both_arms_and_modes", "ocr_3729": {"static_MSE": "3729_passed_in_baseline_and_mtp", "static_max": "3720_failed_in_baseline_and_mtp"}, "python_code": {"tokens": 192, "finish_reason": "length", "gate": "nonempty_and_finite_logprobs_only", "semantic_correctness_established": false}}, "within_arm_baseline_mtp_output_ids_identical_all_cases": true, "loader_diagnostics": {"vision_mtp_skip_unknown_unloaded_counters_zero": true, "torchcodec_notice_nonfatal": true, "numerical_parity_proven": false}, "multimodal_validation_passed": false, "repetition_fixed": false, "mse_long_repetition": "unresolved", "coordinator_restoration": "process_stable", "api_recheck": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.214}, "compose_build_verified": false, "packaging_tests_passed": 18, "scope": "paired five-case baseline/MTP serving smoke; no numerical parity, broad quality, or repetition-fix claim"},
+      "capacity_control_baseline": {"status": "completed", "capacity": {"max_running_requests": 4, "max_mamba_cache_size": 16}, "elapsed_seconds": 380.075, "baseline_only": true, "static_max": {"cases": 5, "passed": false, "failed_case": "ocr_3729", "ocr_observed": "3720", "output_id_hashes_match_previous_capacity_run_all_cases": true}, "static_MSE": {"cases": 5, "passed": true, "output_id_hashes_match_previous_capacity_run_all_cases": false}, "max_capacity_reduction_excluded_as_sole_observed_ocr_cause": true, "all_capacity_effects_or_nondeterminism_excluded": false, "all_batch_behavior_tested": false, "mtp_enabled": false, "repetition_fix_tested": false, "restoration": "process_stable"},
+      "long_prefix_repetition_probe": {"status": "completed", "requests": 4, "context_length": 262144, "mtp_enabled": false, "generation_tokens_each": 4096, "natural_prompt_tokens": 288, "supplied_historical_prefix_tokens": 41760, "historical_loop_onset_token": 33131, "static_MSE_natural_4096_matches_historical": true, "static_max_natural_first_divergence_token": 2, "both_arms_supplied_prefix_next_4096_exact_historical": true, "supplied_prefix_period_lag_tokens": 2032, "all_finish_reason": "length", "eos_candidate_observed": false, "think_end_observed": false, "five_copy_detector_threshold_tokens": 10160, "threshold_reached": false, "natural_window_reaches_historical_loop_onset": false, "fresh_prefill_reproduces_old_incremental_state": false, "natural_loop_reproduced": false, "repetition_fixed": false, "coordinator_local_verification": "reported_failure", "remote_cleanup": {"restoration": "process_stable", "cleanup": "observed_absent", "armed": false}, "api_recovery": {"status": "passed", "scope": "single_TP2_serving_entry_check", "both_containers_running": true, "restart": false, "oom": false, "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.215}, "scope": "bounded natural and supplied-prefix continuation comparison; 4096-token natural window ends before historical loop onset; neither reproduces nor fixes the natural loop"},
+      "selected_real_vision_numeric_probe": {"status": "executed", "elapsed_seconds": 84.901, "modelopt": "0.47.0", "source_shape": [3456, 1152], "calibration": {"dtype": "bfloat16", "rows": 8, "seed": 241023}, "heldout": {"dtype": "bfloat16", "rows": 16, "seed": 241023}, "format": "NVFP4 E2M1 block16; FP8 E4M3 block scale; FP32 weight_scale_2 multiplier", "packed_byte_count_both_arms": 1990656, "repacked_byte_equal_count_both_arms": 1990656, "live_export_block_scale_byte_equal_both_arms": true, "live_export_scale2_equal_both_arms": true, "scale2_sha256_equal_both_arms": true, "compute": "FP32 matmul plus explicit BF16 path", "fake_vs_decode_bf16": {"element_count": 3981312, "static_max_differing_count": 804, "static_MSE_differing_count": 674, "static_max_mse": 5.2323811949861465e-9, "static_MSE_mse": 4.646132811814141e-9, "max_abs_both_arms": 0.0242919921875}, "temporary_exports_removed": true, "raw_tensor_output": false, "decode_multiplication_order_aligned_to_vendor": false, "numeric_parity_passed": false, "limits": ["selected real vision layer only", "not historical full-checkpoint parity", "not full-model numeric parity", "not SGLang kernel or serving behavior", "does not explain MSE-only repetition"], "status_interpretation": "measured fake/decode BF16 differences; scale/FP4 rounding or reconstruction order remain under investigation", "coordinator_lifecycle": {"status": "observation_passed", "process_stable": true, "cleanup": "observed-absent", "armed": false}, "separate_tp2_readiness_check": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.196, "scope": "single serving-rank TP2 entry"}},
+      "selected_real_vision_numeric_probe_v2": {"status": "executed", "elapsed_seconds": 79.681, "source_scope": "same selected real vision layer as v1", "within_arm_repacked_byte_equal_count": 1990656, "effective_scale_values_both_arms": 248832, "effective_scale_max_ulp_both_arms": 0, "vendor_association_bf16_difference_count": 0, "fake_vs_reloaded_decode_residuals": {"element_count": 3981312, "static_max_magnitude_signed_nonzero_mismatch_count": 804, "static_MSE_magnitude_signed_nonzero_mismatch_count": 674, "magnitude_inversion_unresolved": {"static_max": 0, "static_MSE": 0}, "magnitude_inversion_ambiguous": {"static_max": 0, "static_MSE": 0}, "sign_zero_ambiguous": {"static_max": 638148, "static_MSE": 670743}}, "effective_scale_numeric_difference_excluded": true, "decode_association_difference_excluded": true, "fp4_code_decision_difference_observed": true, "division_precision_hypothesis": "unproven", "numeric_parity_passed": false, "full_model_or_repetition_fix": false, "coordinator_lifecycle": {"status": "observation_passed", "process_stable": true}, "separate_tp2_readiness_check": {"status": "passed", "answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.255, "scope": "single serving-rank TP2 entry"}, "limits": ["selected real vision layer only", "not full-model parity", "not SGLang kernel behavior", "does not explain MSE-specific repetition"]},
+      "selected_real_vision_numeric_probe_v3": {"status": "executed", "elapsed_seconds": 80.22, "executor_exit_code": 0, "source_scope": "same selected real vision layer as v1/v2", "same_run_arm_source_bytes_identical": true, "comparison_gates": true, "residual_counts": {"static_max": 804, "static_MSE": 674, "element_count": 3981312}, "fp4_boundary": {"boundary_value": 0.75, "crossing": "downward_magnitude_1.0_to_0.5", "all_residuals_at_boundary": true}, "paths": {"A": "Torch quotient reproducing actual export packing decisions", "B": "default Triton quotient reproducing live fake quantization exactly", "C": "path B with only division changed to libdevice.div_rn"}, "default_ratio_B_vs_A": {"max_ulp": 1, "static_max_differing_count": 1300476, "static_MSE_differing_count": 1304593}, "path_C_div_rn_vs_path_A": {"ratios_match": true, "magnitudes_match": true, "nonzero_signs_match": true, "signed_zero_raw_code_differences": {"static_max": 318729, "static_MSE": 335136}}, "signed_zero_raw_code_differences_are_numeric_residuals": false, "interpretation": "default_approximate_division_explains_all_fake_export_code_differences_at_fp4_tie_within_selected_layer_probe_only", "source_hash_definitions_comparable_to_v2": false, "full_model_parity": false, "repetition_fix": false, "numeric_executor_lifecycle": {"status": "observation_passed", "armed": false, "cleanup": "observed-absent", "restoration": "process_stable"}, "separate_post_probe_readiness": {"status": "passed", "containers_running": 2, "restart_count_each": 0, "oom_killed_each": false, "api_answer": 2, "finish_reason": "stop", "elapsed_seconds": 0.219, "scope": "GLM containers and serving-rank arithmetic readiness check"}, "limits": ["selected real vision layer only", "not full-model parity", "not MSE repetition diagnosis"]},
+      "short_max_mse_replay": {"status": "completed", "mode": "diagnostic_only", "request_count_per_arm": 3, "completion_tokens_per_request": 512, "finish_reason": "length", "within_arm_outputs_identical": true, "cross_arm_common_prefix_tokens": 2, "period_candidates": [], "prompt_tokens": 288, "cached_tokens": 0, "num_retractions": 0, "flush_status": "passed", "cold_cache_verified": false, "spec_verify_ct_present": false, "repetition_fixed": false, "scope": "bounded short determinism only; does not exclude long-context or later-period repetition"}
+    },
+    "long_natural_metric_semantics": {"results_pending": true, "fixed_lag": 2032, "definition": "L counts consecutive positions satisfying ids[i] == ids[i-2032]; the matched span covers L+2032 tokens", "reported_onset": "start of longest match run, first on ties; not earliest occurrence of any repetition", "applies_to": "in-progress long-natural runtime; not completed prefix probe", "prefix_probe_emits_earliest_onset": false, "proves_shortest_period": false, "excludes_other_periods": false, "stop_finish_reason_proves_eos_match": false},
+    "scope": "paired export, auxiliary header, and scoped five-case serving evidence",
+    "export_reload_validated": false,
+    "trajectory_metrics_present": false,
+    "native_text_response_protocol_checks": false,
+    "serving_validated": false,
+    "current_serving_scope": {"static_MSE_five_case_smoke_passed": true, "static_max_five_case_smoke_passed": false, "static_max_failure": "OCR_3720_vs_3729", "baseline_mtp_token_equivalence_both_arms": true, "broad_multimodal_validation_passed": false},
+    "combined_serving_attempt": {"status": "failed", "failure_stage": "RuntimeGate", "checker_returncode": 1, "checker_diagnostics": "unavailable_harness_lost_raw_diagnostic", "lifecycle_restoration": "process_stable"},
+    "vision_mtp_functionality_validated": false,
+    "scoped_mtp_serving_observed": true,
+    "replay_or_repetition_validated": false,
+    "mse_fix_established": false,
+    "gpqa_or_tp2_validated": false,
+    "release_or_fix_claim": false
+  },
+  "protocol": {
+    "calibration_batches": 256,
+    "max_seq_length": 1024,
+    "batch_size": 1,
+    "vision": true,
+    "mtp": true,
+    "same_recipe": true,
+    "modelopt": "0.47.0"
+  },
+  "arms": {
+    "static-max": {
+      "elapsed_seconds": 1084.633522,
+      "returncode": 0,
+      "status": "completed",
+      "export_sha256": "770aed36de2eb5c445b473da6f7449c7f34f9a8a428b924cd424363fa6a14d6d",
+      "dispatch_calls": 3815,
+      "aux_calls": 889,
+      "prepare": {
+        "enabled": 118,
+        "vision": 110,
+        "mtp": 8,
+        "quantizer": "QuantLinear",
+        "format": "nvfp4",
+        "dtype": "cudaBF16",
+        "requires_weight_materialization": false
+      },
+      "after": {"enabled": 118, "dtype": "cudaU8"}
+    },
+    "static-MSE": {
+      "elapsed_seconds": 1480.491465,
+      "returncode": 2,
+      "status": "failed",
+      "dispatch_calls": 2917,
+      "aux_calls": 0,
+      "prepare": {
+        "enabled": 118,
+        "vision": 110,
+        "mtp": 8,
+        "quantizer": "QuantLinear",
+        "format": "nvfp4",
+        "dtype": "cudaBF16",
+        "requires_weight_materialization": false
+      },
+      "after": {"enabled": 118, "dtype": "cudaBF16", "packed": false},
+      "failure_category": "backend_error",
+      "failure_sha256": "de58b1bfcf507b5587000a36cf6b176d324ec9153e97cae57cbadf916b07ceb0"
+    }
+  },
+  "comparison": {
+    "paircompare": "skipped_arm_incomplete",
+    "full_fingerprint_matched": false,
+    "aux_calls_are_not_quantized_layer_count": true
+  },
+  "restoration": {
+    "armed": false,
+    "cleanup": "observed-absent",
+    "restoration": "process_stable",
+    "coordinator": "failed",
+    "recovery_successful": true,
+    "application_readiness": "passed",
+    "both_running": true,
+    "restarting": false,
+    "oom": false,
+    "health_status": 200,
+    "fixed_arithmetic_smoke": {"is_two": true, "finish_reason": "stop"}
+  },
+  "interpretation": {
+    "mse_aux_dispatch_missing": true,
+    "candidate": "ModelOpt streaming resident non-decoder path",
+    "patched_gpu_validated": "small_contract_full_27b_paired_export_and_scoped_five_case_serving",
+    "full_27b_patched_gpu_validated": "paired_export_and_scoped_serving; broad_multimodal_gate_failed_on_static_max_ocr",
+    "repetition_fixed": false,
+    "new_gpqa_or_tp2": false,
+    "new_scoped_serving_observation": true,
+    "vision_mtp_functionality_validated": false,
+    "no_new_matched_fingerprint": false
+  }
+}

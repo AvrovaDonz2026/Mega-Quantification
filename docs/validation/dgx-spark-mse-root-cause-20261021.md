@@ -37,3 +37,39 @@ Retry job `60348764d2634c4d68aaf486` 于 2026-10-21 22:49:32 CST 启动，模型
 - R5 retry：完成 49,152-token 单次生成与候选周期检查；源码门禁通过，双端服务恢复与稳定性验证通过。该统计不含题目、原始输出、token ID 或张量。
 
 该报告只保留聚合统计，不包含主机、私有路径、请求内容、输出文本、token ID 或原始张量。
+
+## 后续 matched export 与数值探针（2026-10-23）
+
+后续 matched full-27B 导出已完成：text 401、vision 110、MTP 8 个量化模块，
+auxiliary U8 条目为 118/118；配对 serving 的范围与限制见
+[`dgx-spark-aux-dispatch-20261022.md`](dgx-spark-aux-dispatch-20261022.md)。
+其 bounded long-prefix 试验没有复现自然循环：4,096-token 自然窗口早于历史
+33,131-token 循环起点，supplied prefix 也不是旧增量 SSM/KV 状态。
+
+另对 pinned serving image 做了 CPU-only source capability 检查：SGLang 0.5.20
+镜像 `sha256:ea5a6262a6ad57e0fd2d99102916a4194a9b7a2ead8fc5c4d69f7a348ac8ad25` 的
+loader source SHA-256 为 `017a0319e7f9c5550c1cdb940ff8ddb92428e34804b477da16fff7e3d761ac40`，
+七项 W4A16 capability 检查均通过，可用于准备 W4A16 对照。该证据仅确认 source
+capability；`gpu_support_proven=false`，没有证明 tiny-GPU 运行、整模量化或 serving 行为。
+
+同日 selected real-vision layer 数值探针观察到 fake/decode BF16 的有限差异，
+但 decode 乘法顺序尚未与 vendor 对齐，scale、FP4 rounding 或重建顺序仍待细分。
+该结果不定位本地导出 bug，也不能解释 MSE 独有重复；它不等同于 full-checkpoint、
+full-model 或 SGLang kernel 数值 parity。
+
+后续 v2 探针在同一层确认两臂有效 scale 的 248,832 个值均 exact（最大 ULP
+差为 0），且 legacy 与 vendor 解码乘法顺序之间的 BF16 差异为 0；残差仍为 max 804、MSE 674
+个元素，均属于 magnitude/signed-nonzero mismatch。effective-scale 数值和
+decode association 因此不再是该探针中的解释，但 FP4 code decision 仍有差异。
+v3 将除法精度假设限定在所选视觉层：path A 使用 Torch quotient，复现实际导出打包的编码选择；path B 使用默认 Triton quotient，精确复现 live fake quantization；path C 只把 B 的除法改为 `libdevice.div_rn`。默认除法在 0.75 FP4 tie 附近造成的 code 选择差异解释了该层观测到的 fake/export 差异；这不是整模 MSE 根因，也不表示重复问题已修复。
+
+v3 两臂使用相同 source bytes，并复现 max 804、MSE 674 个残差；这些都位于
+magnitude 从 1.0 向下跨过 0.75 tie 到 0.5 的位置。默认 ratio 相对 path A 有
+1 ULP 差异，而 round-to-nearest 除法的 path C 在 ratio、magnitude 和非零符号上
+与 path A 一致，仅有 318,729（max）和 335,136（MSE）个 signed-zero raw-code
+差异，这些零符号码差异不改变解码数值。v2 与 v3 的 source hash 使用不同
+计算规则，不应直接比较。数值 executor 以 exit code 0 完成，`observation_passed`，armed=false、
+cleanup 为 observed-absent，恢复状态 process_stable。独立 readiness 检查确认
+两个 GLM 容器运行且 restart count 为 0、无 OOM；服务入口的算术 smoke 在 0.219 秒
+返回 2 和 native stop。该证据支持“默认近似除法造成所选层 fake/export code
+mismatch”的局部解释；它不构成 full-model parity、MSE 独有重复根因或修复声明。

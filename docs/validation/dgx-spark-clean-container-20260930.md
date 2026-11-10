@@ -395,10 +395,10 @@ not change the failing full-model result.
 ### BF16 KV Candidate
 
 A further `fc8925d` test changed only `--kv-cache-dtype` to `bfloat16` from the
-usual baked serving options. All five functional cases passed in both modes,
-but the Python request still diverged at index 16 and the strict MTP client
-exited with code 1. The four short cases matched; MTP accepted 138/144 drafts
-over 72 verification steps. Inspection of both current export indexes found
+usual baked serving options. All five requests completed in both modes. The
+four short cases matched, but the Python request diverged at index 16, so the
+strict MTP client exited with code 1. MTP accepted 138/144 drafts over 72
+verification steps. Inspection of both current export indexes found
 no layer-3 K/V/KV scale entries. The installed KV processing uses unit scales
 when they are absent (or `None` for an unquantized cache), and the FlashInfer
 replay used `k_scale=v_scale=1`. This excludes an erroneous non-unit checkpoint

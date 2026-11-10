@@ -97,8 +97,8 @@ GPU 和容器验证记录保留实际运行版本与冻结 revision，范围见
 Mega-Quantification performs post-training quantization of BF16 Hugging Face
 models and exports checkpoints for SGLang. Qwen/Qwen3.8-27B has completed PTQ
 on a 32 GB RTX 5090 and GPQA Diamond on an 80 GB SM120 and DGX Spark.
-Spark recipes also quantize vision and MTP; fixed image/OCR and embedded MTP
-functional checks are recorded separately from the text benchmark above.
+Spark recipes also quantize vision and MTP; fixed-case image/OCR and embedded
+MTP functional checks are recorded separately from the text benchmark above.
 
 Run the quick-start commands from the repository root to install the base
 package and inspect plans without a GPU or model download. For execution, use
