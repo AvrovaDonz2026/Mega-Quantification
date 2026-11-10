@@ -82,7 +82,7 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 [Auxiliary dispatch probe](dgx-spark-aux-dispatch-20261022.md)记录 fresh paired probe：static-max 完成辅助 dispatch；static-MSE 未调用辅助 dispatch，118 个辅助权重仍为 BF16，随后被精度 guard 拒绝。Pair comparison 因 arm incomplete 跳过。该证据支持 ModelOpt streaming resident non-decoder 路径的候选定位，不代表 patched GPU、重复修复、GPQA、serving 或 TP2 结果。
 
-2026-10-23 的 [full static-max export validation](dgx-spark-export-numeric-20261023.md)
+2026-10-23 的 [full static-max/MSE export validation](dgx-spark-export-numeric-20261023.md)
 记录一臂 full export contract 与独立恢复证据。导出 gates 通过；严格 successor
 adjudication 将 artifact 标记为可用于 matched experiment，但原始生命周期协议仍
 保留 late-heartbeat advisory/failed 状态。static-MSE v1 在执行中失败，未生成
@@ -102,7 +102,15 @@ codec/audit coverage，因此不能写成 GPU codec 通过；V2 尚未执行。
 新增合成 CPU 阈值诊断观察到 FP32 舍入边界差异；尚未证明实际模型权重或
 两条 CUDA 路径存在差异，也未建立与长回答重复的因果关系。
 
-本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
+后续执行中，MSE v6 完成校准后超时；v7 于 2026-10-24 完成 256/256
+校准与 519/519 codec candidates。2026-11-10 的独立 V12 artifact/export gate
+通过，包含 110 个 vision 和 8 个 MTP quantizers；原服务在后续读回时关闭，
+所以独立 recovery/overall 仍为 false。两组现存 export 的完整目录哈希匹配；
+非 GPU staging 和双端真实 systemd/socket 的未 ARM 检查通过，worker 已退役，
+当前服务未变。两次 CPU 数值审计均未完成，不能引用部分进度下数值结论。
+这些后续结果不证明新权重的视觉/MTP serving、配对长生成或重复问题修复。
+
+上述早期 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，

@@ -322,6 +322,112 @@
     "repetition_fix": false,
     "scope": "runtime export execution and independent artifact/export gate passed; V12 later recovery gate failed because original services were off; vision/MTP serving and matched long-generation validation remain unverified"
   },
+  "non_gpu_followup_20261110": {
+    "gpu_experiment_run": false,
+    "fresh_lease_maintenance": {
+      "focused_tests_passed": 39,
+      "live_lease_recovery_proven": false,
+      "test_boundary": "focused tests cover synthetic/fake boundaries only"
+    },
+    "independent_export_tree_hashes": {
+      "passed": true,
+      "service_unchanged": true,
+      "exports": [
+        {
+          "arm": "static-max",
+          "files": 16,
+          "bytes": 17520063370,
+          "expected_tree_sha256": "63ca89e911cabe4e04106ce7173f21853fdda93cc73ddbfac3cef22ba225a914",
+          "observed_tree_sha256": "63ca89e911cabe4e04106ce7173f21853fdda93cc73ddbfac3cef22ba225a914",
+          "elapsed_seconds": 24.6
+        },
+        {
+          "arm": "static-MSE",
+          "files": 16,
+          "bytes": 17520063440,
+          "expected_tree_sha256": "eed63db900dfd4df60edcaa8c8a2a840a2d95b04eec19552553531dcabcbfb4b",
+          "observed_tree_sha256": "eed63db900dfd4df60edcaa8c8a2a840a2d95b04eec19552553531dcabcbfb4b",
+          "elapsed_seconds": 25.089
+        }
+      ]
+    },
+    "fresh_pair_server_stage": {
+      "passed": true,
+      "staging_only": true,
+      "execution_enabled": false,
+      "service_mutation": false,
+      "readonly_export_bindings": true,
+      "required_image_verified": true,
+      "restricted_cpu_dependency_imports_passed": true,
+      "exact_service_identity_unchanged": true
+    },
+    "cpu_import_cache_retry": {
+      "first_attempt": "failed_default_cache_creation_on_read_only_filesystem",
+      "retry": "passed_with_writable_temporary_cache",
+      "model_or_quantization_root_cause": false
+    },
+    "unarmed_worker_probe": {
+      "passed": true,
+      "commands": ["HEARTBEAT", "STATUS"],
+      "transport": "systemd_worker_over_unix_socket",
+      "both_peers_passed": true,
+      "experiment_absent": true,
+      "service_exact_and_running": true,
+      "workers_retired": true,
+      "service_mutation": false,
+      "arm_sent": false,
+      "stop_sent": false,
+      "experiment_launch_sent": false,
+      "service_health_passed": true
+    },
+    "runtime_version_readback": {
+      "both_arms": true,
+      "modelopt_required_version": "0.47.0",
+      "modelopt_installed_version": "0.47.0",
+      "modelopt_package_sha256": "96647188e0afa8dcdcadbe42178feeb4cc19113d9ffcbaf633bd62414bd6d453",
+      "modelopt_hash_matches_across_arms": true,
+      "transformers_exact_version_known": false
+    },
+    "cpu_packed_code_scale_audit": {
+      "status": "incomplete",
+      "started_at_local": "2026-11-10T18:31",
+      "resource_budget": {"cpu_count": 1, "memory_gib": 1, "gpu": false},
+      "ssh_channel_disconnected": true,
+      "reconnected_logs_present": false,
+      "stopped_at_local_approx": "2026-11-10T19:00",
+      "stop_scope_verified": ["exact_audit_container", "command", "mounts", "resource_limits"],
+      "audit_container_stopped": true,
+      "qwen_service": {
+        "running": true,
+        "health_status": 200,
+        "oom_killed": false,
+        "restart_count": 0,
+        "started_at_unchanged": true
+      },
+      "completed": false,
+      "numeric_result_available": false,
+      "diagnosis_available": false,
+      "scale_only_audit": {
+        "status": "incomplete_stopped_and_removed",
+        "processed_weights": 44,
+        "total_weights": 519,
+        "elapsed_seconds": 1122.9,
+        "numeric_output_written": false,
+        "numeric_verdict": false,
+        "signal_alarm_300_enforced": false,
+        "budget_control_issue": "cpu_only_audit_harness_deadline_not_enforced_as_expected",
+        "cause_identified": false,
+        "owned_container_removed": true,
+        "service_unchanged": true,
+        "qwen_health_status": 200,
+        "oom_killed": false,
+        "not_an_mse_finding": true
+      }
+    },
+    "vision_mtp_serving_completed": false,
+    "matched_long_generation_completed": false,
+    "repetition_fix": false
+  },
   "synthetic_rounding_cpu": {
     "status": "boundary_difference_observed",
     "values_per_dtype": 288,

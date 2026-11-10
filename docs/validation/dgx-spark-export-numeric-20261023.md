@@ -236,12 +236,59 @@ V7 recovery passed additively after the failed execution; it does not rewrite th
 failed run as successful.
 The max artifact adjudication does not change either MSE status.
 
+## Non-GPU lease and artifact follow-up: 2026-11-10
+
+Two existing export trees were independently hashed in full. Both matched
+their previously recorded tree hashes: static-max had 16 files and
+17,520,063,370 bytes; static-MSE had 16 files and 17,520,063,440 bytes. The
+fresh-pair stage then passed with read-only bindings to these exports, required
+image verification, restricted CPU dependency-import checks, and exact current
+service identity unchanged. The staging evidence has `execution_enabled=false`
+and `service_mutation=false`.
+
+The fresh-lease maintenance framework passed 39 focused tests; those tests
+cover synthetic/fake boundaries and are not live proof of lease recovery. A
+real systemd worker check used only `HEARTBEAT` and `STATUS` over the local
+control socket on both peers. Both returned the expected status, reported no
+experiment container, and confirmed the exact service remained running. Both
+workers were then retired. No ARM, STOP, or experiment LAUNCH command was sent;
+the original services remained unchanged and their health checks passed.
+
+Runtime-version read-back for both frozen export arms reported ModelOpt
+0.47.0, with identical installed-package SHA-256
+`96647188e0afa8dcdcadbe42178feeb4cc19113d9ffcbaf633bd62414bd6d453`.
+The recorded Transformers package version was not available in this read-back.
+
+The first restricted CPU dependency-import attempt failed because Torch tried
+to create its default cache on a read-only filesystem. Retrying with a writable
+temporary cache passed the imports. This is a container cache-path issue, not a
+model, quantization, or serving root-cause result. No GPU experiment was run.
+An all-packed-code-and-scales CPU audit started at 18:31 local time with a
+one-CPU, 1-GiB, no-GPU budget, then its SSH channel disconnected. Reconnection
+showed no audit output. Around 19:00, after verifying the exact audit container
+and its command, mounts, and resource limits, the audit owner stopped that
+container. The Qwen service remained running with HTTP 200 health, no OOM,
+zero restarts, and its original start time unchanged. The packed-code-and-scales
+audit did not complete and provides no numerical result or diagnosis. A
+subsequent CPU-only scale audit also stopped incomplete: it reached 44/519
+weights after 1,122.9 seconds and wrote no numeric output. Its
+`signal.alarm(300)` budget deadline was not enforced as expected; the reason is
+unknown. After verifying the exact audit container, it was stopped and
+removed. This is an audit-harness runtime-budget control issue, not an MSE
+finding. The partial progress is not a numeric result. Both audits ended with
+the Qwen service unchanged and healthy; no GPU work was run.
+This follow-up does not complete fresh vision/MTP serving or long-generation
+replay, and it provides no evidence that repetition or stopping behavior is
+fixed.
+
 ## Scope
 
 This includes one completed static-max export arm, earlier failed static-MSE
 attempts, and a later static-MSE v7 runtime export execution that completed
 with successful recovery observation. The corrected independent V12 read-back
 passed the artifact/export gate; its later recovery and overall results remain
-false. Vision/MTP serving and matched long-generation comparison remain pending.
+false. Non-GPU lease preflight and read-only worker protocol checks passed, with
+both original services unchanged. Vision/MTP serving and matched
+long-generation comparison remain pending.
 It is not a matched max/MSE result, does not prove the MSE hypothesis or a
 repetition fix, and does not establish production serving or release readiness.
