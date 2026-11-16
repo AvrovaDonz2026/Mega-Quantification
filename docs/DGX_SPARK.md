@@ -11,11 +11,28 @@ v0.1.2 clean-container rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and
 `79b5dfe` for their serving/evaluation client. In addition, the merged-main
 revision `c1b3756` passed the full recipe plan/dry-run matrix (the 26-row
 `summary.json` was independently validated; the rerun did not produce a
-`status.tsv`) and completed real Spark PTQ plus export audits for W4A8, W4A4 max, MSE and Local-Hessian. The
-separate [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md)
-records those results and the failed c1b3756 visual/MTP serving retry; the
-earlier static MAX/MSE serving evidence does not substitute for serving each of
-these four exports. The historical tested images report version 0.1.2; this
+`status.tsv`) and completed real Spark PTQ plus export audits for W4A8, W4A4
+max, MSE and Local-Hessian. MSE and Local-Hessian also passed the fixed five-case
+baseline/embedded-MTP gate, including exact native output-ID parity and
+independent result validation; accepted drafts / verify counts were 135/72 and
+134/74. Temporary raw reports were removed and the serving port was clear.
+An earlier MAX/W4A8 attempt retained stale plan/result export identities and is
+not accepted as evidence for these c1b3756 exports.
+
+All four export trees now use one hash algorithm:
+`sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`. The earlier
+manifest algorithm has not been reconciled with this one, so differing digests
+alone do not establish file changes. A new background queue will repeat all four visual/MTP
+gates with these identities, followed by two long-generation groups at 262144
+context and a 49152-token output budget, with a 7200-second internal deadline
+per group. SSH returned a queue-start acknowledgement, but the Teleport
+certificate then expired; queue status and GPU startup have not yet been read
+back. These queued stages are not completed validation. The
+[dated matrix report](validation/recipe-matrix-c1b3756-20261116.md) keeps their
+status separate from earlier attempts. Earlier static MAX/MSE serving evidence
+does not substitute for serving each of these four exports.
+
+The historical tested images report version 0.1.2; this
 runbook builds local images from your checkout. Record that build's own
 revision, manifests and checks. See the [validation index](validation/README.md)
 for completed results, exact revisions, image digests and earlier repair history.

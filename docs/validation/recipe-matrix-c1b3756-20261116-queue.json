@@ -1,0 +1,51 @@
+{
+  "bundle_archive_sha256": "5ecae64b085c05f33f049614920ad2c135d6ce1ab807c3f4c8251d0b55703d66",
+  "bundle_files_sha256": {
+    "check_sglang_multimodal.py": "a98810199da0b4c376f2a539f3ab1f54ccb82f278fc335887724b6db19a21c5d",
+    "full_pair_serving_runtime.py": "679d4e0e6feab2ab40e6d9dd5c89b54c6fcff76b05a45fe1e7e906a6bb5bc4a3",
+    "max-w4a8-long-plan.json": "f02adb98bbd6840f45238e76c5b6e22fa4eaaf391c69085cb8f6e11b0544cd06",
+    "max-w4a8-multimodal-plan.json": "e124f6035eb417ca767514403ae1e97e6d44f4f6f9cbcef3092e6295acb640ee",
+    "mse-hessian-long-plan.json": "5ff4b08d3293a8e514abf7379b357d584fff46fd2bd3747e4fb96ac096389ff9",
+    "mse-hessian-multimodal-plan.json": "c54f708539efad2f8da41fc38419fe06eb827de765257dca6eed7cc364c2bf11",
+    "queue-meta.json": "8f5a35d08de616e46913004c00ac092fd5ba7e8c604d4c5995fe7db9edb34793",
+    "repetition_period_analysis.py": "0fccd145d77964e6f56af5ca9a6474f8783dd91baaab280f370a23aad4a979ac",
+    "run_tp1.py": "a5b11ec3f27e2b6581e150c2ed714e5a1ebc2a987d872b9b1020a085d0cd963e",
+    "spark_validation_queue.py": "6739241f4025d72c8a44a7e061a5a072e80566589aa914137f13093ec56434d1"
+  },
+  "groups": {
+    "max-w4a8": {
+      "static-MSE": {
+        "hash": "be7da417c6cad88492ceea79f45fdb07fcf804b007eb097409b37eab15add115",
+        "job": "c1b3756-be7da417c6cad884",
+        "path": "/home/zhiman/megaquant-validation-20261116-c1b3756/outputs/Qwen3.8-27B-NVFP4-W4A8-spark"
+      },
+      "static-max": {
+        "hash": "d2854d6f43b20a33de664bbf6d1ca597ddcc0be6436fca3af00dd9eb9b6e74ba",
+        "job": "c1b3756-d2854d6f43b20a33",
+        "path": "/home/zhiman/megaquant-validation-20261116-c1b3756/outputs/Qwen3.8-27B-NVFP4-W4A4-spark"
+      }
+    },
+    "mse-hessian": {
+      "static-MSE": {
+        "hash": "74d45b686c55411c0943ed96789915f9f653665eb5f88f3c267e8945c66fb7a1",
+        "job": "c1b3756-74d45b686c55411c",
+        "path": "/home/zhiman/megaquant-validation-20261116-c1b3756/outputs/Qwen3.8-27B-NVFP4-W4A4-spark-hessian"
+      },
+      "static-max": {
+        "hash": "93971d74ac78b659175bd672ed9a1663f878894227b0bdedd5d4a80124fe0ce3",
+        "job": "c1b3756-93971d74ac78b659",
+        "path": "/home/zhiman/megaquant-validation-20261116-c1b3756/outputs/Qwen3.8-27B-NVFP4-W4A4-spark-mse"
+      }
+    }
+  },
+  "image": "megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42",
+  "queue_root": "/home/zhiman/megaquant-validation/c1b3756-queued-validation-20261116-2302",
+  "revision": "c1b3756a1ce9bf9aa6a5895f7dd13765e48cde14",
+  "schema": "megaquant-c1b3756-queue-v1",
+  "startup_acknowledgement": {
+    "gpu_launch_confirmed": false,
+    "pid": 829659,
+    "status_readback": false
+  },
+  "tree_hash_algorithm": "sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))"
+}
