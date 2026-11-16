@@ -4,6 +4,15 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+2026-11-16 的 [合并主线配方矩阵与 Spark PTQ 验证](recipe-matrix-c1b3756-20261116.md)
+以合并后的 `c1b3756` 为基线：14 个量化配方 plan 和 6 个评测配方的
+serve/eval dry-run 共 26 项通过，且 rerun `summary.json` 已独立校验（26 行、退出码均为
+0；该 rerun 未生成 `status.tsv`）；其中 Spark 适用的 W4A8、W4A4 max、MSE 与
+Local-Hessian 四个 27B 配方另完成真实 GPU PTQ 和导出审计。矩阵 dry-run
+不代表其他目标硬件的实测。该轮 c1b3756 新导出的视觉/MTP serving 重试因
+SGLang JIT 缓存加载失败而未完成；下方既有静态 MAX/MSE serving 报告是另一组
+导出证据，不能替代本轮四个导出的逐一 serving 验证。
+
 2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
 
 2026-10-19 的 [GDN parity 验证](dgx-spark-gdn-parity-20261019.md)记录了 GB10/SM121
