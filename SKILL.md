@@ -33,6 +33,40 @@ Agent entry. Humans start at [README.md](README.md) and the
   BF16 raises `BackendError`; the export is not reported successful and no new
   `backend_meta.json` is written. This is an early export-contract check, not a
   repair of MSE duplication or packing root causes and not new GPU validation.
+- ModelOpt 0.47 offloaded streaming exports have a narrowly gated resident
+  `QuantLinear` auxiliary compatibility path in
+  `src/megaquant/modelopt_streaming.py`: it accepts one exact vendor source,
+  dispatches each eligible resident module once, and leaves vendor
+  materialization/writeback unchanged. The auxiliary precision guard remains
+  authoritative. Focused local CPU tests pass. The public checker has a seeded
+  small CUDA contract pass: both arms matched input fingerprint
+  `f11307676a14adb219097c8ff08bca10b928693e21e871bcff3afa7cf8ad163a`, and the
+  compatibility arm packed both auxiliary weights as U8 `[32,16]` with block
+  FP8 `[32,2]` and scalar FP32 scales. The earlier unseeded private regression
+  remains historical evidence; neither is numeric parity. The unpatched full-256
+  diagnostic still recorded max with 118 auxiliary U8 tensors, while MSE had
+  zero auxiliary dispatch and 118 BF16 tensors rejected by the guard. A later
+  patched full-27B pair completed both arms and comparison with 118/118 eligible
+  auxiliary weights packed as U8 (110 vision plus 8 MTP); writable-cache MTP
+  serving was exercised, while broad quality and repetition repair remain pending.
+  A later combined serving
+  attempt failed its RuntimeGate with checker details unavailable; both GLM
+  services were subsequently restored, with 121.684 seconds of stable-process
+  observation and an API arithmetic smoke returning 2 with native `stop`. All
+  five pinned-image dependency imports passed. Two pre-cache-fix baseline attempts
+  returned identical outputs: OCR was `3720` instead of `3729`, and Python ended
+  at its length limit. The first MTP startup failure lacked captured errno/stack;
+  the repeat failed with errno 30. Source audit traced it to unconditional
+  TileLang cache creation at `~/.tilelang/cache` before the MTP flag check; the
+  writable-cache service checks now run both arms: MSE passed all five checks,
+  while max still returned the wrong OCR answer. MTP verification ran for each
+  case; Python remained length-limited. A separate bounded short replay completed
+  with identical within-arm 512-token outputs but no repetition fix proof or
+  cold-cache verification. The later API smoke passed in 0.214 seconds. See
+  `docs/validation/dgx-spark-aux-dispatch-20261022.md`. Reproduce the small
+  contract check with `scripts/check_modelopt_streaming_export.py`; its default
+  mode plans without downloads and `--execute` requires the pinned ModelOpt
+  0.47.0 CUDA/Accelerate image, failing closed when unsupported.
 - License is AGPL-3.0-or-later (`LICENSE`, Copyright 2026 Donz). Leave that grant in place.
 - The pipeline has been industrially validated. The concrete runs are the 5090 production PTQ and the finished GPQA journals in `docs/qwen3.8-27b.md`. Do not invent customers, certifications, or extra scores.
 

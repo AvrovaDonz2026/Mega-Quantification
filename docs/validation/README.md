@@ -4,6 +4,8 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
+
 2026-10-19 的 [GDN parity 验证](dgx-spark-gdn-parity-20261019.md)记录了 GB10/SM121
 上的局部 beta 回归、W4A4/W4A8 五 case baseline/MTP 候选矩阵和 synthetic FP4 shape probe。
 all-beta 与 shared-decode force=0/1 在当前 768-token fixture 上通过完整 parity gate；
@@ -80,7 +82,37 @@ Fresh serving 的早期只读路径启动故障已修复；随后 `static-max` �
 
 同日的 [辅助精度 guard 现有导出检查](dgx-spark-auxiliary-precision-guard-20261022.json)只读了 safetensors headers：static-max 的 110 个 vision 与 8 个 MTP 权重全部为 U8 packed，118/118 通过；static-MSE 的同一范围全部为 BF16，118/118 被 guard 拒绝。该记录把导出后的辅助范围丢失固定为可重复的 contract failure，不代表 MSE 重复输出的完整根因或新的 GPU 量化验证。
 
-本轮 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
+[Auxiliary dispatch probe](dgx-spark-aux-dispatch-20261022.md)记录 fresh paired probe：static-max 完成辅助 dispatch；static-MSE 未调用辅助 dispatch，118 个辅助权重仍为 BF16，随后被精度 guard 拒绝。Pair comparison 因 arm incomplete 跳过。该证据支持 ModelOpt streaming resident non-decoder 路径的候选定位，不代表 patched GPU、重复修复、GPQA、serving 或 TP2 结果。
+
+2026-10-23 的 [full static-max/MSE export validation](dgx-spark-export-numeric-20261023.md)
+记录一臂 full export contract 与独立恢复证据。导出 gates 通过；严格 successor
+adjudication 将 artifact 标记为可用于 matched experiment，但原始生命周期协议仍
+保留 late-heartbeat advisory/failed 状态。static-MSE v1 在执行中失败，未生成
+export；retry v3 又在 worker installation 的 TTL hard gate 前失败，同样没有启动
+量化/export。retry v4 于 20:51:25 CST 开始执行，约 6 分钟后因 transport timeout
+在导出前失败；coordinator recovery 稳定。随后 additive V7 readback 已通过恢复验证；该 readback 不生成 export，也不改写 v4
+执行失败状态。
+另有 no-GPU transport echo/idle diagnostic：420 秒内两 peer 分别 357/357 与
+356/356 成功，teardown 前进程存活，118 次 idle inspection 无错误。teardown 后的
+exit/stderr 仅是后置观察，不能隔离 v4 SSH 根因，也不证明 PTQ load 下的 transport
+稳定性或量化/export 成功。
+该记录不等同于 paired quality、production
+serving、full-model parity 或 repetition fix。
+Static-MSE v6 的双端 staging 与 26 项 focused tests 通过，但证书在执行前过期，
+没有启动 GPU quantization/export。独立 tiny public-codec hardware probe 未完成
+codec/audit coverage，因此不能写成 GPU codec 通过；V2 尚未执行。
+新增合成 CPU 阈值诊断观察到 FP32 舍入边界差异；尚未证明实际模型权重或
+两条 CUDA 路径存在差异，也未建立与长回答重复的因果关系。
+
+后续执行中，MSE v6 完成校准后超时；v7 于 2026-10-24 完成 256/256
+校准与 519/519 codec candidates。2026-11-10 的独立 V12 artifact/export gate
+通过，包含 110 个 vision 和 8 个 MTP quantizers；原服务在后续读回时关闭，
+所以独立 recovery/overall 仍为 false。两组现存 export 的完整目录哈希匹配；
+非 GPU staging 和双端真实 systemd/socket 的未 ARM 检查通过，worker 已退役，
+当前服务未变。两次 CPU 数值审计均未完成，不能引用部分进度下数值结论。
+这些后续结果不证明新权重的视觉/MTP serving、配对长生成或重复问题修复。
+
+上述早期 MSE 视觉/MTP 导出未满足请求的量化范围，不能作为完整量化 serving 的验证结果。256k MTP 质量、TP2 和广泛视觉质量仍待验证。服务恢复后的固定算术 probe 只覆盖该请求；进程稳定本身不证明应用可用。
 
 [SGLang 上游补丁验证](sglang-upstream-patches-20261013.md)记录 logprob 与视觉/MTP
 贡献的精确源码、全量贡献检查及 GB10 NVFP4 回归。后者是合成线性层 GPU 验证，
