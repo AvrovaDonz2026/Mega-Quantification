@@ -5,10 +5,17 @@ W4A8 and W4A4 quantization, image inference and embedded MTP checks on one GB10.
 Start with the default mixed W4A8 recipe; uniform W4A4 and its scale-search
 experiments are alternatives. All recipes here use TP1 on a single host.
 
-The current release is [v0.1.3](releases/v0.1.3.md). GPU evidence remains frozen
-at the revisions actually tested: `ac53833` for the v0.1.2 clean-container
-rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and `79b5dfe` for their
-serving/evaluation client. Those tested images report version 0.1.2; this
+The current release is [v0.1.3](releases/v0.1.3.md). Historical clean-container
+GPU evidence remains bound to the revisions actually tested: `ac53833` for the
+v0.1.2 clean-container rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and
+`79b5dfe` for their serving/evaluation client. In addition, the merged-main
+revision `c1b3756` passed the full recipe plan/dry-run matrix (the 26-row
+`summary.json` was independently validated; the rerun did not produce a
+`status.tsv`) and completed real Spark PTQ plus export audits for W4A8, W4A4 max, MSE and Local-Hessian. The
+separate [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md)
+records those results and the failed c1b3756 visual/MTP serving retry; the
+earlier static MAX/MSE serving evidence does not substitute for serving each of
+these four exports. The historical tested images report version 0.1.2; this
 runbook builds local images from your checkout. Record that build's own
 revision, manifests and checks. See the [validation index](validation/README.md)
 for completed results, exact revisions, image digests and earlier repair history.
