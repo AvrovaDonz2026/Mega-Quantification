@@ -103,6 +103,14 @@
   服务 API 返回 `2`、`stop`（0.222 秒）。v3 的 serialized header gate 失败保留为
   历史记录；v4 仅说明本次 tiny contract gate 已通过，PR72 仍保持 draft。
 
+- 2026-11-16 合并主线配方矩阵报告经远端状态复查发现：rerun 目录没有
+  `status.tsv`；另一个较早的矩阵目录存在同名文件，但不能作为 rerun 的逐项状态证据。
+  rerun `summary.json` 已独立读取和内容校验：`all_passed=true`，26 行均为退出码 0，
+  对应日志存在；文件 SHA-256 为
+  `e5afebac9e9a8959412b9a8c7c9ba45c2de57432f75b0db17b23858a36ab5799`。四个 Spark PTQ
+  作业的导出和审计记录另行报告完成；对应哈希和镜像身份以该报告实际列出的值为准，
+  不推断未记录的源权重、校准集或各导出文件哈希。见[矩阵记录](recipe-matrix-c1b3756-20261116.md)。
+
 ## Pull request 状态
 
 2026-10-23 当前核验显示，公开未合并 PR 仅有 [PR #72](https://github.com/AvrovaDonz2026/Mega-Quantification/pull/72)
