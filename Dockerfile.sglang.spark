@@ -14,6 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/cache/huggingface \
+    TILELANG_CACHE_DIR=/cache/tilelang \
+    TILELANG_TMP_DIR=/cache/tilelang/tmp \
     MEGAQUANT_ROOT=/opt/megaquant \
     MEGAQUANT_VERIFY_CONTAINER=1 \
     TORCH_CUDA_ARCH_LIST=12.1 \
@@ -34,7 +36,7 @@ COPY scripts ./scripts
 RUN python -m pip install --no-cache-dir --no-deps --find-links=/tmp/wheelhouse -r /tmp/requirements-build-spark.txt \
     && python -m pip install --no-cache-dir --no-deps --no-build-isolation . \
     && python scripts/patch_sglang_spark.py \
-    && mkdir -p /cache/huggingface /opt/megaquant/outputs /opt/megaquant/offload /models /data \
+    && mkdir -p /cache/huggingface /cache/tilelang/tmp /opt/megaquant/outputs /opt/megaquant/offload /models /data \
     && chmod +x /opt/megaquant/docker/entrypoint.sh /opt/megaquant/scripts/*.sh \
     && python scripts/container_manifest.py record --kind sglang \
         --base-image "${BASE_IMAGE}" --revision "${GIT_REVISION}"
