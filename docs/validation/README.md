@@ -4,6 +4,8 @@
 [Spark 指南](../DGX_SPARK.md)和[模型手册](../qwen3.8-27b.md)。
 日期命名的报告与相邻 JSON 保留实际运行的版本、源码 revision、输入及文件哈希。
 
+2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
+
 2026-10-19 的 [GDN parity 验证](dgx-spark-gdn-parity-20261019.md)记录了 GB10/SM121
 上的局部 beta 回归、W4A4/W4A8 五 case baseline/MTP 候选矩阵和 synthetic FP4 shape probe。
 all-beta 与 shared-decode force=0/1 在当前 768-token fixture 上通过完整 parity gate；
