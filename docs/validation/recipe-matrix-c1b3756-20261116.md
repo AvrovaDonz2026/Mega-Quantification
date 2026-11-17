@@ -194,17 +194,26 @@ megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b4
 `effective_stop=false`；native `stop` 不能据此解释为 EOS 或自然停止恢复。该实验每臂仅运行
 一次，且不是质量 gate，也不证明 MSE 根因或重复问题已修复。
 
-队列已于 2026-11-17 06:23:43 UTC 自动进入 MSE/Hessian 长生成阶段。2026-11-17
-06:28:43.872030 UTC 的回读显示，MSE 臂已进入实际解码：`request_id=static-max`、
-`completion_tokens=1537`、`elapsed_seconds=284`、`finish_type=null`；容器仍在运行，
-runner PID 为 `1755423` 且存活，GPU 利用率约 95%。Hessian 第二臂尚未开始。
-这是 MSE 单臂的中途进度，不是完整组结果，也不能由 elapsed 推算 decode 速度。
+队列于 2026-11-17 06:23:43 UTC 自动进入 MSE/Hessian 长生成阶段。06:28:43 UTC 的
+[历史运行快照](recipe-matrix-c1b3756-20261117-long-status.json)记录 MSE 第一臂已开始解码，
+Hessian 尚未开始；该快照不含 MSE 第一臂的最终 finish、长度或周期摘要。
 
-MAX 配对结果及 MSE/Hessian 最新进度见[脱敏长生成状态快照](recipe-matrix-c1b3756-20261117-long-status.json)。
-较早的[启动快照](recipe-matrix-c1b3756-20261117-status.json)保留 05:10 状态，不代表当前状态。
-本地[旧队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)只对应旧队列包，不是续跑队列
-的完整 manifest；续跑 queue 脚本哈希不同于旧包，但 runtime、`run_tp1` 和四份 plan
-哈希与仓库 manifest 匹配。
+2026-11-17 14:05:39.992445 UTC 的终态回读显示队列以 `error_code=validation_container_nonzero`
+失败。MSE/Hessian 容器于 06:23:43.891602041 UTC 启动、08:23:51.130518426 UTC 退出，
+exit code 1、`OOMKilled=false`；runtime 报 `ServingRuntimeError: incomplete streaming response`。
+失败发生在 7,200 秒共享时限附近，但现有证据不能确定具体是哪一个调用因超时抛错。
+`pair-serving-result.json` 不存在，runner 已退出。失败前的后续回读确认 MSE 第一臂已结束、
+Hessian 第二臂已开始生成；但运行时只将臂级 summary 保存在内存，直到两臂均结束才落盘，
+所以两臂最终 summary 均未保存。终态没有 MSE 最终 finish、输出长度或周期统计，因此不推测
+其 token 总数或 `length`/`stop` 结果；Hessian 也无最终结果。该组长生成验证未完成。
+终态主机观察显示 Aitop 与 Robo 的 GPU 利用率均为 0%、compute 进程数均为 0，且没有新
+验证任务运行。这是该时点的观察，不表示 GPU 资源预留。
+
+终态证据见[脱敏终态快照](recipe-matrix-c1b3756-20261117-terminal-status.json)。06:28 的
+运行快照仍保留为历史记录；更早的[启动快照](recipe-matrix-c1b3756-20261117-status.json)
+保留 05:10 状态。本地[旧队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)只对应旧包，
+不是续跑队列的完整 manifest；续跑 queue 脚本哈希不同于旧包，但 runtime、`run_tp1` 和
+四份 plan 哈希与仓库 manifest 匹配。
 
 仓库中的 [DGX Spark static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)
 属于另一组 static 导出，不替代本报告四个配方的长生成结果。`length` 只表示达到

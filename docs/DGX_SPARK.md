@@ -37,13 +37,19 @@ result SHA-256 is
 finite cycle searches reported `period.found=false`, but `complete=false` and
 `exhaustive=false`; actual EOS stop tokens were not checked and
 `effective_stop=false`. This does not establish no repetition or stopping
-recovery. The continuation queue has entered the MSE/Local-Hessian long stage.
-At 06:28:43.872 UTC on 2026-11-17, the MSE arm was decoding with 1,537
-completion tokens over 284 seconds; its container and runner were still running,
-GPU utilization was about 95%, and the Hessian arm had not started. The 284
-seconds include whole-group loading time and cannot establish decode speed.
-This is one arm's in-progress state, not a group result. The seed exists only in plan
-metadata; the current runtime does not pass it to HTTP `sampling_params`. This execution and
+recovery. The MSE/Local-Hessian long stage later failed with queue status
+`validation_container_nonzero`. Its container exited 1 near the shared 7,200-second
+limit after reporting `incomplete streaming response`; the evidence does not identify
+which exact call raised a timeout. No final `pair-serving-result.json` was produced.
+The MSE arm's intermediate summary was only in memory, so its final token count,
+finish type and cycle summary are unavailable; do not infer a length or stop result.
+Later readback confirmed the MSE arm finished and the Hessian arm began generation,
+but neither arm's final summary was persisted. Aitop and Robo both showed 0% GPU
+utilization and no compute processes afterward, and no new validation job is running. See the
+[terminal snapshot](validation/recipe-matrix-c1b3756-20261117-terminal-status.json);
+the earlier [06:28 progress snapshot](validation/recipe-matrix-c1b3756-20261117-long-status.json)
+remains a historical point-in-time record. The seed exists only in plan metadata; the
+current runtime does not pass it to HTTP `sampling_params`. This execution and
 evidence validation is not a GPQA quality gate or an MSE root-cause/fix result. The
 [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md) keeps their
 status separate from earlier attempts. Earlier static MAX/MSE serving evidence
@@ -55,9 +61,10 @@ determinism. The archived `recipe-matrix-c1b3756-20261116-queue.json` describes
 the older queue package only and is not a complete manifest for the continuation.
 The earlier sanitized startup snapshot is
 [`recipe-matrix-c1b3756-20261117-status.json`](validation/recipe-matrix-c1b3756-20261117-status.json).
-The latest long-generation status snapshot is
+The earlier 06:28 progress snapshot is
 [`recipe-matrix-c1b3756-20261117-long-status.json`](validation/recipe-matrix-c1b3756-20261117-long-status.json);
-it records the completed MAX pair and current MSE/Hessian progress.
+it records the completed MAX pair and historical MSE/Hessian progress. The terminal outcome is in
+[`recipe-matrix-c1b3756-20261117-terminal-status.json`](validation/recipe-matrix-c1b3756-20261117-terminal-status.json).
 
 The later `main` commit `eaae979` passed [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287):
 Ruff passed and pytest reported 823 passed, 8 skipped in 29.93 seconds. This CI

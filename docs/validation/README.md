@@ -33,15 +33,22 @@ repeat2 仅复验该固定用例，不证明重复运行确定性或普遍 parit
 均为 `period.found=false`，但 `complete=false`、`exhaustive=false`，实际 EOS stop token
 未核查且 `effective_stop=false`，因此不能声称无重复或停止行为恢复。
 
-队列已进入 MSE/Hessian 长生成阶段；截至 2026-11-17 06:28:43.872 UTC，MSE 臂已实际解码
-1,537 tokens、经过 284 秒，仍在运行，GPU 利用率约 95%；Hessian 第二臂尚未开始。这是
-单臂中途进度，不代表组结果；284 秒包含整组加载时间，不能推算解码速度。
-MAX 配对状态及最新 MSE/Hessian 进度见
-[脱敏长生成快照](recipe-matrix-c1b3756-20261117-long-status.json)。
-旧的 05:10 启动快照仅作历史状态；旧队列清单也不代表续跑队列的完整 manifest。seed 仅存在于
-计划元数据，当前 runtime 未传入 HTTP sampling parameters。该长生成执行与结果校验不构成 GPQA 质量 gate，
-也不证明 MSE 根因或重复修复。既有 static MAX/MSE serving 报告仍是另一组权重证据，不能
-替代本轮四个导出的逐一 serving 和长生成验证。
+MSE/Hessian 长生成队列最终以 `validation_container_nonzero` 失败。容器在共享 7,200 秒
+时限附近退出，runtime 报 `incomplete streaming response`；不能据此断言某个精确调用触发
+了超时。最终 `pair-serving-result.json` 缺失。后续回读确认 MSE 第一臂已结束、Hessian
+第二臂已开始生成，但运行时只把臂级 summary 保存在内存，未落盘两臂的最终 tokens、finish
+或周期摘要；因此不推测 MSE 的最终输出长度或 `length`/`stop` 结果。终态 GPU 利用率均为
+0%、compute 进程数均为 0，且没有新验证运行。终态快照见
+[脱敏终态记录](recipe-matrix-c1b3756-20261117-terminal-status.json)，06:28 的
+[运行快照](recipe-matrix-c1b3756-20261117-long-status.json)保留为历史。
+
+MAX 两臂长生成结果仍有效：任务及独立校验通过，W4A4 MAX 为 46,784 tokens、W4A8 为
+33,399 tokens，均以 native `stop` 结束。周期搜索并不完整或穷尽，EOS stop token 未核查；
+这不证明无重复或停止恢复。四个 Spark 配方的固定视觉/MTP 检查通过，但本轮长生成失败，
+不能据此给出 GPQA、总体质量或 MSE 根因/重复修复结论。队列终止后没有遗留 GPU compute
+进程，也没有新验证任务运行。seed 仅存在于计划元数据，runtime 未传入 HTTP sampling
+parameters。旧队列清单不代表续跑队列的完整 manifest；旧 static MAX/MSE serving 报告也
+不能替代本轮四个导出的长生成验证。
 
 2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
 

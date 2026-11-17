@@ -1,0 +1,85 @@
+{
+  "schema": "megaquant-spark-safe-snapshot-v1",
+  "snapshot_kind": "sanitized_terminal_state_not_complete_raw_evidence",
+  "observed_utc": "2026-11-17T14:05:39.992445+00:00",
+  "tested_revision": "c1b3756a1ce9bf9aa6a5895f7dd13765e48cde14",
+  "previous_snapshot": "recipe-matrix-c1b3756-20261117-long-status.json",
+  "runner_identity_snapshot": "recipe-matrix-c1b3756-20261117-status.json",
+  "queue": {
+    "phase": "failed",
+    "error_class": "RuntimeError",
+    "error_code": "validation_container_nonzero",
+    "updated_utc": "2026-11-17T08:23:51.247534+00:00",
+    "status_sha256": "59dbbd6851bb31f2ebda6ce6f9ccaa998a95cb8d361fdd88c077afa41b2c4385",
+    "runner_pid_exists": false
+  },
+  "completed_tasks_recorded_by_continuation_queue": [
+    {
+      "group": "mse-hessian",
+      "mode": "multimodal",
+      "exit_code": 0,
+      "validated": true,
+      "pair_id": "1ddc44624608209ff48568f1",
+      "result_sha256": "73ed94c70806f035dbca578c483c969692833a1bbfe400e2b9c4d42ec1a5bd97"
+    },
+    {
+      "group": "max-w4a8",
+      "mode": "long",
+      "exit_code": 0,
+      "validated": true,
+      "pair_id": "640a797b25687df4bd0a5638",
+      "result_sha256": "cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd"
+    }
+  ],
+  "failed_task": {
+    "group": "mse-hessian",
+    "mode": "long",
+    "container_state": "exited",
+    "container_running": false,
+    "container_exit_code": 1,
+    "oom_killed": false,
+    "container_started_utc": "2026-11-17T06:23:43.891602041Z",
+    "container_finished_utc": "2026-11-17T08:23:51.130518426Z",
+    "whole_group_deadline_seconds": 7200,
+    "progress_phase": "failed",
+    "progress_error_class": "ServingRuntimeError",
+    "progress_sha256": "5339c78d3d94fcdaef333ce4d04b32831c58dc7a72b234d8f446e25acc80b49c",
+    "allowlisted_log_error": "incomplete streaming response",
+    "pair_result_exists": false,
+    "completed_pair_validation": false,
+    "per_arm_summary_persisted": false,
+    "mse_final_token_count": null,
+    "mse_finish_reason": null,
+    "hessian_final_token_count": null,
+    "hessian_finish_reason": null,
+    "deadline_causation": "failure_near_shared_deadline_exact_trigger_not_independently_proven"
+  },
+  "host_observations": [
+    {
+      "role": "validation_host",
+      "observed_utc": "2026-11-17T14:05:39.992445+00:00",
+      "gpu_utilization_percent": 0,
+      "reported_gpu_compute_process_count": 0,
+      "checked_serving_ports": [30000, 30001, 30002, 30080, 8000],
+      "checked_serving_ports_listening": []
+    },
+    {
+      "role": "peer_host",
+      "observed_utc": "2026-11-17T14:05:36.178138+00:00",
+      "gpu_utilization_percent": 0,
+      "reported_gpu_compute_process_count": 0,
+      "checked_serving_ports": [30000, 30001, 30002, 30080, 8000],
+      "checked_serving_ports_listening": []
+    }
+  ],
+  "new_validation_started_during_readback": false,
+  "limits": [
+    "earlier_running_snapshots_are_historical_not_current_status",
+    "mse_first_arm_finished_and_hessian_started_were_observed_before_failure_but_final_arm_summaries_were_not_persisted",
+    "runtime_keeps_completed_arm_summary_in_memory_until_both_arms_finish",
+    "stream_failure_does_not_establish_model_repetition_or_a_length_finish",
+    "oom_killed_false_is_container_metadata_not_a_proof_about_all_memory_conditions",
+    "gpu_and_port_observations_are_point_in_time_not_a_reservation",
+    "completed_max_w4a8_validation_does_not_establish_eos_quality_or_repetition_repair"
+  ]
+}
