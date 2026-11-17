@@ -76,11 +76,34 @@ sha256:16657528650800627d436e4244a1a4ac52fd3244cb2fb0657c7bd7ff3fe4c467
 revision=c1b3756
 ```
 
+后续 `main` 提交 `eaae979` 的 [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287)
+通过：Ruff 检查通过，pytest 为 823 passed、8 skipped（29.93 秒）。这是后续源码的 CI
+证据，不改变本报告绑定的 `c1b3756` GPU 运行身份，也不替代其远端 PTQ/serving 证据。
+
 本次实测建立了四个 Spark 配方的 GPU 量化和导出证据，但没有把它外推到
 5090、6000D、Marlin 或需要更大显存的 `mixed.yaml`。这些配方仍需在对应硬件
 上进行真实量化；本报告中的 26 项计划检查不能替代该验证。
 
 ## 视觉与 embedded MTP
+
+早期一次 MAX/W4A8 运行因 plan/result 引用旧导出身份而不被接受。随后首次身份正确的
+运行中，Python 固定用例在第 16 个 token 出现 MTP 与 baseline mismatch。之后
+MAX/W4A8 repeat2 按当前四棵导出树身份完成独立多模态复验：容器退出码为 0；baseline 与 embedded MTP 的五个固定用例
+均通过，逐题 native output IDs parity 通过，draft 接受数和 verify 次数均为正数。
+该轮结果 SHA-256 为
+`8b4bd5a68f63f89f7b6e5cbd7f0f314a50fbf926ef3564ee0e915aee8fdd79d7`。
+其独立只读 `validate_plan` 与 `validate_multimodal_result` 校验均通过，`validated=true`，
+pair ID 为 `c4aa749615092a23af51e97f`。旧身份运行、身份正确首轮的 Python token mismatch
+及早期失败均保留为历史；repeat2 不证明重复运行确定性或普遍 parity。
+
+续跑队列的 MSE/Local-Hessian 多模态结果状态为 `exit_code=0`、`validated=true`，
+结果 SHA-256 为 `73ed94c70806f035dbca578c483c969692833a1bbfe400e2b9c4d42ec1a5bd97`。
+该 MSE/Hessian 续跑 pair ID 为 `1ddc44624608209ff48568f1`；MSE 为 135 accepted / 144
+proposed drafts、72 verify，Local-Hessian 为 134 / 148、74。两臂分别完成 baseline 与
+MTP 五题（baseline 14/14 checks、MTP 19/19 checks），独立结果校验及功能验证通过；
+每臂内部 MTP↔baseline 均为 5/5 exact output IDs、无首个 mismatch 且 greedy outputs
+identical。这是臂内 parity，不表示 MAX/W4A8 与 MSE/Hessian 跨臂输出相同。该队列结果与
+下方先前安全运行记录分别保留；哈希用于绑定结果，不包含原始视觉请求或模型回答。
 
 把 `HOME`、`TMPDIR` 及 SGLang、TileLang、Triton、TorchInductor 缓存全部放入
 挂载的可写 `/cache` 后，W4A4 MSE 与 Local-Hessian 在新 serving 镜像上完成了
@@ -111,13 +134,17 @@ MTP 质量已经通过。
 `failed to map segment from shared object`；显式将上述缓存移到 `/cache` 后，后续
 serving 成功运行。旧的一次 checker 非零退出未保留失败用例，因此不能确定原失败原因。
 
-MAX/W4A8 的一次安全重跑虽然退出码为 0，且容器实际挂载本次新导出，但其计划和
-结果仍引用旧 static MAX/MSE 的 source job 和树哈希。它的功能输出不能作为身份绑定
-正确的本次正式通过证据；已安排重新运行。
+MAX/W4A8 首次身份正确的尝试中，Python 固定用例在第 16 个 token 出现 MTP 与 baseline
+mismatch。后续 repeat2 通过的是该固定用例及当前结果校验；它不抹去此前 mismatch，
+也不构成重复运行确定性或普遍 token parity 证明。
+
+另一次安全重跑虽然退出码为 0，且容器实际挂载本次新导出，但其计划和结果仍引用旧
+static MAX/MSE 的 source job 和树哈希。它的功能输出不能作为身份绑定正确的本次正式
+通过证据；该身份不匹配记录仍作为历史保留。
 
 此外，之前导出清单的树哈希与本次显式算法的结果不同，尚未证明两者采用相同算法，
 不能据此断言文件发生变化。为避免混用，后续队列在运行前重新核验四棵完整导出树，
-并将计划、source job 和结果重新绑定到以下算法与结果，再重复四个导出的视觉/MTP：
+并将计划、source job 和结果重新绑定到以下算法与结果，用于四个导出的视觉/MTP 复验：
 
 ```text
 sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))
@@ -141,32 +168,35 @@ sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))
 megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42
 ```
 
-队列先独立校验已完成的 MSE/Hessian 结果，再核验上述四棵导出树；按
-MAX/W4A8、MSE/Hessian 两组串行重复视觉/MTP gate。两组均通过后，各执行一次
-TP1 长生成配对：262,144 context、固定 288-token 输入、temperature 0、seed
-213087260、MTP 关闭、FP8 KV、FP32 SSM、冷启动并 flush cache，单题最多生成
+队列独立校验多模态结果并核验上述四棵导出树；W4A8 与 W4A4 MAX 多模态复验，
+以及 MSE/Hessian 续跑多模态阶段均已完成。随后按计划执行两组 TP1 长生成：262,144 context、固定
+288-token 输入、temperature 0、计划记录 seed `213087260`、MTP 关闭、FP8 KV、FP32 SSM、
+冷启动并 flush cache，单题最多生成
 49,152 tokens。每组长生成的内部总时限为 7,200 秒，外层另留 180 秒及停止宽限。
 持久结果只保留计数、哈希、周期检测与停止元数据；视觉/MTP 原始临时报告结束后清理。
+长生成各组只有一轮、两臂各一次，没有重跑一致性要求。`completion_tokens` 是当前单臂
+单次请求的累计值；`elapsed_seconds` 是整组启动以来的经过时间，包含加载阶段，不能据此
+计算 decode 速度。计划中的 seed 是上层元数据，尚未核实是否传入 HTTP `sampling_params`。
 
-后台进程已由 SSH 返回 `STARTED 829659`。随后的状态读取因 Teleport 证书于
-2026-11-16 23:04:47 CST 到期而未能完成；**尚未回读该队列的状态文件，也未确认新
-容器是否进入 GPU 推理**。不能把成功启动后台进程写成整条验证队列通过。
-队列按脱离 SSH 会话的方式启动，当前是否存活仍待续证后确认。续证后应读取以下产物：
+续跑队列位于 `c1b3756-queued-validation-cont-20261117-041456`，runner SHA-256 为
+`c57b60b5516c419de5c6d1d56317c8da6df5616c594f1672ce5fe2491852027a`，进程 PID 为
+`1755423`。MSE/Local-Hessian 多模态阶段已完成并通过独立结果校验；MAX/W4A8 长生成
+随后运行，MSE/Local-Hessian 长生成尚未开始。队列顺序和完成状态不表示整个长生成配对
+已经完成。
 
-```text
-/home/zhiman/megaquant-validation/c1b3756-queued-validation-20261116-2302/status.json
-/home/zhiman/megaquant-validation/c1b3756-queue-2302.log
-/home/zhiman/megaquant-validation/c1b3756-queue-2302.pid
-/home/zhiman/megaquant-validation/megaquant-c1b3756-spark-queue-20261116-2302/
-```
+截至 2026-11-17 05:10:22 UTC，MAX/W4A8 长生成组当前 `static-max`（W4A4 MAX）臂的单次
+请求累计 `completion_tokens=31233`；整组经过 `elapsed_seconds=2520`，`finish_type=null`，
+容器仍在运行，GPU 利用率约 95%。W4A8 同组第二臂尚未完成；MSE/Local-Hessian 长生成
+尚未开始。该进度不是完整组结果，也不能用 elapsed 推算生成速度，尚无跨臂比较。
+结果校验器允许存在 `period.found=true` 的记录；本阶段未核对 EOS 实际 stop token，
+因此即使完成也只表示执行及证据校验，不代表无重复、自然停止恢复或质量 gate 通过。
 
-本地归档的[队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)保存镜像、
-四棵树、验证包及其文件的 SHA-256，不包含 prompt 或模型响应。
-
-容器名前缀为 `megaquant-c1b3756-q2255-`。每阶段均需核对退出码与计划绑定，并独立
-执行对应结果校验；结束后检查 GPU 进程、服务端口与原始临时报告清理情况。
+最新安全状态快照见[续跑队列状态](recipe-matrix-c1b3756-20261117-status.json)。快照确认
+runtime 与 `run_tp1` 哈希匹配仓库 manifest、四份计划匹配 manifest；续跑 queue 脚本哈希
+不同于旧包。本地归档的[队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)只对应
+2026-11-16 旧队列包身份，不代表当前续跑状态或完整 manifest。
 
 仓库中的 [DGX Spark static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)
 属于另一组 static 导出，不替代本报告四个配方的长生成结果。`length` 只表示达到
 49,152 输出预算，不等于耗尽 262K 上下文；`stop` 不能单独证明 EOS。
-目前没有新的长生成通过结果，也不能宣称重复问题已修复。
+当前长生成尚未完成，不能据此给出完整配对结论、质量排序或重复修复结论。

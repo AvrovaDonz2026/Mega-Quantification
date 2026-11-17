@@ -1,0 +1,118 @@
+{
+  "schema": "megaquant-spark-safe-snapshot-v1",
+  "snapshot_kind": "sanitized_point_in_time_metadata_not_complete_raw_evidence",
+  "observed_utc": "2026-11-17T05:10:22+00:00",
+  "tested_revision": "c1b3756a1ce9bf9aa6a5895f7dd13765e48cde14",
+  "runner_identity": {
+    "full_pair_serving_runtime_sha256": "679d4e0e6feab2ab40e6d9dd5c89b54c6fcff76b05a45fe1e7e906a6bb5bc4a3",
+    "run_tp1_sha256": "a5b11ec3f27e2b6581e150c2ed714e5a1ebc2a987d872b9b1020a085d0cd963e",
+    "spark_validation_queue_sha256": "c57b60b5516c419de5c6d1d56317c8da6df5616c594f1672ce5fe2491852027a",
+    "runtime_and_run_tp1_match_repository_manifest": true,
+    "continuation_queue_differs_from_original_queue_manifest": true,
+    "plan_sha256": {
+      "max-w4a8-multimodal-plan.json": "e124f6035eb417ca767514403ae1e97e6d44f4f6f9cbcef3092e6295acb640ee",
+      "max-w4a8-long-plan.json": "f02adb98bbd6840f45238e76c5b6e22fa4eaaf391c69085cb8f6e11b0544cd06",
+      "mse-hessian-multimodal-plan.json": "c54f708539efad2f8da41fc38419fe06eb827de765257dca6eed7cc364c2bf11",
+      "mse-hessian-long-plan.json": "5ff4b08d3293a8e514abf7379b357d584fff46fd2bd3747e4fb96ac096389ff9"
+    },
+    "all_four_plans_match_repository_manifest": true
+  },
+  "image_identity": {
+    "image_id": "sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42",
+    "image_ref": "megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42"
+  },
+  "completed_multimodal_tasks": [
+    {
+      "group": "mse-hessian",
+      "mode": "multimodal",
+      "validated": true,
+      "container_exit_code": 0,
+      "pair_id": "1ddc44624608209ff48568f1",
+      "result_sha256": "73ed94c70806f035dbca578c483c969692833a1bbfe400e2b9c4d42ec1a5bd97",
+      "arms": [
+        {
+          "arm": "static-max",
+          "baseline_cases": 5,
+          "baseline_checks_passed": 14,
+          "baseline_check_count": 14,
+          "mtp_cases": 5,
+          "mtp_checks_passed": 19,
+          "mtp_check_count": 19,
+          "baseline_and_mtp_returncode": 0,
+          "greedy_outputs_identical": true,
+          "exact_output_ids_equal_cases": 5,
+          "first_mismatch": null,
+          "accepted_drafts": 135,
+          "proposed_drafts": 144,
+          "verify_runs": 72
+        },
+        {
+          "arm": "static-MSE",
+          "baseline_cases": 5,
+          "baseline_checks_passed": 14,
+          "baseline_check_count": 14,
+          "mtp_cases": 5,
+          "mtp_checks_passed": 19,
+          "mtp_check_count": 19,
+          "baseline_and_mtp_returncode": 0,
+          "greedy_outputs_identical": true,
+          "exact_output_ids_equal_cases": 5,
+          "first_mismatch": null,
+          "accepted_drafts": 134,
+          "proposed_drafts": 148,
+          "verify_runs": 74
+        }
+      ],
+      "parity_scope": "each_arm_baseline_vs_mtp_only_not_cross_arm"
+    }
+  ],
+  "repeat2_independent_validator": {
+    "observed_container_exit_code": 0,
+    "runtime_loaded_from_repeat2_container_workspace_mount": true,
+    "plan_selected_from_repeat2_container_command": true,
+    "functions_called": [
+      "validate_plan",
+      "validate_multimodal_result"
+    ],
+    "validated": true,
+    "pair_id": "c4aa749615092a23af51e97f",
+    "result_sha256": "8b4bd5a68f63f89f7b6e5cbd7f0f314a50fbf926ef3564ee0e915aee8fdd79d7"
+  },
+  "current": {
+    "group": "max-w4a8",
+    "mode": "long",
+    "queue_phase": "launching",
+    "container_name": "megaquant-c1b3756-q1117-cont-max-w4a8-long",
+    "container_state": "running",
+    "container_running": true,
+    "container_exit_code_is_not_final": 0,
+    "container_started_utc": "2026-11-17T04:28:19.978852777Z",
+    "request_id": "static-max",
+    "phase": "long_generation",
+    "completion_tokens": 31233,
+    "elapsed_seconds": 2520,
+    "finish_type": null,
+    "progress_mtime_utc": "2026-11-17T05:10:21+00:00",
+    "counters_scope": "current_request_not_group_total",
+    "gpu_utilization_percent": 95,
+    "runner_alive": true
+  },
+  "pending_tasks": [
+    {
+      "group": "max-w4a8",
+      "mode": "long",
+      "status": "current_group_incomplete"
+    },
+    {
+      "group": "mse-hessian",
+      "mode": "long",
+      "status": "not_started"
+    }
+  ],
+  "limits": [
+    "long_progress_has_no_arm_or_replicate_index_fields_request_id_contains_current_arm",
+    "long_progress_has_no_repetition_or_cycle_metrics",
+    "completed_multimodal_does_not_establish_long_generation_quality_or_repetition_fix",
+    "long_each_group_has_one_run_per_arm_validator_allows_repetition_and_does_not_verify_actual_eos"
+  ]
+}

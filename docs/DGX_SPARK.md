@@ -12,25 +12,48 @@ v0.1.2 clean-container rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and
 revision `c1b3756` passed the full recipe plan/dry-run matrix (the 26-row
 `summary.json` was independently validated; the rerun did not produce a
 `status.tsv`) and completed real Spark PTQ plus export audits for W4A8, W4A4
-max, MSE and Local-Hessian. MSE and Local-Hessian also passed the fixed five-case
-baseline/embedded-MTP gate, including exact native output-ID parity and
-independent result validation; accepted drafts / verify counts were 135/72 and
-134/74. Temporary raw reports were removed and the serving port was clear.
-An earlier MAX/W4A8 attempt retained stale plan/result export identities and is
-not accepted as evidence for these c1b3756 exports.
+max, MSE and Local-Hessian. MSE and Local-Hessian passed the fixed five-case
+baseline/embedded-MTP gate with independent result validation. MAX/W4A8's
+identity-correct repeat2 also passed all five baseline/MTP cases and per-case
+native output-ID parity; both arms had positive accepted-draft and verify
+counts. MSE/Hessian baseline and MTP checks were 14/14 and 19/19 per arm;
+accepted/proposed drafts and verify counts were 135/144, 72 for MSE and
+134/148, 74 for Hessian. Each arm's MTP outputs matched its own baseline 5/5;
+this is not cross-arm parity. Result SHA-256 values are recorded in the
+[dated matrix report](validation/recipe-matrix-c1b3756-20261116.md).
+Earlier JIT cache failures and the first MAX/W4A8 run with stale plan/result
+export identities remain historical failures and are not counted as these
+exports' passing evidence.
 
 All four export trees now use one hash algorithm:
 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`. The earlier
 manifest algorithm has not been reconciled with this one, so differing digests
-alone do not establish file changes. A new background queue will repeat all four visual/MTP
-gates with these identities, followed by two long-generation groups at 262144
-context and a 49152-token output budget, with a 7200-second internal deadline
-per group. SSH returned a queue-start acknowledgement, but the Teleport
-certificate then expired; queue status and GPU startup have not yet been read
-back. These queued stages are not completed validation. The
+alone do not establish file changes. MAX/W4A8 repeat2 passed independent plan
+and multimodal validation. The continuation queue has completed MSE/Local-Hessian
+multimodal validation and is running the MAX/W4A8 long group. At 05:10:22 UTC on
+2026-11-17, the current W4A4 MAX arm had accumulated 31,233 completion tokens
+in its single request; the group had run for 2,520 seconds with no finish type.
+The W4A8 arm in that group had not completed. Elapsed time includes model
+loading and is not decode throughput. MSE/Local-Hessian long generation had not
+started. The planned seed is recorded in runner metadata; delivery to HTTP
+sampling parameters is unverified. The result validator accepts
+`period.found=true`, and EOS stop-token use has not been checked. This progress
+is not a completed paired result, a no-repetition finding, or a quality gate. The
 [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md) keeps their
 status separate from earlier attempts. Earlier static MAX/MSE serving evidence
 does not substitute for serving each of these four exports.
+
+The first identity-correct MAX/W4A8 attempt had a Python-case token mismatch at
+position 16. Repeat2 passed that fixed case, which does not establish run-to-run
+determinism. The archived `recipe-matrix-c1b3756-20261116-queue.json` describes
+the older queue package only and is not a complete manifest for the continuation.
+The latest sanitized continuation snapshot is
+[`recipe-matrix-c1b3756-20261117-status.json`](validation/recipe-matrix-c1b3756-20261117-status.json).
+
+The later `main` commit `eaae979` passed [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287):
+Ruff passed and pytest reported 823 passed, 8 skipped in 29.93 seconds. This CI
+result is software validation for that later source revision; it does not change
+the revision or GPU evidence bound to `c1b3756`.
 
 The historical tested images report version 0.1.2; this
 runbook builds local images from your checkout. Record that build's own

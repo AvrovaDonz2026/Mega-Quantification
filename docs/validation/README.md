@@ -10,21 +10,33 @@ serve/eval dry-run 共 26 项通过，且 rerun `summary.json` 已独立校验�
 0；该 rerun 未生成 `status.tsv`）；其中 Spark 适用的 W4A8、W4A4 max、MSE 与
 Local-Hessian 四个 27B 配方另完成真实 GPU PTQ 和导出审计。矩阵 dry-run
 不代表其他目标硬件的实测。
+后续 `main` 提交 `eaae979` 的 [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287)
+通过（Ruff 通过；pytest 823 passed、8 skipped，29.93 秒）；该软件门禁不改变上文 GPU
+记录绑定的 `c1b3756` 源码身份。
 
-该轮 MSE / Local-Hessian 新导出已完成固定五题 baseline 与 embedded MTP 检查：
-功能检查全部通过、各臂 baseline/MTP 的 native output IDs 完全一致，accepted
-drafts / verify 分别为 135/72 与 134/74。结果已通过独立
-`validate_multimodal_result` 校验；临时原始报告无残留，服务端口已无监听。
-早期 JIT 缓存加载失败保留为失败尝试；MAX/W4A8 的一次运行因 plan/result
-仍引用旧导出身份，不计为本轮通过证据。
+该轮 MSE / Local-Hessian 续跑多模态的状态为 `exit_code=0`、`validated=true`，
+结果 SHA-256 为 `73ed94c70806f035dbca578c483c969692833a1bbfe400e2b9c4d42ec1a5bd97`。
+两臂各自的 baseline 与 MTP 五题检查通过（baseline 14/14、MTP 19/19 checks），臂内
+baseline/MTP output IDs 均为 5/5 exact match；MSE 为 135/144 accepted/proposed drafts、
+72 verify，Local-Hessian 为 134/148、74。MAX/W4A8 身份正确 repeat2 也已完成，容器退出码
+为 0、结果 SHA-256 为 `8b4bd5a68f63f89f7b6e5cbd7f0f314a50fbf926ef3564ee0e915aee8fdd79d7`；
+它的五题 baseline/MTP 与臂内 token parity 通过，draft 与 verify 计数均为正。此处 parity
+均是每臂内部对照，不代表跨权重臂输出一致。早期 JIT 缓存失败、身份不匹配的 MAX/W4A8
+尝试，以及身份正确首次尝试中 Python 用例第 16 token 的 parity mismatch 均保留为历史；
+repeat2 仅复验该固定用例，不证明重复运行确定性或普遍 parity，不能由后续通过覆盖。
 
 四棵导出树已统一按 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`
-计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。新的后台队列
-将按统一身份重跑全部四个配方的视觉/MTP，再执行两组长生成（262144 context、
-49152 输出预算、每组内部 deadline 7200 秒）。SSH 已返回队列启动回执；随后
-Teleport 证书过期，尚未回读队列状态或确认 GPU 启动，不计为已开始或完成实测。
-下方既有静态 MAX/MSE serving 报告是另一组导出证据，不能替代本轮四个导出的
-逐一 serving 和长生成验证。
+计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。续跑队列已
+完成 MSE/Local-Hessian 多模态阶段，并正在运行 W4A4 MAX 长生成；截至 2026-11-17
+05:10:22 UTC，当前 `static-max`（W4A4 MAX）臂单次请求累计 31,233 tokens，整组经过
+2,520 秒，仍在运行且未报告结束类型；同组 W4A8 第二臂尚未完成。
+该 elapsed 包含加载时间，不能用于推算 decode 速度。MSE/Local-Hessian 长生成尚未开始，
+因此配对长生成未完成。计划记录的 seed 尚未核实是否发送到 HTTP sampling parameters；
+校验器允许 `period.found=true`，且尚未核查 EOS 实际 stop token。该进度不代表无重复、
+自然停止恢复或质量 gate。下方既有静态 MAX/MSE serving 报告是另一组导出证据，不能
+替代本轮四个导出的逐一 serving 和长生成验证。
+最新安全状态见[脱敏续跑快照](recipe-matrix-c1b3756-20261117-status.json)；旧
+`recipe-matrix-c1b3756-20261116-queue.json` 仅记录旧队列包身份，不是当前续跑的完整 manifest。
 
 2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
 
