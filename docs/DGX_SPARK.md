@@ -29,16 +29,22 @@ All four export trees now use one hash algorithm:
 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`. The earlier
 manifest algorithm has not been reconciled with this one, so differing digests
 alone do not establish file changes. MAX/W4A8 repeat2 passed independent plan
-and multimodal validation. The continuation queue has completed MSE/Local-Hessian
-multimodal validation and is running the MAX/W4A8 long group. At 05:10:22 UTC on
-2026-11-17, the current W4A4 MAX arm had accumulated 31,233 completion tokens
-in its single request; the group had run for 2,520 seconds with no finish type.
-The W4A8 arm in that group had not completed. Elapsed time includes model
-loading and is not decode throughput. MSE/Local-Hessian long generation had not
-started. The planned seed is recorded in runner metadata; delivery to HTTP
-sampling parameters is unverified. The result validator accepts
-`period.found=true`, and EOS stop-token use has not been checked. This progress
-is not a completed paired result, a no-repetition finding, or a quality gate. The
+and multimodal validation. The W4A8/W4A4 MAX long-generation pair is complete
+and passed task-level plus independent result validation: W4A4 MAX generated
+46,784 tokens and W4A8 generated 33,399, both with native finish `stop`. The
+result SHA-256 is
+`cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd`. Both arms'
+finite cycle searches reported `period.found=false`, but `complete=false` and
+`exhaustive=false`; actual EOS stop tokens were not checked and
+`effective_stop=false`. This does not establish no repetition or stopping
+recovery. The continuation queue has entered the MSE/Local-Hessian long stage.
+At 06:28:43.872 UTC on 2026-11-17, the MSE arm was decoding with 1,537
+completion tokens over 284 seconds; its container and runner were still running,
+GPU utilization was about 95%, and the Hessian arm had not started. The 284
+seconds include whole-group loading time and cannot establish decode speed.
+This is one arm's in-progress state, not a group result. The seed exists only in plan
+metadata; the current runtime does not pass it to HTTP `sampling_params`. This execution and
+evidence validation is not a GPQA quality gate or an MSE root-cause/fix result. The
 [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md) keeps their
 status separate from earlier attempts. Earlier static MAX/MSE serving evidence
 does not substitute for serving each of these four exports.
@@ -47,8 +53,11 @@ The first identity-correct MAX/W4A8 attempt had a Python-case token mismatch at
 position 16. Repeat2 passed that fixed case, which does not establish run-to-run
 determinism. The archived `recipe-matrix-c1b3756-20261116-queue.json` describes
 the older queue package only and is not a complete manifest for the continuation.
-The latest sanitized continuation snapshot is
+The earlier sanitized startup snapshot is
 [`recipe-matrix-c1b3756-20261117-status.json`](validation/recipe-matrix-c1b3756-20261117-status.json).
+The latest long-generation status snapshot is
+[`recipe-matrix-c1b3756-20261117-long-status.json`](validation/recipe-matrix-c1b3756-20261117-long-status.json);
+it records the completed MAX pair and current MSE/Hessian progress.
 
 The later `main` commit `eaae979` passed [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287):
 Ruff passed and pytest reported 823 passed, 8 skipped in 29.93 seconds. This CI

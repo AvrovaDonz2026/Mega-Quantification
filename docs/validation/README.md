@@ -26,17 +26,22 @@ baseline/MTP output IDs 均为 5/5 exact match；MSE 为 135/144 accepted/propos
 repeat2 仅复验该固定用例，不证明重复运行确定性或普遍 parity，不能由后续通过覆盖。
 
 四棵导出树已统一按 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`
-计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。续跑队列已
-完成 MSE/Local-Hessian 多模态阶段，并正在运行 W4A4 MAX 长生成；截至 2026-11-17
-05:10:22 UTC，当前 `static-max`（W4A4 MAX）臂单次请求累计 31,233 tokens，整组经过
-2,520 秒，仍在运行且未报告结束类型；同组 W4A8 第二臂尚未完成。
-该 elapsed 包含加载时间，不能用于推算 decode 速度。MSE/Local-Hessian 长生成尚未开始，
-因此配对长生成未完成。计划记录的 seed 尚未核实是否发送到 HTTP sampling parameters；
-校验器允许 `period.found=true`，且尚未核查 EOS 实际 stop token。该进度不代表无重复、
-自然停止恢复或质量 gate。下方既有静态 MAX/MSE serving 报告是另一组导出证据，不能
+计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。W4A8/W4A4 MAX
+长生成配对已完成并通过任务级与独立结果校验：W4A4 MAX 为 46,784 tokens、native
+`stop`；W4A8 为 33,399 tokens、native `stop`。结果 SHA-256 为
+`cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd`。两臂的有限周期搜索
+均为 `period.found=false`，但 `complete=false`、`exhaustive=false`，实际 EOS stop token
+未核查且 `effective_stop=false`，因此不能声称无重复或停止行为恢复。
+
+队列已进入 MSE/Hessian 长生成阶段；截至 2026-11-17 06:28:43.872 UTC，MSE 臂已实际解码
+1,537 tokens、经过 284 秒，仍在运行，GPU 利用率约 95%；Hessian 第二臂尚未开始。这是
+单臂中途进度，不代表组结果；284 秒包含整组加载时间，不能推算解码速度。
+MAX 配对状态及最新 MSE/Hessian 进度见
+[脱敏长生成快照](recipe-matrix-c1b3756-20261117-long-status.json)。
+旧的 05:10 启动快照仅作历史状态；旧队列清单也不代表续跑队列的完整 manifest。seed 仅存在于
+计划元数据，当前 runtime 未传入 HTTP sampling parameters。该长生成执行与结果校验不构成 GPQA 质量 gate，
+也不证明 MSE 根因或重复修复。既有 static MAX/MSE serving 报告仍是另一组权重证据，不能
 替代本轮四个导出的逐一 serving 和长生成验证。
-最新安全状态见[脱敏续跑快照](recipe-matrix-c1b3756-20261117-status.json)；旧
-`recipe-matrix-c1b3756-20261116-queue.json` 仅记录旧队列包身份，不是当前续跑的完整 manifest。
 
 2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
 

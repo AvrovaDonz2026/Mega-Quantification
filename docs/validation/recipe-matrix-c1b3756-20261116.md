@@ -176,27 +176,37 @@ megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b4
 持久结果只保留计数、哈希、周期检测与停止元数据；视觉/MTP 原始临时报告结束后清理。
 长生成各组只有一轮、两臂各一次，没有重跑一致性要求。`completion_tokens` 是当前单臂
 单次请求的累计值；`elapsed_seconds` 是整组启动以来的经过时间，包含加载阶段，不能据此
-计算 decode 速度。计划中的 seed 是上层元数据，尚未核实是否传入 HTTP `sampling_params`。
+计算 decode 速度。seed 仅存在于计划元数据；当前 runtime 未将其传入 HTTP `sampling_params`。
 
-续跑队列位于 `c1b3756-queued-validation-cont-20261117-041456`，runner SHA-256 为
-`c57b60b5516c419de5c6d1d56317c8da6df5616c594f1672ce5fe2491852027a`，进程 PID 为
-`1755423`。MSE/Local-Hessian 多模态阶段已完成并通过独立结果校验；MAX/W4A8 长生成
-随后运行，MSE/Local-Hessian 长生成尚未开始。队列顺序和完成状态不表示整个长生成配对
-已经完成。
+续跑队列位于 `c1b3756-queued-validation-cont-20261117-041456`。W4A8/W4A4 MAX 长生成
+配对已完成：任务状态为 `validated=true`、容器退出码 0，pair ID 为
+`640a797b25687df4bd0a5638`，结果 SHA-256 为
+`cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd`。14:25:34 CST 又按
+当前 bundle 中的 plan/result 独立执行 `validate_result` 并通过。
 
-截至 2026-11-17 05:10:22 UTC，MAX/W4A8 长生成组当前 `static-max`（W4A4 MAX）臂的单次
-请求累计 `completion_tokens=31233`；整组经过 `elapsed_seconds=2520`，`finish_type=null`，
-容器仍在运行，GPU 利用率约 95%。W4A8 同组第二臂尚未完成；MSE/Local-Hessian 长生成
-尚未开始。该进度不是完整组结果，也不能用 elapsed 推算生成速度，尚无跨臂比较。
-结果校验器允许存在 `period.found=true` 的记录；本阶段未核对 EOS 实际 stop token，
-因此即使完成也只表示执行及证据校验，不代表无重复、自然停止恢复或质量 gate 通过。
+| 请求/量化臂 | completion tokens | native finish | 额外记录 |
+|---|---:|---|---|
+| `static-max`（W4A4 MAX） | 46,784 | `stop` | `matched_kind=integer`；周期搜索 966 candidates / 85,339 comparisons |
+| `static-MSE`（W4A8） | 33,399 | `stop` | matched hash `54363ddee68f4a5db81c9d37e5fb738d28f5b67dc7f725ad7333172b1ea157da`；周期搜索 183 candidates / 13,130 comparisons |
 
-最新安全状态快照见[续跑队列状态](recipe-matrix-c1b3756-20261117-status.json)。快照确认
-runtime 与 `run_tp1` 哈希匹配仓库 manifest、四份计划匹配 manifest；续跑 queue 脚本哈希
-不同于旧包。本地归档的[队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)只对应
-2026-11-16 旧队列包身份，不代表当前续跑状态或完整 manifest。
+两臂 `period.found=false`，但 `complete=false`、`exhaustive=false`；各自覆盖数与 copies
+均为 0、period 为 null。这个有限检测结果不表示没有重复。实际 EOS stop token 未核查，
+`effective_stop=false`；native `stop` 不能据此解释为 EOS 或自然停止恢复。该实验每臂仅运行
+一次，且不是质量 gate，也不证明 MSE 根因或重复问题已修复。
+
+队列已于 2026-11-17 06:23:43 UTC 自动进入 MSE/Hessian 长生成阶段。2026-11-17
+06:28:43.872030 UTC 的回读显示，MSE 臂已进入实际解码：`request_id=static-max`、
+`completion_tokens=1537`、`elapsed_seconds=284`、`finish_type=null`；容器仍在运行，
+runner PID 为 `1755423` 且存活，GPU 利用率约 95%。Hessian 第二臂尚未开始。
+这是 MSE 单臂的中途进度，不是完整组结果，也不能由 elapsed 推算 decode 速度。
+
+MAX 配对结果及 MSE/Hessian 最新进度见[脱敏长生成状态快照](recipe-matrix-c1b3756-20261117-long-status.json)。
+较早的[启动快照](recipe-matrix-c1b3756-20261117-status.json)保留 05:10 状态，不代表当前状态。
+本地[旧队列身份清单](recipe-matrix-c1b3756-20261116-queue.json)只对应旧队列包，不是续跑队列
+的完整 manifest；续跑 queue 脚本哈希不同于旧包，但 runtime、`run_tp1` 和四份 plan
+哈希与仓库 manifest 匹配。
 
 仓库中的 [DGX Spark static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)
 属于另一组 static 导出，不替代本报告四个配方的长生成结果。`length` 只表示达到
 49,152 输出预算，不等于耗尽 262K 上下文；`stop` 不能单独证明 EOS。
-当前长生成尚未完成，不能据此给出完整配对结论、质量排序或重复修复结论。
+MSE/Hessian 长生成尚未完成，不能据此给出该组配对结论、质量排序或重复修复结论。
