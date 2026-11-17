@@ -1,0 +1,143 @@
+{
+  "schema": "megaquant-spark-safe-snapshot-v1",
+  "snapshot_kind": "sanitized_point_in_time_metadata_not_complete_raw_evidence",
+  "observed_utc": "2026-11-17T06:29:51.464054+00:00",
+  "tested_revision": "c1b3756a1ce9bf9aa6a5895f7dd13765e48cde14",
+  "previous_snapshot": "recipe-matrix-c1b3756-20261117-status.json",
+  "runner_identity": {
+    "full_pair_serving_runtime_sha256": "679d4e0e6feab2ab40e6d9dd5c89b54c6fcff76b05a45fe1e7e906a6bb5bc4a3",
+    "run_tp1_sha256": "a5b11ec3f27e2b6581e150c2ed714e5a1ebc2a987d872b9b1020a085d0cd963e",
+    "spark_validation_queue_sha256": "c57b60b5516c419de5c6d1d56317c8da6df5616c594f1672ce5fe2491852027a",
+    "runtime_and_run_tp1_match_repository_manifest": true,
+    "continuation_queue_differs_from_original_queue_manifest": true,
+    "plan_sha256": {
+      "max-w4a8-long-plan.json": "f02adb98bbd6840f45238e76c5b6e22fa4eaaf391c69085cb8f6e11b0544cd06",
+      "mse-hessian-long-plan.json": "5ff4b08d3293a8e514abf7379b357d584fff46fd2bd3747e4fb96ac096389ff9"
+    }
+  },
+  "image_identity": {
+    "image_id": "sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42",
+    "image_ref": "megaquant@sha256:7c591ade0bdaf84d6abb342419f08ba0f8ddab92987f05a3af063b3237379b42"
+  },
+  "protocol": {
+    "tensor_parallel_size": 1,
+    "context_length": 262144,
+    "input_token_count": 288,
+    "temperature": 0,
+    "mtp_enabled": false,
+    "kv_cache_dtype": "fp8",
+    "ssm_state_dtype": "float32",
+    "cold_start_and_cache_flush": true,
+    "max_new_tokens_per_arm": 49152,
+    "whole_group_deadline_seconds": 7200,
+    "runs_per_arm": 1,
+    "seed_is_plan_metadata_only_not_sent_in_http_sampling_params": true
+  },
+  "completed_long_tasks": [
+    {
+      "group": "max-w4a8",
+      "mode": "long",
+      "validated": true,
+      "container_exit_code": 0,
+      "deadline_exceeded": false,
+      "pair_id": "640a797b25687df4bd0a5638",
+      "result_sha256": "cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd",
+      "independent_validator": {
+        "observed_utc": "2026-11-17T06:25:34+00:00",
+        "functions_called": ["validate_plan", "validate_result"],
+        "validated": true,
+        "scope": "execution_and_evidence_contract_not_quality_or_repetition_repair"
+      },
+      "repetition_fixed": false,
+      "arms": [
+        {
+          "arm": "static-max",
+          "export_label": "W4A4 MAX",
+          "token_count": 46784,
+          "token_sha256": "7b80dda1572c7d840ec71548741ef9713f9413af7f5e396a4c1de801f6d45afd",
+          "finish_reason": {
+            "type": "stop",
+            "length": null,
+            "matched_kind": "integer",
+            "matched_sha256": "54363ddee68f4a5db81c9d37e5fb738d28f5b67dc7f725ad7333172b1ea157da"
+          },
+          "period": {
+            "found": false,
+            "period": null,
+            "onset": null,
+            "covered": 0,
+            "copies": 0,
+            "equals": false,
+            "complete": false,
+            "exhaustive": false,
+            "tokens": 46784,
+            "candidate_count": 966,
+            "comparisons": 85339
+          },
+          "eos": {"candidate_count": null, "candidate_list_checked": false},
+          "effective_stop": false
+        },
+        {
+          "arm": "static-MSE",
+          "export_label": "W4A8",
+          "token_count": 33399,
+          "token_sha256": "a08efadc931015a064cba59bf94cd9b11eab9a3d4c33da42e0e6853badf2c0d0",
+          "finish_reason": {
+            "type": "stop",
+            "length": null,
+            "matched_kind": "integer",
+            "matched_sha256": "54363ddee68f4a5db81c9d37e5fb738d28f5b67dc7f725ad7333172b1ea157da"
+          },
+          "period": {
+            "found": false,
+            "period": null,
+            "onset": null,
+            "covered": 0,
+            "copies": 0,
+            "equals": false,
+            "complete": false,
+            "exhaustive": false,
+            "tokens": 33399,
+            "candidate_count": 183,
+            "comparisons": 13130
+          },
+          "eos": {"candidate_count": null, "candidate_list_checked": false},
+          "effective_stop": false
+        }
+      ]
+    }
+  ],
+  "current": {
+    "observed_utc": "2026-11-17T06:28:43.872030+00:00",
+    "group": "mse-hessian",
+    "mode": "long",
+    "queue_phase": "launching",
+    "container_state": "running",
+    "container_running": true,
+    "container_started_utc": "2026-11-17T06:23:43.891602041Z",
+    "request_id": "static-max",
+    "export_label": "W4A4 MSE",
+    "phase": "long_generation",
+    "completion_tokens": 1537,
+    "elapsed_seconds": 284,
+    "elapsed_scope": "whole_group_including_loading_not_decode_timing",
+    "finish_type": null,
+    "progress_mtime_utc": "2026-11-17T06:28:28.558404+00:00",
+    "counters_scope": "current_request_not_group_total",
+    "gpu_utilization_percent": 95,
+    "runner_alive": true
+  },
+  "pending_tasks": [
+    {"group": "mse-hessian", "mode": "long", "status": "current_group_incomplete"},
+    {"group": "mse-hessian", "arm": "static-MSE", "export_label": "W4A4 Local-Hessian", "status": "not_started"}
+  ],
+  "limits": [
+    "found_false_is_not_proof_of_no_repetition_detector_is_not_complete_or_exhaustive",
+    "native_stop_is_recorded_but_actual_eos_candidates_have_not_been_verified",
+    "effective_stop_false_means_eos_not_established_not_that_generation_failed_to_stop",
+    "validator_allows_repetition_and_does_not_establish_quality_or_repetition_repair",
+    "one_run_per_arm_does_not_establish_repeated_output_determinism",
+    "current_progress_has_no_repetition_or_cycle_metrics",
+    "current_arm_names_are_slots_use_export_label_for_actual_quantization"
+  ]
+}

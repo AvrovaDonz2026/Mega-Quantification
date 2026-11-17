@@ -12,25 +12,64 @@ v0.1.2 clean-container rerun, `14d5ad6` for the later MSE/Local-Hessian PTQ, and
 revision `c1b3756` passed the full recipe plan/dry-run matrix (the 26-row
 `summary.json` was independently validated; the rerun did not produce a
 `status.tsv`) and completed real Spark PTQ plus export audits for W4A8, W4A4
-max, MSE and Local-Hessian. MSE and Local-Hessian also passed the fixed five-case
-baseline/embedded-MTP gate, including exact native output-ID parity and
-independent result validation; accepted drafts / verify counts were 135/72 and
-134/74. Temporary raw reports were removed and the serving port was clear.
-An earlier MAX/W4A8 attempt retained stale plan/result export identities and is
-not accepted as evidence for these c1b3756 exports.
+max, MSE and Local-Hessian. MSE and Local-Hessian passed the fixed five-case
+baseline/embedded-MTP gate with independent result validation. MAX/W4A8's
+identity-correct repeat2 also passed all five baseline/MTP cases and per-case
+native output-ID parity; both arms had positive accepted-draft and verify
+counts. MSE/Hessian baseline and MTP checks were 14/14 and 19/19 per arm;
+accepted/proposed drafts and verify counts were 135/144, 72 for MSE and
+134/148, 74 for Hessian. Each arm's MTP outputs matched its own baseline 5/5;
+this is not cross-arm parity. Result SHA-256 values are recorded in the
+[dated matrix report](validation/recipe-matrix-c1b3756-20261116.md).
+Earlier JIT cache failures and the first MAX/W4A8 run with stale plan/result
+export identities remain historical failures and are not counted as these
+exports' passing evidence.
 
 All four export trees now use one hash algorithm:
 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`. The earlier
 manifest algorithm has not been reconciled with this one, so differing digests
-alone do not establish file changes. A new background queue will repeat all four visual/MTP
-gates with these identities, followed by two long-generation groups at 262144
-context and a 49152-token output budget, with a 7200-second internal deadline
-per group. SSH returned a queue-start acknowledgement, but the Teleport
-certificate then expired; queue status and GPU startup have not yet been read
-back. These queued stages are not completed validation. The
+alone do not establish file changes. MAX/W4A8 repeat2 passed independent plan
+and multimodal validation. The W4A8/W4A4 MAX long-generation pair is complete
+and passed task-level plus independent result validation: W4A4 MAX generated
+46,784 tokens and W4A8 generated 33,399, both with native finish `stop`. The
+result SHA-256 is
+`cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd`. Both arms'
+finite cycle searches reported `period.found=false`, but `complete=false` and
+`exhaustive=false`; actual EOS stop tokens were not checked and
+`effective_stop=false`. This does not establish no repetition or stopping
+recovery. The MSE/Local-Hessian long stage later failed with queue status
+`validation_container_nonzero`. Its container exited 1 near the shared 7,200-second
+limit after reporting `incomplete streaming response`; the evidence does not identify
+which exact call raised a timeout. No final `pair-serving-result.json` was produced.
+The MSE arm's intermediate summary was only in memory, so its final token count,
+finish type and cycle summary are unavailable; do not infer a length or stop result.
+Later readback confirmed the MSE arm finished and the Hessian arm began generation,
+but neither arm's final summary was persisted. Aitop and Robo both showed 0% GPU
+utilization and no compute processes afterward, and no new validation job is running. See the
+[terminal snapshot](validation/recipe-matrix-c1b3756-20261117-terminal-status.json);
+the earlier [06:28 progress snapshot](validation/recipe-matrix-c1b3756-20261117-long-status.json)
+remains a historical point-in-time record. The seed exists only in plan metadata; the
+current runtime does not pass it to HTTP `sampling_params`. This execution and
+evidence validation is not a GPQA quality gate or an MSE root-cause/fix result. The
 [dated matrix report](validation/recipe-matrix-c1b3756-20261116.md) keeps their
 status separate from earlier attempts. Earlier static MAX/MSE serving evidence
 does not substitute for serving each of these four exports.
+
+The first identity-correct MAX/W4A8 attempt had a Python-case token mismatch at
+position 16. Repeat2 passed that fixed case, which does not establish run-to-run
+determinism. The archived `recipe-matrix-c1b3756-20261116-queue.json` describes
+the older queue package only and is not a complete manifest for the continuation.
+The earlier sanitized startup snapshot is
+[`recipe-matrix-c1b3756-20261117-status.json`](validation/recipe-matrix-c1b3756-20261117-status.json).
+The earlier 06:28 progress snapshot is
+[`recipe-matrix-c1b3756-20261117-long-status.json`](validation/recipe-matrix-c1b3756-20261117-long-status.json);
+it records the completed MAX pair and historical MSE/Hessian progress. The terminal outcome is in
+[`recipe-matrix-c1b3756-20261117-terminal-status.json`](validation/recipe-matrix-c1b3756-20261117-terminal-status.json).
+
+The later `main` commit `eaae979` passed [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287):
+Ruff passed and pytest reported 823 passed, 8 skipped in 29.93 seconds. This CI
+result is software validation for that later source revision; it does not change
+the revision or GPU evidence bound to `c1b3756`.
 
 The historical tested images report version 0.1.2; this
 runbook builds local images from your checkout. Record that build's own

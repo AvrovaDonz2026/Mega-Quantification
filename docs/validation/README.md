@@ -10,21 +10,45 @@ serve/eval dry-run 共 26 项通过，且 rerun `summary.json` 已独立校验�
 0；该 rerun 未生成 `status.tsv`）；其中 Spark 适用的 W4A8、W4A4 max、MSE 与
 Local-Hessian 四个 27B 配方另完成真实 GPU PTQ 和导出审计。矩阵 dry-run
 不代表其他目标硬件的实测。
+后续 `main` 提交 `eaae979` 的 [GitHub Actions CI](https://github.com/AvrovaDonz2026/Mega-Quantification/actions/runs/43896392287)
+通过（Ruff 通过；pytest 823 passed、8 skipped，29.93 秒）；该软件门禁不改变上文 GPU
+记录绑定的 `c1b3756` 源码身份。
 
-该轮 MSE / Local-Hessian 新导出已完成固定五题 baseline 与 embedded MTP 检查：
-功能检查全部通过、各臂 baseline/MTP 的 native output IDs 完全一致，accepted
-drafts / verify 分别为 135/72 与 134/74。结果已通过独立
-`validate_multimodal_result` 校验；临时原始报告无残留，服务端口已无监听。
-早期 JIT 缓存加载失败保留为失败尝试；MAX/W4A8 的一次运行因 plan/result
-仍引用旧导出身份，不计为本轮通过证据。
+该轮 MSE / Local-Hessian 续跑多模态的状态为 `exit_code=0`、`validated=true`，
+结果 SHA-256 为 `73ed94c70806f035dbca578c483c969692833a1bbfe400e2b9c4d42ec1a5bd97`。
+两臂各自的 baseline 与 MTP 五题检查通过（baseline 14/14、MTP 19/19 checks），臂内
+baseline/MTP output IDs 均为 5/5 exact match；MSE 为 135/144 accepted/proposed drafts、
+72 verify，Local-Hessian 为 134/148、74。MAX/W4A8 身份正确 repeat2 也已完成，容器退出码
+为 0、结果 SHA-256 为 `8b4bd5a68f63f89f7b6e5cbd7f0f314a50fbf926ef3564ee0e915aee8fdd79d7`；
+它的五题 baseline/MTP 与臂内 token parity 通过，draft 与 verify 计数均为正。此处 parity
+均是每臂内部对照，不代表跨权重臂输出一致。早期 JIT 缓存失败、身份不匹配的 MAX/W4A8
+尝试，以及身份正确首次尝试中 Python 用例第 16 token 的 parity mismatch 均保留为历史；
+repeat2 仅复验该固定用例，不证明重复运行确定性或普遍 parity，不能由后续通过覆盖。
 
 四棵导出树已统一按 `sha256(concat(sorted(relative_path + NUL + binary_sha256(file))))`
-计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。新的后台队列
-将按统一身份重跑全部四个配方的视觉/MTP，再执行两组长生成（262144 context、
-49152 输出预算、每组内部 deadline 7200 秒）。SSH 已返回队列启动回执；随后
-Teleport 证书过期，尚未回读队列状态或确认 GPU 启动，不计为已开始或完成实测。
-下方既有静态 MAX/MSE serving 报告是另一组导出证据，不能替代本轮四个导出的
-逐一 serving 和长生成验证。
+计算身份；旧清单的算法尚未与本次统一，摘要差异不能据此解释为文件变化。W4A8/W4A4 MAX
+长生成配对已完成并通过任务级与独立结果校验：W4A4 MAX 为 46,784 tokens、native
+`stop`；W4A8 为 33,399 tokens、native `stop`。结果 SHA-256 为
+`cb4b7d76bb3545ec1fa3722a14d6a215c3373f0cfe4e4821416ccd51aa5679fd`。两臂的有限周期搜索
+均为 `period.found=false`，但 `complete=false`、`exhaustive=false`，实际 EOS stop token
+未核查且 `effective_stop=false`，因此不能声称无重复或停止行为恢复。
+
+MSE/Hessian 长生成队列最终以 `validation_container_nonzero` 失败。容器在共享 7,200 秒
+时限附近退出，runtime 报 `incomplete streaming response`；不能据此断言某个精确调用触发
+了超时。最终 `pair-serving-result.json` 缺失。后续回读确认 MSE 第一臂已结束、Hessian
+第二臂已开始生成，但运行时只把臂级 summary 保存在内存，未落盘两臂的最终 tokens、finish
+或周期摘要；因此不推测 MSE 的最终输出长度或 `length`/`stop` 结果。终态 GPU 利用率均为
+0%、compute 进程数均为 0，且没有新验证运行。终态快照见
+[脱敏终态记录](recipe-matrix-c1b3756-20261117-terminal-status.json)，06:28 的
+[运行快照](recipe-matrix-c1b3756-20261117-long-status.json)保留为历史。
+
+MAX 两臂长生成结果仍有效：任务及独立校验通过，W4A4 MAX 为 46,784 tokens、W4A8 为
+33,399 tokens，均以 native `stop` 结束。周期搜索并不完整或穷尽，EOS stop token 未核查；
+这不证明无重复或停止恢复。四个 Spark 配方的固定视觉/MTP 检查通过，但本轮长生成失败，
+不能据此给出 GPQA、总体质量或 MSE 根因/重复修复结论。队列终止后没有遗留 GPU compute
+进程，也没有新验证任务运行。seed 仅存在于计划元数据，runtime 未传入 HTTP sampling
+parameters。旧队列清单不代表续跑队列的完整 manifest；旧 static MAX/MSE serving 报告也
+不能替代本轮四个导出的长生成验证。
 
 2026-11-16 的 [static MAX/MSE TP1 实测](dgx-spark-static-tp1-20261116.md)完成了新导出的固定视觉/MTP 五用例 gate 和 262K context 长生成对照。两臂的视觉/MTP gate 均通过；长生成记录了 MAX 的后段重复与长度截断，以及 MSE 的有界 matched-stop。EOS、泛化视觉质量、TP2 和重复根因仍未由该固定协议证明。
 
